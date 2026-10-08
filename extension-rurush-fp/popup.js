@@ -40,6 +40,15 @@ $('run').onclick = async () => {
   $('run').textContent = 'Ejecutar ahora';
   pintar();
 };
+// clic en la etiqueta de modo = cambiar entre simulación y envío real
+$('modo').style.cursor = 'pointer';
+$('modo').title = 'Clic para cambiar entre simulación y envío real';
+$('modo').onclick = async () => {
+  const { config = {} } = await chrome.storage.local.get('config');
+  const dryRun = config.dryRun !== false;
+  if (dryRun && !confirm('¿Pasar a ENVÍO REAL? Desde ahora los recordatorios se envían de verdad.')) return;
+  await chrome.storage.local.set({ config: { ...config, dryRun: !dryRun } });
+};
 $('opts').onclick = () => chrome.runtime.openOptionsPage();
 chrome.storage.onChanged.addListener(pintar);
 pintar();

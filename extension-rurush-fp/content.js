@@ -72,6 +72,9 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       invalid: invalidPopup(),
       messages: c ? readMessages() : [],
     });
+  } else if (msg.type === 'prepNav') {
+    document.documentElement.dataset.rurushNav = '1';
+    reply({ ok: true });
   } else if (msg.type === 'send') {
     clickSend().then(reply);
     return true;

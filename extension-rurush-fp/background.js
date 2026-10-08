@@ -155,9 +155,21 @@ async function openChat(tabId, phone, text) {
   const url = new URL('https://web.whatsapp.com/send');
   url.searchParams.set('phone', phone);
   if (text) url.searchParams.set('text', text);
+  await ask(tabId, { type: 'prepNav' });
   await chrome.tabs.update(tabId, { url: url.toString() });
   await sleep(4000);
-  return waitFor(tabId, { type: 'chatState' }, (r) => r.invalid || (r.ready && (!text || r.hasDraft)));
+  const r = await waitFor(tabId, { type: 'chatState' }, (x) => x.invalid || (x.ready && (!text || x.hasDraft)));
+  if (!r || r.invalid || text) return r;
+  // esperar a que terminen de cargar los mensajes (misma cantidad dos lecturas seguidas)
+  let prev = r;
+  for (let i = 0; i < 8; i++) {
+    await sleep(1500);
+    const cur = await ask(tabId, { type: 'chatState' });
+    if (!cur) break;
+    if (cur.messages.length && cur.messages.length === prev.messages.length) return cur;
+    prev = cur;
+  }
+  return prev;
 }
 
 // ───────────────────────── lectura del chat ─────────────────────────
@@ -309,6 +321,7 @@ async function run(reason) {
     }
 
     await chrome.storage.local.set({ sent: limpiarSent(sent) });
+    await ask(tab.id, { type: 'prepNav' });
     await chrome.tabs.update(tab.id, { url: 'https://web.whatsapp.com/' });
   } catch (e) {
     resumen.alertas.push(String(e.message || e));
