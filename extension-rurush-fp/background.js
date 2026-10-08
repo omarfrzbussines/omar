@@ -134,6 +134,13 @@ async function ask(tabId, msg) {
   try { return await chrome.tabs.sendMessage(tabId, msg); } catch { return null; }
 }
 
+// Si WhatsApp Web ya estaba abierto antes de instalar/recargar la extensión,
+// Chrome no le inyecta content.js: lo inyectamos a mano.
+async function asegurarScript(tabId) {
+  if (await ask(tabId, { type: 'ping' })) return;
+  try { await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] }); } catch {}
+}
+
 async function waitFor(tabId, msg, ok, timeoutMs = 60000) {
   const end = Date.now() + timeoutMs;
   while (Date.now() < end) {
@@ -255,6 +262,8 @@ async function run(reason) {
     }
 
     const tab = await waTab();
+    await sleep(1000);
+    await asegurarScript(tab.id);
     const status = await waitFor(tab.id, { type: 'ping' }, (r) => r.loggedIn, 90000);
     if (!status) throw new Error('WhatsApp Web no cargó o no tiene sesión iniciada.');
     if (cfg.expectedNumber && status.wid && status.wid !== String(cfg.expectedNumber).replace(/\D/g, '')) {
@@ -309,7 +318,7 @@ async function run(reason) {
       resumen.enviados.length && `✅ ${resumen.enviados.length} enviados`,
       resumen.simulados.length && `🧪 ${resumen.simulados.length} simulados`,
       resumen.saltados.length && `⏭️ ${resumen.saltados.length} saltados`,
-      resumen.alertas.length && `⚠️ ${resumen.alertas.length} para revisar`,
+      resumen.alertas.length && `⚠️ ${resumen.alertas.length} para revisar: ${resumen.alertas[0]}`,
     ].filter(Boolean).join(' · ');
     if (linea) {
       await log({ level: resumen.alertas.length ? 'warn' : 'ok', msg: linea, detalle: resumen });

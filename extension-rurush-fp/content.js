@@ -1,4 +1,6 @@
 // Corre dentro de web.whatsapp.com: lee el chat abierto y aprieta Enviar.
+if (!window.__rurushFP) {
+window.__rurushFP = true;
 
 const RX_PRE = /\[(\d{1,2}):(\d{2})(?:\s*([ap])\.?\s*m\.?)?,?\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\]/i;
 
@@ -61,7 +63,7 @@ async function clickSend() {
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg.type === 'ping') {
-    reply({ loggedIn: !!document.querySelector('#pane-side'), wid: wid() });
+    reply({ loggedIn: !!document.querySelector('#pane-side, #side, [aria-label="Lista de chats"], [aria-label="Chat list"]'), wid: wid() });
   } else if (msg.type === 'chatState') {
     const c = compose();
     reply({
@@ -87,3 +89,4 @@ function marcarActividad(e) {
 }
 window.addEventListener('keydown', marcarActividad, true);
 window.addEventListener('mousedown', marcarActividad, true);
+}
