@@ -50,6 +50,8 @@ function utcToLima(ms) {
   const d = new Date(ms + LIMA_OFFSET_H * 3600e3);
   return { date: d.toISOString().slice(0, 10), hour: d.getUTCHours(), min: d.getUTCMinutes() };
 }
+// "a las 7 pm" / "a la 1 pm"
+const aLas = (h, m) => `${((h + 11) % 12) + 1 === 1 ? 'a la' : 'a las'} ${fmtHora(h, m)}`;
 function fmtHora(h, m) {
   const suf = h >= 12 ? 'pm' : 'am';
   const h12 = ((h + 11) % 12) + 1;
@@ -223,7 +225,7 @@ function analizar(fp, msgs, hoy) {
 
   // ¿se acordó otra hora por chat? → no adivinar, que lo vea la asesora
   let otraHora = null;
-  for (const m of deHoy.slice(-8)) {
+  for (const m of deHoy.filter((x) => !x.out).slice(-8)) {
     for (const t of horasMencionadas(m.text)) {
       const mismaHora = t.h12 === fp.hour % 12 && (t.m == null || t.m === fp.min);
       if (!mismaHora) otraHora = m.text.slice(0, 80);
@@ -235,14 +237,14 @@ function analizar(fp, msgs, hoy) {
 // ───────────────────────── mensaje ─────────────────────────
 function mensaje(fp, confirmo) {
   const n = firstName(fp.personName);
-  const h = fmtHora(fp.hour, fp.min);
+  const h = aLas(fp.hour, fp.min);
   const hola = n ? pick([`¡Hola ${n}! 👋`, `${n}, ¡hola! 😊`, `¡Hola ${n}! 🙌`]) : pick(['¡Hola! 👋', '¡Hola! 😊']);
   let cuerpo, cierre;
   if (confirmo) {
-    cuerpo = pick([`¡Perfecto! Te esperamos hoy a las ${h} 💪`, `Todo listo para tu clase de hoy a las ${h} 💪`, `Nos vemos hoy a las ${h} 🔥`]);
+    cuerpo = pick([`¡Perfecto! Te esperamos hoy ${h} 💪`, `Todo listo para tu clase de hoy ${h} 💪`, `Nos vemos hoy ${h} 🔥`]);
     cierre = pick([`Te dejo la ubicación 📍 ${GPS}`, `📍 ${GPS}`, `Aquí la ubicación 📍 ${GPS}`]);
   } else {
-    cuerpo = pick([`Hoy es tu clase de prueba GRATIS a las ${h} 🔥`, `Te esperamos hoy a las ${h} para tu clase gratis 💪`, `Hoy a las ${h} es tu clase de prueba 🔥`]);
+    cuerpo = pick([`Hoy es tu clase de prueba GRATIS ${h} 🔥`, `Te esperamos hoy ${h} para tu clase gratis 💪`, `Hoy ${h} es tu clase de prueba 🔥`]);
     cierre = pick([`¿Confirmas? Te paso la ubicación 📍 ${GPS}`, `¿Me confirmas? 📍 ${GPS}`, `¿Confirmas tu asistencia? Ubicación 📍 ${GPS}`]);
   }
   const ref = 'Av. Larco 1164, Víctor Larco, al costado de Mass';
@@ -286,6 +288,16 @@ const RX_AVISA = /(te aviso|le aviso|les aviso|avisar[eé]|me comunico|yo te esc
 const RX_REAGENDO_DICHO = /(voy el|puedo el|para el|el (lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado)|ma[ñn]ana (a las|en la|voy|puedo))/i;
 const RX_BIENESTAR = /(enferm|resfri|gripe|viaj|hospital|cl[ií]nica|operac|duelo|falleci|me siento mal|estoy mal|lesi[oó]n|me lesion)/i;
 
+function otraHoraDesde(fp, msgs, desdeMs) {
+  for (const m of entrantesDesde(msgs, desdeMs).slice(-8)) {
+    for (const t of horasMencionadas(m.text)) {
+      if (!(t.h12 === fp.hour % 12 && (t.m == null || t.m === fp.min))) return m.text.slice(0, 80);
+    }
+  }
+  return null;
+}
+const yaEnviado = (ctx, id, ...partes) => partes.some((p) => ctx.sent[`${p}:${id}`]) || (partes.includes('m1') && ctx.sent[id]);
+
 // ── opciones de horario para reagendar (doble opción con días concretos) ──
 function opciones(fp, now) {
   const ahoraMin = now.hour * 60 + now.min;
@@ -303,10 +315,10 @@ function opciones(fp, now) {
   }
   const d1 = sig(now.date);
   const [h1, m1] = horaPara(d1);
-  if (hoy) return [`hoy a las ${fmtHora(...hoy)}`, `${nombreDia(d1)} a las ${fmtHora(h1, m1)}`];
+  if (hoy) return [`hoy ${aLas(...hoy)}`, `${nombreDia(d1)} ${aLas(h1, m1)}`];
   const d2 = sig(d1);
   const [h2, m2] = horaPara(d2);
-  return [`${nombreDia(d1)} a las ${fmtHora(h1, m1)}`, `${nombreDia(d2)} a las ${fmtHora(h2, m2)}`];
+  return [`${nombreDia(d1)} ${aLas(h1, m1)}`, `${nombreDia(d2)} ${aLas(h2, m2)}`];
 }
 
 // ── plantillas ──
@@ -315,7 +327,7 @@ const hola = (n, opts) => (n ? pick(opts.map((o) => o.replace('N', n))) : '¡Hol
 function msgManana(fp) {
   const n = firstName(fp.personName);
   return `${hola(n, ['¡Hola N! 😊', 'N, ¡buenos días! ☀️', '¡Buen día N! 😊'])} `
-    + `${pick([`Hoy a las ${fmtHora(fp.hour, fp.min)} es tu clase de prueba GRATIS 💪`, `Te esperamos hoy a las ${fmtHora(fp.hour, fp.min)} para tu clase gratis 💪`])}\n`
+    + `${pick([`Hoy ${aLas(fp.hour, fp.min)} es tu clase de prueba GRATIS 💪`, `Te esperamos hoy ${aLas(fp.hour, fp.min)} para tu clase gratis 💪`])}\n`
     + `${pick(['¿Nos confirmas tu asistencia?', '¿Me confirmas que vienes?'])}\n\n✅ Confirmo\n🔄 Reagendar`;
 }
 
@@ -323,7 +335,7 @@ function msgRefuerzo(fp, now) {
   const n = firstName(fp.personName);
   const dia = fp.date === sumarDias(now.date, 1) ? `Mañana ${DIAS[diaSemana(fp.date)]}` : `El ${DIAS[diaSemana(fp.date)]}`;
   return `${hola(n, ['¡Hola N! 😊', 'N, ¡hola! 👋', '¡Hola N! 🙌'])} `
-    + `${pick([`${dia} a las ${fmtHora(fp.hour, fp.min)} es tu clase de prueba GRATIS 💪`, `Te recuerdo: ${dia.toLowerCase()} a las ${fmtHora(fp.hour, fp.min)} tienes tu clase gratis 🔥`])} `
+    + `${pick([`${dia} ${aLas(fp.hour, fp.min)} es tu clase de prueba GRATIS 💪`, `Te recuerdo: ${dia.toLowerCase()} ${aLas(fp.hour, fp.min)} tienes tu clase gratis 🔥`])} `
     + `${pick(['¡Te esperamos!', '¡Nos vemos!'])}\n📍 ${DIR}\n${GPS}`;
 }
 
@@ -357,9 +369,9 @@ function msgDomingoLunes(fp) {
 
 function msgDomingoNoShow(fp) {
   const n = firstName(fp.personName);
-  const h = abre(1)[0] <= fp.hour && fp.hour <= abre(1)[1] - 1 ? fmtHora(fp.hour, fp.min) : '6 pm';
+  const h = abre(1)[0] <= fp.hour && fp.hour <= abre(1)[1] - 1 ? aLas(fp.hour, fp.min) : 'a las 6 pm';
   return `¡Hola${n ? ' ' + n : ''}! 😊 Vimos que no pudiste llegar a tu clase gratis 🔥\n\n`
-    + `¿La retomamos mañana lunes a las ${h}? ¿O prefieres otro horario? 💪\n\n📍 ${DIR}\n📍 GPS: ${GPS}`;
+    + `¿La retomamos mañana lunes ${h}? ¿O prefieres otro horario? 💪\n\n📍 ${DIR}\n📍 GPS: ${GPS}`;
 }
 
 // ── decisiones por tipo ── devuelven { enviar: texto, imagen } | { saltar } | { alerta }
@@ -372,10 +384,12 @@ function decidirRecordatorio2h(fp, msgs, now, cfg) {
   return { enviar: mensaje(fp, a.confirmo), imagen: true };
 }
 
-function decidirManana(fp, msgs, now) {
-  const a = analizar({ ...fp, cfgWindowH: 24 }, msgs, now.date);
-  if (a.cancelo) return { saltar: 'canceló/reagenda' };
-  if (a.otraHora) return { alerta: `el chat menciona otra hora → «${a.otraHora}» — revisar a mano` };
+function decidirManana(fp, msgs, now, ctx = { sent: {} }) {
+  // va aunque haya recibido el refuerzo de la noche anterior (así lo pidió Omar: noche + mañana + 2h)
+  if (yaEnviado(ctx, fp.id, 'm1', 'manana')) return { saltar: 'ya recibió el recordatorio 2h' };
+  if (entrantesDesde(msgs, now.ms - 48 * 3600e3).some((m) => RX_CANCELA.test(m.text))) return { saltar: 'canceló/reagenda' };
+  const otra = otraHoraDesde(fp, msgs, now.ms - 48 * 3600e3);
+  if (otra) return { alerta: `el chat menciona otra hora → «${otra}» — revisar a mano` };
   if (entrantesDesde(msgs, now.ms - 24 * 3600e3).some((m) => RX_CONFIRMA.test(m.text) && !RX_CANCELA.test(m.text))) {
     return { saltar: 'ya confirmó' };
   }
@@ -385,17 +399,24 @@ function decidirManana(fp, msgs, now) {
 function decidirRefuerzo(fp, msgs, now, ctx) {
   if (ctx.sent[`m5a:${fp.id}`]) return { saltar: 'ya recibió el recordatorio del domingo' };
   if (entrantesDesde(msgs, now.ms - 48 * 3600e3).some((m) => RX_CANCELA.test(m.text))) return { saltar: 'canceló/reagenda' };
+  const otra = otraHoraDesde(fp, msgs, now.ms - 48 * 3600e3);
+  if (otra) return { alerta: `el chat menciona otra hora → «${otra}» — revisar a mano` };
   return { enviar: msgRefuerzo(fp, now), imagen: true };
 }
 
 function decidirNoShow(fp, msgs, now, ctx, plantilla) {
-  if (ctx.futuroPorPersona.has(fp.personId)) return { saltar: 'ya tiene un FP nuevo agendado' };
+  // ¿la persona tiene otro FP posterior a este (aunque sea hoy y ya haya pasado)? → ya reagendó
+  const otros = (ctx.fpsPorPersona && ctx.fpsPorPersona.get(fp.personId)) || [];
+  if (otros.some((o) => o.id !== fp.id && o.classMs > fp.classMs)) return { saltar: 'ya tiene un FP nuevo agendado' };
   const desdeClase = entrantesDesde(msgs, fp.classMs);
   if (desdeClase.some((m) => RX_ASISTIO.test(m.text))) return { saltar: 'dice que ya asistió' };
   if (desdeClase.some((m) => RX_NO_INTERES.test(m.text))) return { alerta: 'dice que no le interesa — revisar' };
   if (desdeClase.some((m) => RX_REAGENDO_DICHO.test(m.text))) return { alerta: 'dice que reagenda, pero no hay FP nuevo en Pipedrive — crear la actividad' };
   if (desdeClase.some((m) => RX_AVISA.test(m.text))) return { saltar: 'dijo que avisa' };
-  if (entrantesDesde(msgs, now.ms - 3 * 3600e3).length) return { saltar: 'conversación activa (escribió hace <3h)' };
+  if (msgs.some((m) => msgMs(m) != null && msgMs(m) >= now.ms - 3 * 3600e3)) return { saltar: 'conversación activa (mensajes hace <3h)' };
+  if (plantilla === 'reagendo' && msgs.some((m) => m.out && msgMs(m) != null && msgMs(m) > fp.classMs)) {
+    return { saltar: 'ya se le escribió después de la clase' };
+  }
   if (entrantesDesde(msgs, now.ms - 72 * 3600e3).some((m) => RX_BIENESTAR.test(m.text))) {
     return plantilla === 'reagendo' ? { enviar: msgBienestar(fp), imagen: false } : { saltar: 'está enfermo/de viaje' };
   }
@@ -408,9 +429,12 @@ async function candidatosDe(key, cfg, now) {
   const tok = cfg.pipedriveToken;
   const hoy = now.date;
   const pasados = (fps, graciaMin) => fps.filter((f) => f.classMs + graciaMin * 60e3 <= now.ms);
-  const futuro = async () => {
-    const fut = await fpsEntre(tok, hoy, sumarDias(hoy, 14));
-    return new Set(fut.filter((f) => f.classMs > now.ms).map((f) => f.personId));
+  // todos los FP (de `desde` a +14 días) agrupados por persona, para saber si ya reagendó
+  const porPersonaMapa = async (desde) => {
+    const todos = await fpsEntre(tok, desde, sumarDias(hoy, 14));
+    const mapa = new Map();
+    for (const f of todos) mapa.set(f.personId, [...(mapa.get(f.personId) || []), f]);
+    return mapa;
   };
   // un solo FP por persona (el más reciente) para los reagendos semanales
   const porPersona = (fps) => [...new Map(fps.map((f) => [f.personId || f.id, f])).values()];
@@ -425,27 +449,28 @@ async function candidatosDe(key, cfg, now) {
     }
     case 'manana': {
       const fps = await fpsEntre(tok, hoy, hoy);
-      return { lista: fps.filter((f) => f.classMs > now.ms + 2 * 3600e3 && f.hour >= cfg.mananaDesdeHora), total: fps.length,
-        decidir: (fp, msgs) => decidirManana(fp, msgs, now) };
+      // solo clases lejos de la ventana del recordatorio 2h, para no mandar dos mensajes seguidos
+      return { lista: porPersona(fps.filter((f) => f.classMs - now.ms > (cfg.sendWindowH + 1) * 3600e3 && f.hour >= cfg.mananaDesdeHora)), total: fps.length,
+        decidir: (fp, msgs, ctx) => decidirManana(fp, msgs, now, ctx) };
     }
     case 'm2': {
       const fps = await fpsEntre(tok, sumarDias(hoy, 1), sumarDias(hoy, 1));
-      return { lista: fps, total: fps.length, decidir: (fp, msgs, ctx) => decidirRefuerzo(fp, msgs, now, ctx) };
+      return { lista: porPersona(fps), total: fps.length, decidir: (fp, msgs, ctx) => decidirRefuerzo(fp, msgs, now, ctx) };
     }
     case 'm3': case 'm4': {
       const fps = await fpsEntre(tok, hoy, hoy);
       const ini = (now.dow === 6 ? 7 : 6) * 60;
       const lista = key === 'm3' ? rango(pasados(fps, 90), ini, 11 * 60 + 30) : rango(pasados(fps, 60), 11 * 60 + 30, 18 * 60 + 30);
-      return { lista, total: fps.length, futuroPorPersona: await futuro(), decidir: (fp, msgs, ctx) => decidirNoShow(fp, msgs, now, ctx, 'reagendo') };
+      return { lista, total: fps.length, fpsPorPersona: await porPersonaMapa(fps.length ? fps[0].date : hoy), decidir: (fp, msgs, ctx) => decidirNoShow(fp, msgs, now, ctx, 'reagendo') };
     }
     case 'm7': {
       const ayer = sumarDias(hoy, -1);
       const fps = await fpsEntre(tok, ayer, ayer);
-      return { lista: fps, total: fps.length, futuroPorPersona: await futuro(), decidir: (fp, msgs, ctx) => decidirNoShow(fp, msgs, now, ctx, 'reagendo') };
+      return { lista: fps, total: fps.length, fpsPorPersona: await porPersonaMapa(fps.length ? fps[0].date : hoy), decidir: (fp, msgs, ctx) => decidirNoShow(fp, msgs, now, ctx, 'reagendo') };
     }
     case 'm6': {
       const fps = pasados(await fpsEntre(tok, sumarDias(hoy, -5), hoy), 60);
-      return { lista: porPersona(fps), total: fps.length, futuroPorPersona: await futuro(), decidir: (fp, msgs, ctx) => decidirNoShow(fp, msgs, now, ctx, 'sabado') };
+      return { lista: porPersona(fps), total: fps.length, fpsPorPersona: await porPersonaMapa(fps.length ? fps[0].date : hoy), decidir: (fp, msgs, ctx) => decidirNoShow(fp, msgs, now, ctx, 'sabado') };
     }
     default: return null;
   }
@@ -506,6 +531,7 @@ async function correrModulo(key, reason, programado) {
   if (!cfg.enabled && !manual) return;
   if (modo === 'off' && !manual) return;
   if (!cfg.pipedriveToken) { await log({ level: 'error', msg: 'Falta el token de Pipedrive (Opciones).' }); return; }
+  if (key === 'm5' && now.dow !== 0) { await log({ level: 'info', msg: `${nombre}: solo corre los domingos.` }); return; }
   if (key === 'm1' && !manual && (!cfg.days.includes(now.dow) || now.hour < cfg.startHour || now.hour > cfg.endHour)) return;
   // nunca escribir de madrugada ni de noche, aunque la PC se haya prendido tarde
   const minDia = now.hour * 60 + now.min;
@@ -534,7 +560,9 @@ async function correrModulo(key, reason, programado) {
     // domingo: el módulo tiene dos partes
     const partes = key === 'm5' ? ['m5a', 'm5b'] : [key];
     let enviadosCorrida = 0;
+    const tocados = new Set(); // un solo mensaje por teléfono por corrida
     for (const parte of partes) {
+     try {
       const plan = parte === 'm5a' ? await planDomingoLunes(cfg, now)
         : parte === 'm5b' ? await planDomingoNoShows(cfg, now)
         : await candidatosDe(parte, cfg, now);
@@ -564,6 +592,8 @@ async function correrModulo(key, reason, programado) {
         const etiqueta = `${fp.personName || fp.subject} · ${fp.date !== now.date ? DIAS[diaSemana(fp.date)] + ' ' : ''}${fmtHora(fp.hour, fp.min)}`;
         const clave = `${parte}:${fp.id}`;
         try {
+          const ahora = limaNow();
+          if (ahora.hour * 60 + ahora.min > 21 * 60 + 30) { resumen.saltados.push(`${etiqueta} (pasó la hora límite 21:30)`); continue; }
           if (enviadosCorrida >= cfg.maxEnviosCorrida) { resumen.saltados.push(`${etiqueta} (tope de ${cfg.maxEnviosCorrida} envíos por corrida)`); continue; }
           const { sent = {} } = await chrome.storage.local.get('sent');
           if (sent[clave] || (parte === 'm1' && sent[fp.id])) { resumen.saltados.push(`${etiqueta} (ya enviado)`); continue; }
@@ -578,6 +608,7 @@ async function correrModulo(key, reason, programado) {
           const phone = await phoneOf(fp.personId, cfg.pipedriveToken);
           if (!phone) { resumen.alertas.push(`${etiqueta}: sin celular válido en Pipedrive`); continue; }
           if (bloqueados.has(ultimos9(phone))) { resumen.saltados.push(`${etiqueta} (bloqueado)`); continue; }
+          if (tocados.has(ultimos9(phone))) { resumen.saltados.push(`${etiqueta} (ya se le escribió en esta corrida)`); continue; }
           if (REAGENDOS.has(parte)) {
             const freno = await frenoReagendo(phone);
             if (freno) { resumen.saltados.push(`${etiqueta} (${freno})`); continue; }
@@ -591,10 +622,11 @@ async function correrModulo(key, reason, programado) {
           const msgs = chat.messages || [];
           if (msgs.length && !msgs.some((m) => m.date)) { resumen.alertas.push(`${etiqueta}: no pude leer las fechas del chat, no se envió por seguridad`); continue; }
 
-          const d = plan.decidir(fp, msgs, { sent, futuroPorPersona: plan.futuroPorPersona || new Set() });
+          const d = plan.decidir(fp, msgs, { sent, fpsPorPersona: plan.fpsPorPersona || new Map() });
           if (d.saltar) { if (d.marcar) await marcarSent(clave, d.marcar); resumen.saltados.push(`${etiqueta} (${d.saltar})`); continue; }
           if (d.alerta) { resumen.alertas.push(`${etiqueta}: ${d.alerta}`); continue; }
 
+          tocados.add(ultimos9(phone));
           if (!real) { resumen.simulados.push(`${etiqueta} · ${phone} → ${d.enviar.replace(/\n+/g, ' ')}`); continue; }
 
           await marcarSent(clave, 'intento');
@@ -617,6 +649,11 @@ async function correrModulo(key, reason, programado) {
           resumen.alertas.push(`${etiqueta}: ${e.message || e}`);
         }
       }
+     } catch (e) {
+      // falló WhatsApp Web o Pipedrive para esta parte: reintentar en 10 min (hasta 3h de atraso)
+      resumen.alertas.push(`${parte}: ${e.message || e}`);
+      if (!manual) chrome.alarms.create(`retry:${key}:${programado || ''}`, { delayInMinutes: 10 });
+     }
     }
   } catch (e) {
     resumen.alertas.push(String(e.message || e));
@@ -641,9 +678,11 @@ async function planDomingoLunes(cfg, now) {
   const lunes = sumarDias(now.date, 1);
   const fps = await fpsEntre(cfg.pipedriveToken, lunes, lunes);
   return {
-    lista: fps,
+    lista: [...new Map(fps.map((f) => [f.personId || f.id, f])).values()],
     decidir: (fp, msgs) => {
       if (entrantesDesde(msgs, now.ms - 48 * 3600e3).some((m) => RX_CANCELA.test(m.text))) return { saltar: 'pidió reagendar' };
+      const otra = otraHoraDesde(fp, msgs, now.ms - 48 * 3600e3);
+      if (otra) return { alerta: `el chat menciona otra hora → «${otra}» — revisar a mano` };
       if (entrantesDesde(msgs, now.ms - 24 * 3600e3).some((m) => RX_CONFIRMA.test(m.text) && !RX_CANCELA.test(m.text))) return { saltar: 'ya confirmó' };
       return { enviar: msgDomingoLunes(fp), imagen: true };
     },
@@ -651,11 +690,12 @@ async function planDomingoLunes(cfg, now) {
 }
 async function planDomingoNoShows(cfg, now) {
   const tok = cfg.pipedriveToken;
-  const fps = (await fpsEntre(tok, sumarDias(now.date, -6), sumarDias(now.date, -1))).filter((f) => f.classMs < now.ms);
-  const fut = await fpsEntre(tok, now.date, sumarDias(now.date, 14));
-  const futuroPorPersona = new Set(fut.filter((f) => f.classMs > now.ms).map((f) => f.personId));
-  const lista = [...new Map(fps.map((f) => [f.personId || f.id, f])).values()].filter((f) => !futuroPorPersona.has(f.personId));
-  return { lista, futuroPorPersona, decidir: (fp, msgs, ctx) => decidirNoShow(fp, msgs, now, ctx, 'domingo') };
+  const todos = await fpsEntre(tok, sumarDias(now.date, -6), sumarDias(now.date, 14));
+  const fpsPorPersona = new Map();
+  for (const f of todos) fpsPorPersona.set(f.personId, [...(fpsPorPersona.get(f.personId) || []), f]);
+  const fps = todos.filter((f) => f.date < now.date && f.classMs < now.ms);
+  const lista = [...new Map(fps.map((f) => [f.personId || f.id, f])).values()];
+  return { lista, fpsPorPersona, decidir: (fp, msgs, ctx) => decidirNoShow(fp, msgs, now, ctx, 'domingo') };
 }
 
 
@@ -669,7 +709,7 @@ async function reporte(dia) {
     `REPORTE RURUSH FP · ${dia} · v${chrome.runtime.getManifest().version}`,
     `activa: ${config.enabled !== false} · ventana 2h ≤${config.sendWindowH || 4}h · corridas: ${deDia.length}`,
     `módulos: ${Object.entries(MODULOS).map(([k, m]) => `${m.nombre}=${modoDe(config, k)}`).join(' · ')}`,
-    `FP marcados como enviados (últimos 3 días): ${Object.keys(sent).length}`,
+    `registro de enviados (últimos 14 días): ${Object.keys(sent).length}`,
     '',
   ];
   for (const l of deDia) {
@@ -709,7 +749,9 @@ async function programar(soloFaltantes = false) {
   const cfg = await getConfig();
   const existentes = new Set((await chrome.alarms.getAll()).map((a) => a.name));
   const crear = (nombre, info) => { if (!soloFaltantes || !existentes.has(nombre)) chrome.alarms.create(nombre, info); };
-  if (!soloFaltantes) await chrome.alarms.clearAll();
+  if (!soloFaltantes) {
+    for (const a of await chrome.alarms.getAll()) if (!a.name.startsWith('retry:')) await chrome.alarms.clear(a.name);
+  }
   crear('tick', { delayInMinutes: 1, periodInMinutes: cfg.intervalMin });
   crear('reporte', { when: proximaLima(21, 5), periodInMinutes: 1440 });
   for (const [key, mod] of Object.entries(MODULOS)) {
@@ -718,7 +760,7 @@ async function programar(soloFaltantes = false) {
   }
 }
 
-chrome.runtime.onInstalled.addListener(() => programar());
+chrome.runtime.onInstalled.addListener((d) => programar(d.reason !== 'install' && d.reason !== 'update'));
 chrome.runtime.onStartup.addListener(() => programar(true));
 chrome.alarms.onAlarm.addListener((a) => {
   if (a.name === 'tick') return encolar('m1', 'alarm');
@@ -745,6 +787,6 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
 // exportado solo para pruebas en Node
 if (typeof module !== 'undefined') {
   module.exports = { analizar, mensaje, horasMencionadas, normPhone, fmtHora, utcToLima, limpiarSent, ultimos9,
-    opciones, sumarDias, diaSemana, decidirNoShow, decidirManana, decidirRefuerzo, msgReagendo, msgManana,
+    opciones, sumarDias, diaSemana, decidirNoShow, aLas, decidirManana, decidirRefuerzo, msgReagendo, msgManana,
     msgRefuerzo, msgSabado, msgDomingoLunes, msgDomingoNoShow, MODULOS };
 }

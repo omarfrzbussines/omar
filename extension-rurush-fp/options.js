@@ -11,6 +11,7 @@ const rango = (v, min, max, def) => {
   return v === '' || Number.isNaN(n) ? def : Math.min(max, Math.max(min, Math.round(n)));
 };
 
+$('save').disabled = true;
 async function cargar() {
   const { config = {} } = await chrome.storage.local.get('config');
   const c = { ...DEFAULTS, ...config };
@@ -32,6 +33,7 @@ async function cargar() {
   $('expectedNumber').value = c.expectedNumber;
   $('blocklist').value = c.blocklist.join('\n');
   for (const k of ['startHour', 'endHour', 'intervalMin', 'sendWindowH']) $(k).value = c[k];
+  $('save').disabled = false;
 }
 
 $('save').onclick = async () => {
