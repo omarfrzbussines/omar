@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Rurush FP — Recordatorio 2h",
+  "version": "1.0.0",
+  "description": "Recordatorio cercano + GPS a los Free Pass de hoy. Lee Pipedrive, envía por WhatsApp Web. Sin uso de Claude.",
+  "permissions": ["alarms", "storage", "tabs", "notifications"],
+  "host_permissions": [
+    "https://api.pipedrive.com/*",
+    "https://web.whatsapp.com/*"
+  ],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": { "48": "icon48.png", "128": "icon128.png" },
+  "action": { "default_popup": "popup.html", "default_title": "Rurush FP" },
+  "options_page": "options.html"
+}

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Rurush FP — Opciones</title>
+<style>
+  body { font: 14px system-ui, sans-serif; max-width: 560px; margin: 24px auto; padding: 0 16px; color: #1c1c1c; }
+  label { display: block; margin: 14px 0 4px; font-weight: 600; }
+  input[type=text], input[type=password], input[type=number] { width: 100%; padding: 7px; box-sizing: border-box; }
+  .hint { color: #666; font-size: 12px; font-weight: 400; }
+  .check { display: flex; gap: 8px; align-items: center; margin-top: 14px; font-weight: 600; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  button { margin-top: 20px; padding: 8px 16px; border: 0; border-radius: 6px; background: #e65100; color: #fff; cursor: pointer; }
+  #ok { color: #1e6b35; margin-left: 10px; }
+</style>
+</head>
+<body>
+  <h2>🔥 Rurush FP — Opciones</h2>
+
+  <div class="check"><input type="checkbox" id="enabled"> Activa (corre sola en el horario)</div>
+  <div class="check"><input type="checkbox" id="dryRun"> 🧪 Simulación — arma los mensajes pero NO los envía</div>
+
+  <label>Token de Pipedrive <span class="hint">(Pipedrive → Configuración personal → API)</span></label>
+  <input type="password" id="pipedriveToken" autocomplete="off">
+
+  <label>Número de la sesión de WhatsApp Web <span class="hint">(ej. 51926918075 · vacío = no verificar)</span></label>
+  <input type="text" id="expectedNumber">
+
+  <label>Números que NUNCA se contactan <span class="hint">(uno por línea, con 51)</span></label>
+  <textarea id="blocklist" rows="4" style="width:100%"></textarea>
+
+  <div class="grid">
+    <div><label>Desde (hora)</label><input type="number" id="startHour" min="0" max="23"></div>
+    <div><label>Hasta (hora)</label><input type="number" id="endHour" min="0" max="23"></div>
+    <div><label>Cada (min)</label><input type="number" id="intervalMin" min="15" max="120"></div>
+  </div>
+  <label>Enviar si a la clase le faltan ≤ (horas)</label>
+  <input type="number" id="sendWindowH" min="1" max="8">
+
+  <button id="save">Guardar</button><span id="ok"></span>
+  <script src="options.js"></script>
+</body>
+</html>
