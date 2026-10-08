@@ -3,21 +3,33 @@
 Reemplaza la rutina **FPS 2HRS** sin gastar uso de Claude. Corre en el Chrome
 donde está abierto WhatsApp Web (Pipechat) de las asesoras.
 
-## Qué hace (cada 30 min, 8am–8pm, lun–sáb, hora Lima)
+## Módulos (hora Lima)
 
-1. **Pipedrive** → actividades `FP…` / `FREE PASS…` de HOY (ventana ayer → hoy+2 por el bug de UTC).
-2. **Portero** → solo sigue si a alguna clase le faltan **≤ 4h** y todavía no pasó.
-3. **WhatsApp Web** → abre el chat y lo lee:
-   - ya tiene recordatorio cercano con GPS hoy → salta
-   - canceló / pidió reagendar → salta
-   - el chat menciona **otra hora** distinta a Pipedrive → **no envía**, lo marca ⚠️ para revisar a mano
-   - confirmó → reconfirmación + GPS · no respondió → "¿confirmas?" + GPS
-4. **Envía** un solo mensaje (≤180 caracteres, combinatorio para que no se repita).
-5. Registra cada FP enviado para no repetirle, y muestra el resumen en el ícono 🔥.
+| Módulo | Cuándo | A quién | Reemplaza |
+|---|---|---|---|
+| Recordatorio 2h | cada 30 min, lun–sáb 8–20h | FP de hoy con ≤4h para la clase | FPS 2HRS |
+| Recordatorio de la mañana | lun–sáb 9:00 (configurable) | FP de hoy desde la 1pm | (nuevo) |
+| No-show de ayer | lun–sáb 9:15 | FP de ayer que no vinieron | FP 9 AM (parte no-shows) |
+| Sábado seguimiento | sáb 11:00 | no-shows lun–sáb sin FP nuevo | FP SABADOS SEGUIMIENTO |
+| No-show de la mañana | lun–sáb 13:00 | FP de hoy 6:00–11:30 | FP 1PM |
+| Refuerzo noche anterior | dom–vie 20:00 | FP de mañana | FP 8PM (parte FP de mañana) |
+| No-show de la tarde | lun–sáb 20:10 | FP de hoy 11:30–18:30 | FP 8PM (parte no-shows) |
+| Domingo | dom 9:00 | FP del lunes + no-shows de la semana | DOMINGO REC FP 9 AM |
 
-Si en Opciones cargaste una **imagen "cómo llegar"**, envía la imagen con el texto como descripción, en una sola burbuja.
+Cada módulo tiene su modo en Opciones: 🧪 Simulación (no envía), 📤 Envío real o Apagado.
 
-Todos los días a las **9:05pm** descarga solo el reporte del día en
+Reglas comunes:
+- Antes de escribir abre el chat, comprueba que es el del número y lo lee.
+- Reagendos: máximo 1 cada 48h y 3 en total por persona; nunca a quien ya tiene un FP nuevo.
+- Salta a quien escribió hace <3h, dijo que ya asistió, que avisa, o canceló (según el módulo).
+- Avisa ⚠️ para revisar a mano: otra hora en el chat, "no me interesa", "voy el viernes" sin FP nuevo.
+- Nunca escribe antes de las 6:00 ni después de las 21:30; si la PC estuvo apagada >3h a la hora programada, ese módulo se omite.
+- No escribe en Pipedrive.
+- Dirección: Av. Larco 1164, Víctor Larco, al costado de Mass.
+
+La imagen "cómo llegar" (Opciones) va en el recordatorio 2h, el refuerzo de la noche anterior y el del domingo.
+
+Todos los días a las **9:05pm** descarga el reporte del día en
 `Descargas/RurushFP/reporte-AAAA-MM-DD.txt` (también está el botón 📋 Copiar reporte de hoy).
 
 Nunca contacta los números de la lista de bloqueo (vienen cargados 51942853538 y 51953876647).
@@ -33,13 +45,11 @@ Nunca contacta los números de la lista de bloqueo (vienen cargados 51942853538 
    - **Guardar**
 5. Deja una pestaña de WhatsApp Web abierta (mejor fijada). Si no hay, la extensión la abre.
 
-## Primera vez: modo simulación 🧪
+## Activar un módulo
 
-Viene con **Simulación activada**: hace todo menos apretar Enviar y te muestra en el
-ícono 🔥 qué mensaje le habría mandado a cada uno. Revisa un par de corridas y, si
-todo cuadra, en Opciones desmarca **Simulación** → desde ahí envía de verdad.
-
-Después **desactiva la rutina "FPS 2HRS"** para que no manden los dos.
+1. Viene en 🧪 Simulación. Déjalo correr 1–2 días y revisa en el ícono 🔥 qué habría enviado.
+2. Si está bien, en Opciones pásalo a 📤 Envío real.
+3. Pausa (o recorta) la rutina de Claude que reemplaza, para que no salgan mensajes dobles.
 
 ## Convivencia con las rutinas de Claude
 

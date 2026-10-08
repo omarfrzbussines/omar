@@ -131,13 +131,13 @@ async function esperarSalida(antes, intentos = 30) {
 
 // Envía el recordatorio en el chat ya abierto, sin recargar:
 // con imagen → una sola burbuja (imagen + texto como descripción); sin imagen → solo texto.
-async function enviarRecordatorio(text, phone, header) {
+async function enviarRecordatorio(text, phone, header, conImagen = true) {
   const seguro = () => chatEsDe(phone) && cabecera() === header;
   const c = compose();
   if (!c) return { ok: false, error: 'chat no abierto' };
   if (!seguro()) return { ok: false, noEnviado: true, error: 'el chat abierto no es el de este número' };
   if (c.innerText.trim()) return { ok: false, noEnviado: true, error: 'hay un borrador escrito en el chat' };
-  const { gpsImage } = await chrome.storage.local.get('gpsImage');
+  const { gpsImage } = conImagen ? await chrome.storage.local.get('gpsImage') : {};
 
   if (gpsImage) {
     const blob = await (await fetch(gpsImage)).blob();
@@ -196,7 +196,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     document.documentElement.dataset.rurushNav = '1';
     reply({ ok: true });
   } else if (msg.type === 'sendReminder') {
-    enviarRecordatorio(msg.text, msg.phone, msg.header).then(reply, (e) => reply({ ok: false, error: String(e) }));
+    enviarRecordatorio(msg.text, msg.phone, msg.header, msg.conImagen !== false).then(reply, (e) => reply({ ok: false, error: String(e) }));
     return true;
   }
   return false;

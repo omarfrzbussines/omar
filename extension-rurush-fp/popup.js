@@ -1,13 +1,26 @@
 const $ = (id) => document.getElementById(id);
 
+let MODS = {};
+const ETIQ = { real: ['📤 Envío real', 'real'], sim: ['🧪 Simulación', 'sim'], off: ['Apagado', 'apag'] };
+
 async function pintar() {
   const { config = {}, logs = [] } = await chrome.storage.local.get(['config', 'logs']);
   const enabled = config.enabled !== false;
-  const dryRun = config.dryRun !== false;
   $('estado').textContent = enabled ? '● Activa' : '● Pausada';
   $('estado').className = 'badge ' + (enabled ? 'on' : 'off');
-  $('modo').textContent = dryRun ? '🧪 Simulación (no envía)' : '📤 Envío real';
-  $('modo').className = 'badge ' + (dryRun ? 'test' : 'on');
+
+  const tabla = $('mods');
+  tabla.innerHTML = '';
+  for (const [k, nombre] of Object.entries(MODS)) {
+    const modo = (config.modos && config.modos[k]) || (k === 'm1' ? (config.dryRun === false ? 'real' : 'sim') : 'sim');
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td></td><td style="text-align:right"><span class="badge"></span></td>';
+    tr.firstChild.textContent = nombre;
+    const b = tr.querySelector('.badge');
+    b.textContent = ETIQ[modo][0];
+    b.className = 'badge ' + ETIQ[modo][1];
+    tabla.appendChild(tr);
+  }
 
   const ul = $('logs');
   ul.innerHTML = '';
@@ -35,19 +48,10 @@ async function pintar() {
 $('run').onclick = async () => {
   $('run').disabled = true;
   $('run').textContent = 'Corriendo…';
-  await chrome.runtime.sendMessage({ type: 'runNow' });
+  await chrome.runtime.sendMessage({ type: 'runNow', mod: $('modSel').value });
   $('run').disabled = false;
   $('run').textContent = 'Ejecutar ahora';
   pintar();
-};
-// clic en la etiqueta de modo = cambiar entre simulación y envío real
-$('modo').style.cursor = 'pointer';
-$('modo').title = 'Clic para cambiar entre simulación y envío real';
-$('modo').onclick = async () => {
-  const { config = {} } = await chrome.storage.local.get('config');
-  const dryRun = config.dryRun !== false;
-  if (dryRun && !confirm('¿Pasar a ENVÍO REAL? Desde ahora los recordatorios se envían de verdad.')) return;
-  await chrome.storage.local.set({ config: { ...config, dryRun: !dryRun } });
 };
 // reporte de texto con todas las corridas de hoy (hora Lima), para revisarlo con Claude
 $('rep').onclick = async () => {
@@ -57,5 +61,13 @@ $('rep').onclick = async () => {
   setTimeout(() => ($('rep').textContent = '📋 Copiar reporte de hoy'), 2000);
 };
 $('opts').onclick = () => chrome.runtime.openOptionsPage();
+chrome.runtime.sendMessage({ type: 'modulos' }, (m) => {
+  MODS = m || {};
+  for (const [k, nombre] of Object.entries(MODS)) {
+    const o = document.createElement('option');
+    o.value = k; o.textContent = nombre;
+    $('modSel').appendChild(o);
+  }
+  pintar();
+});
 chrome.storage.onChanged.addListener(pintar);
-pintar();

@@ -3,13 +3,17 @@
 <head>
 <meta charset="utf-8">
 <style>
-  body { font: 13px system-ui, sans-serif; width: 380px; margin: 0; padding: 12px; color: #1c1c1c; }
+  body { font: 13px system-ui, sans-serif; width: 420px; margin: 0; padding: 12px; color: #1c1c1c; }
   h1 { font-size: 15px; margin: 0 0 8px; }
   .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
   button { padding: 6px 10px; border: 0; border-radius: 6px; background: #e65100; color: #fff; cursor: pointer; }
   button.sec { background: #eee; color: #1c1c1c; }
   .badge { padding: 2px 8px; border-radius: 10px; font-size: 12px; }
   .on { background: #e6f4ea; color: #1e6b35; } .off { background: #fdecea; color: #a1281c; } .test { background: #fff4e0; color: #8a5300; }
+  #mods { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 12px; }
+  #mods td { padding: 3px 4px; border-top: 1px solid #eee; }
+  select { padding: 5px; border-radius: 6px; }
+  .sim { background: #fff4e0; color: #8a5300; } .real { background: #e6f4ea; color: #1e6b35; } .apag { background: #eee; color: #777; }
   ul { list-style: none; padding: 0; margin: 0; max-height: 380px; overflow: auto; }
   li { border-top: 1px solid #eee; padding: 6px 0; }
   .t { color: #777; font-size: 11px; }
@@ -17,12 +21,13 @@
 </style>
 </head>
 <body>
-  <h1>🔥 Rurush FP — recordatorio 2h</h1>
+  <h1>🔥 Rurush FP</h1>
   <div class="row">
     <span id="estado" class="badge"></span>
-    <span id="modo" class="badge"></span><span class="t">← clic para cambiar</span>
   </div>
+  <table id="mods"></table>
   <div class="row">
+    <select id="modSel"></select>
     <button id="run">Ejecutar ahora</button>
     <button id="opts" class="sec">Opciones</button>
     <button id="rep" class="sec">📋 Copiar reporte de hoy</button>
