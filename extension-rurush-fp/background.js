@@ -306,14 +306,14 @@ async function run(reason) {
       if (a.otraHora) { resumen.alertas.push(`${etiqueta}: el chat menciona otra hora → «${a.otraHora}» — revisar a mano`); continue; }
 
       const texto = mensaje(fp, a.confirmo);
-      if (cfg.dryRun) { resumen.simulados.push(`${etiqueta} → ${texto.replace(/\n/g, ' ')}`); continue; }
+      if (cfg.dryRun) { resumen.simulados.push(`${etiqueta} · ${phone} → ${texto.replace(/\n/g, ' ')}`); continue; }
 
       const draft = await openChat(tab.id, phone, texto);
       if (!draft || draft.invalid || !draft.hasDraft) { resumen.alertas.push(`${etiqueta}: no se pudo cargar el mensaje`); continue; }
       const r = await ask(tab.id, { type: 'send' });
       if (r && r.ok) {
         sent[fp.id] = new Date().toISOString();
-        resumen.enviados.push(etiqueta);
+        resumen.enviados.push(`${etiqueta} · ${phone} · «${texto.replace(/\n/g, ' ')}»`);
       } else {
         resumen.alertas.push(`${etiqueta}: falló el clic en Enviar (${(r && r.error) || 'sin respuesta'})`);
       }

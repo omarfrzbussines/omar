@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Rurush FP — Recordatorio 2h",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Recordatorio cercano + GPS a los Free Pass de hoy. Lee Pipedrive, envía por WhatsApp Web. Sin uso de Claude.",
   "permissions": [
     "alarms",
