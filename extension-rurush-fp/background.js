@@ -208,7 +208,7 @@ function analizar(fp, msgs, hoy) {
   const recientes = [...deHoy.slice(-6), ...msgs.slice(-1)];
   const avisoDesde = fp.hour * 60 + fp.min - (fp.cfgWindowH * 60 + 30);
 
-  const yaCercano = deHoy.some((m) => m.out && /maps\.app\.goo\.gl|larco 1170/i.test(m.text)
+  const yaCercano = deHoy.some((m) => m.out && /maps\.app\.goo\.gl|larco 11(64|70)/i.test(m.text)
     && (m.minutes == null || m.minutes >= avisoDesde));
   const cancelo = recientes.some((m) => !m.out && RX_CANCELA.test(m.text));
   const confirmo = deHoy.some((m) => !m.out && RX_CONFIRMA.test(m.text));
@@ -237,7 +237,7 @@ function mensaje(fp, confirmo) {
     cuerpo = pick([`Hoy es tu clase de prueba GRATIS a las ${h} 🔥`, `Te esperamos hoy a las ${h} para tu clase gratis 💪`, `Hoy a las ${h} es tu clase de prueba 🔥`]);
     cierre = pick([`¿Confirmas? Te paso la ubicación 📍 ${GPS}`, `¿Me confirmas? 📍 ${GPS}`, `¿Confirmas tu asistencia? Ubicación 📍 ${GPS}`]);
   }
-  const ref = 'Av. Larco 1170, al costado de Mass.';
+  const ref = 'Av. Larco 1164, Víctor Larco, al costado de Mass.';
   const full = `${hola} ${cuerpo}\n${cierre}\n${ref}`;
   return full.length <= 180 ? full : `${hola} ${cuerpo}\n${cierre}`;
 }
