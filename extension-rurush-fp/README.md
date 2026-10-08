@@ -24,7 +24,7 @@ Nunca contacta los números de la lista de bloqueo (vienen cargados 51942853538 
 3. Activa **Modo de desarrollador** (arriba a la derecha) → **Cargar descomprimida** → elige la carpeta.
 4. Clic en el ícono 🔥 → **Opciones**:
    - pega el **token de Pipedrive**
-   - (opcional) el número de esa sesión de WhatsApp Web, para que verifique que es la correcta
+   - el número de la sesión ya viene cargado (51926918075): si WhatsApp Web está en otro número, no envía nada
    - **Guardar**
 5. Deja una pestaña de WhatsApp Web abierta (mejor fijada). Si no hay, la extensión la abre.
 

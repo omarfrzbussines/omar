@@ -1,5 +1,5 @@
 const DEFAULTS = {
-  enabled: true, dryRun: true, pipedriveToken: '', expectedNumber: '',
+  enabled: true, dryRun: true, pipedriveToken: '', expectedNumber: '51926918075',
   blocklist: ['51942853538', '51953876647'],
   startHour: 8, endHour: 20, intervalMin: 30, sendWindowH: 4,
 };

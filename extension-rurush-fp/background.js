@@ -9,7 +9,7 @@ const DEFAULTS = {
   enabled: true,
   dryRun: true,            // simulación: arma todo pero NO aprieta Enviar
   pipedriveToken: '',
-  expectedNumber: '',      // número de la sesión de WhatsApp Web (vacío = no verificar)
+  expectedNumber: '51926918075', // número de la sesión de WhatsApp Web (vacío = no verificar)
   blocklist: ['51942853538', '51953876647'],
   startHour: 8,            // primera corrida (hora Lima)
   endHour: 20,             // última corrida (hora Lima, inclusive)
