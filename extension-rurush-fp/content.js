@@ -3,6 +3,9 @@ if (!window.__rurushFP) {
 window.__rurushFP = true;
 
 const RX_PRE = /\[(\d{1,2}):(\d{2})(?:\s*([ap])\.?\s*m\.?)?,?\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\]/i;
+const RX_PRE_ISO = /\[(\d{1,2}):(\d{2})(?:\s*([ap])\.?\s*m\.?)?,?\s*(\d{4})-(\d{2})-(\d{2})\]/i;
+// WhatsApp Web usa el formato de fecha del navegador: en-US = m/d/aaaa, el resto d/m/aaaa
+const MES_PRIMERO = /^en-US/i.test(navigator.language || '');
 
 function wid() {
   try {
@@ -20,25 +23,48 @@ function invalidPopup() {
   return [...nodes].some((n) => /(no es v[aá]lido|isn.t valid|is invalid|not on whatsapp|no est[aá] en whatsapp)/i.test(n.innerText || ''));
 }
 
-// [{out, text, date, dateAlt, minutes}] en orden cronológico (viejo → nuevo)
+const esSaliente = (el) => !!(el.closest('.message-out') || el.closest('[data-id^="true_"]'));
+
+// [{out, text, date, minutes}] en orden cronológico (viejo → nuevo); date/minutes = null si no se pudo leer
 function readMessages() {
   const out = [];
+  const pad = (n) => String(n).padStart(2, '0');
   for (const el of document.querySelectorAll('#main [data-pre-plain-text]')) {
-    const pre = el.getAttribute('data-pre-plain-text') || '';
-    const m = pre.match(RX_PRE);
-    let date = null, dateAlt = null, minutes = null;
+    const pre = (el.getAttribute('data-pre-plain-text') || '').replace(/[  ]/g, ' ');
+    let date = null, minutes = null, m;
+    if ((m = pre.match(RX_PRE))) {
+      const [d, mo] = MES_PRIMERO ? [m[5], m[4]] : [m[4], m[5]];
+      date = `${m[6]}-${pad(mo)}-${pad(d)}`;
+    } else if ((m = pre.match(RX_PRE_ISO))) {
+      date = `${m[4]}-${m[5]}-${m[6]}`;
+    }
     if (m) {
       let h = Number(m[1]);
       if (m[3]) h = (h % 12) + (m[3].toLowerCase() === 'p' ? 12 : 0);
       minutes = h * 60 + Number(m[2]);
-      const pad = (n) => String(n).padStart(2, '0');
-      date = `${m[6]}-${pad(m[5])}-${pad(m[4])}`;    // d/m/aaaa
-      dateAlt = `${m[6]}-${pad(m[4])}-${pad(m[5])}`; // m/d/aaaa (WhatsApp en inglés)
     }
     const text = (el.querySelector('span.selectable-text') || el).innerText || '';
-    out.push({ out: !!el.closest('.message-out'), text, date, dateAlt, minutes });
+    out.push({ out: esSaliente(el), text, date, minutes });
   }
   return out;
+}
+
+// ¿El chat abierto es el de este número?
+// 1) esta carga de la página se abrió con send?phone=<phone> (lo anota main.js)
+// 2) ningún mensaje visible pertenece a otro número
+function chatEsDe(phone) {
+  if (document.documentElement.dataset.rurushPhone !== phone) return false;
+  for (const el of document.querySelectorAll('#main [data-id*="@c.us"]')) {
+    const m = (el.getAttribute('data-id') || '').match(/_(\d+)@c\.us/);
+    if (m && m[1] !== phone) return false;
+  }
+  return true;
+}
+
+function cabecera() {
+  // solo el nombre/número (primera línea); el estado "en línea / escribiendo…" cambia solo
+  const h = document.querySelector('#main header');
+  return h ? ((h.innerText || '').trim().split('\n')[0] || '').slice(0, 120) : '';
 }
 
 function sendButton() {
@@ -62,7 +88,10 @@ async function clickSend() {
 }
 
 function outCount() {
-  return document.querySelectorAll('#main .message-out').length;
+  return Math.max(
+    document.querySelectorAll('#main .message-out').length,
+    document.querySelectorAll('#main [data-id^="true_"]').length,
+  );
 }
 
 const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -102,9 +131,12 @@ async function esperarSalida(antes, intentos = 30) {
 
 // Envía el recordatorio en el chat ya abierto, sin recargar:
 // con imagen → una sola burbuja (imagen + texto como descripción); sin imagen → solo texto.
-async function enviarRecordatorio(text) {
+async function enviarRecordatorio(text, phone, header) {
+  const seguro = () => chatEsDe(phone) && cabecera() === header;
   const c = compose();
   if (!c) return { ok: false, error: 'chat no abierto' };
+  if (!seguro()) return { ok: false, noEnviado: true, error: 'el chat abierto no es el de este número' };
+  if (c.innerText.trim()) return { ok: false, noEnviado: true, error: 'hay un borrador escrito en el chat' };
   const { gpsImage } = await chrome.storage.local.get('gpsImage');
 
   if (gpsImage) {
@@ -122,25 +154,29 @@ async function enviarRecordatorio(text) {
       const caja = cajaCaption();
       const conTexto = caja ? await pegarTexto(caja, text) : false;
       btn = botonEnviarPreview() || btn;
+      if (!seguro()) return { ok: false, noEnviado: true, error: 'el chat cambió antes de enviar' };
       btn.click();
       if (!(await esperarSalida(antes))) return { ok: false, error: 'la imagen no apareció en el chat' };
       if (conTexto) return { ok: true, imagen: true };
       // la imagen salió sin descripción: mandar el texto aparte
       await esperar(1500);
-      const r = await enviarTexto(text);
-      return { ...r, imagen: true, aviso: 'imagen y texto salieron por separado' };
+      const r = await enviarTexto(text, seguro);
+      return { ok: true, imagen: true, aviso: r.ok ? 'imagen y texto salieron por separado' : `salió la imagen, pero el texto no (${r.error})` };
     }
     // no abrió la vista previa: seguimos solo con texto
-    const r = await enviarTexto(text);
-    return { ...r, imagen: false, aviso: 'no se pudo adjuntar la imagen, se envió solo el texto' };
+    // si quedó una vista previa abierta, no seguir: podría enviarse sola después
+    if (botonEnviarPreview()) return { ok: false, noEnviado: true, error: 'quedó abierta la vista previa de la imagen' };
+    const r = await enviarTexto(text, seguro);
+    return { ...r, imagen: false, aviso: r.ok ? 'no se pudo adjuntar la imagen, se envió solo el texto' : undefined };
   }
-  return enviarTexto(text);
+  return enviarTexto(text, seguro);
 }
 
-async function enviarTexto(text) {
+async function enviarTexto(text, seguro) {
   const c = compose();
-  if (!c) return { ok: false, error: 'chat no abierto' };
-  if (!(await pegarTexto(c, text))) return { ok: false, error: 'no se pudo escribir el mensaje' };
+  if (!c) return { ok: false, noEnviado: true, error: 'chat no abierto' };
+  if (!(await pegarTexto(c, text))) return { ok: false, noEnviado: true, error: 'no se pudo escribir el mensaje' };
+  if (!seguro()) return { ok: false, noEnviado: true, error: 'el chat cambió antes de enviar' };
   return clickSend();
 }
 
@@ -150,16 +186,17 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   } else if (msg.type === 'chatState') {
     const c = compose();
     reply({
-      ready: !!c,
+      ready: !!c && (!msg.phone || chatEsDe(msg.phone)),
       hasDraft: !!(c && c.innerText.trim()),
       invalid: invalidPopup(),
+      header: cabecera(),
       messages: c ? readMessages() : [],
     });
   } else if (msg.type === 'prepNav') {
     document.documentElement.dataset.rurushNav = '1';
     reply({ ok: true });
   } else if (msg.type === 'sendReminder') {
-    enviarRecordatorio(msg.text).then(reply, (e) => reply({ ok: false, error: String(e) }));
+    enviarRecordatorio(msg.text, msg.phone, msg.header).then(reply, (e) => reply({ ok: false, error: String(e) }));
     return true;
   }
   return false;

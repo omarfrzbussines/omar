@@ -4,6 +4,10 @@ const DEFAULTS = {
   startHour: 8, endHour: 20, intervalMin: 30, sendWindowH: 4,
 };
 const $ = (id) => document.getElementById(id);
+const rango = (v, min, max, def) => {
+  const n = Number(v);
+  return v === '' || Number.isNaN(n) ? def : Math.min(max, Math.max(min, Math.round(n)));
+};
 
 async function cargar() {
   const { config = {} } = await chrome.storage.local.get('config');
@@ -24,11 +28,11 @@ $('save').onclick = async () => {
     dryRun: $('dryRun').checked,
     pipedriveToken: $('pipedriveToken').value.trim(),
     expectedNumber: $('expectedNumber').value.replace(/\D/g, ''),
-    blocklist: $('blocklist').value.split(/\s+/).map((x) => x.replace(/\D/g, '')).filter(Boolean),
-    startHour: Number($('startHour').value),
-    endHour: Number($('endHour').value),
-    intervalMin: Math.max(15, Number($('intervalMin').value)),
-    sendWindowH: Number($('sendWindowH').value),
+    blocklist: $('blocklist').value.split(/[\n,;]+/).map((x) => x.replace(/\D/g, '')).filter((x) => x.length >= 9),
+    startHour: rango($('startHour').value, 0, 23, DEFAULTS.startHour),
+    endHour: rango($('endHour').value, 0, 23, DEFAULTS.endHour),
+    intervalMin: rango($('intervalMin').value, 15, 120, DEFAULTS.intervalMin),
+    sendWindowH: rango($('sendWindowH').value, 1, 8, DEFAULTS.sendWindowH),
   };
   await chrome.storage.local.set({ config: nuevo });
   await chrome.runtime.sendMessage({ type: 'reschedule' });
