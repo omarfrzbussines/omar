@@ -15,6 +15,11 @@ donde está abierto WhatsApp Web (Pipechat) de las asesoras.
 4. **Envía** un solo mensaje (≤180 caracteres, combinatorio para que no se repita).
 5. Registra cada FP enviado para no repetirle, y muestra el resumen en el ícono 🔥.
 
+Si en Opciones cargaste una **imagen "cómo llegar"**, la envía justo después del texto.
+
+Todos los días a las **9:05pm** descarga solo el reporte del día en
+`Descargas/RurushFP/reporte-AAAA-MM-DD.txt` (también está el botón 📋 Copiar reporte de hoy).
+
 Nunca contacta los números de la lista de bloqueo (vienen cargados 51942853538 y 51953876647).
 
 ## Instalación (una sola vez)

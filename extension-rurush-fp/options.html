@@ -37,6 +37,11 @@
   <label>Enviar si a la clase le faltan ≤ (horas)</label>
   <input type="number" id="sendWindowH" min="1" max="8">
 
+  <label>Imagen "cómo llegar" <span class="hint">(se envía después del texto con GPS · JPG o PNG)</span></label>
+  <input type="file" id="img" accept="image/jpeg,image/png">
+  <div style="margin-top:8px"><img id="imgPrev" style="max-width:220px;display:none;border-radius:6px"></div>
+  <button id="imgDel" type="button" style="display:none;background:#eee;color:#1c1c1c;margin-top:6px">Quitar imagen</button>
+
   <button id="save">Guardar</button><span id="ok"></span>
   <script src="options.js"></script>
 </body>

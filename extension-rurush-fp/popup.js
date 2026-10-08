@@ -50,23 +50,9 @@ $('modo').onclick = async () => {
   await chrome.storage.local.set({ config: { ...config, dryRun: !dryRun } });
 };
 // reporte de texto con todas las corridas de hoy (hora Lima), para revisarlo con Claude
-const diaLima = (iso) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
 $('rep').onclick = async () => {
-  const { logs = [], config = {}, sent = {} } = await chrome.storage.local.get(['logs', 'config', 'sent']);
-  const hoy = diaLima(new Date().toISOString());
-  const deHoy = logs.filter((l) => diaLima(l.at) === hoy).reverse();
-  const lineas = [
-    `REPORTE RURUSH FP · ${hoy} · v${chrome.runtime.getManifest().version}`,
-    `modo: ${config.dryRun === false ? 'ENVÍO REAL' : 'SIMULACIÓN'} · activa: ${config.enabled !== false} · ventana ≤${config.sendWindowH || 4}h · corridas hoy: ${deHoy.length}`,
-    `FP marcados como enviados (últimos 3 días): ${Object.keys(sent).length}`,
-    '',
-  ];
-  for (const l of deHoy) {
-    const t = new Date(l.at).toLocaleTimeString('es-PE', { timeZone: 'America/Lima', hour: '2-digit', minute: '2-digit' });
-    lineas.push(`[${t}] ${l.msg}`);
-    for (const [k, arr] of Object.entries(l.detalle || {})) for (const x of arr) lineas.push(`    ${k}: ${x}`);
-  }
-  await navigator.clipboard.writeText(lineas.join('\n'));
+  const { texto } = await chrome.runtime.sendMessage({ type: 'report' });
+  await navigator.clipboard.writeText(texto);
   $('rep').textContent = '✓ Copiado';
   setTimeout(() => ($('rep').textContent = '📋 Copiar reporte de hoy'), 2000);
 };

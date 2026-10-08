@@ -36,4 +36,20 @@ $('save').onclick = async () => {
   setTimeout(() => ($('ok').textContent = ''), 2000);
 };
 
+async function pintarImg() {
+  const { gpsImage } = await chrome.storage.local.get('gpsImage');
+  $('imgPrev').src = gpsImage || '';
+  $('imgPrev').style.display = gpsImage ? 'block' : 'none';
+  $('imgDel').style.display = gpsImage ? 'inline-block' : 'none';
+}
+$('img').onchange = () => {
+  const f = $('img').files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = async () => { await chrome.storage.local.set({ gpsImage: r.result }); pintarImg(); };
+  r.readAsDataURL(f);
+};
+$('imgDel').onclick = async () => { await chrome.storage.local.remove('gpsImage'); $('img').value = ''; pintarImg(); };
+
 cargar();
+pintarImg();

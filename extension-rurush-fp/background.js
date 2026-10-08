@@ -314,6 +314,12 @@ async function run(reason) {
       if (r && r.ok) {
         sent[fp.id] = new Date().toISOString();
         resumen.enviados.push(`${etiqueta} · ${phone} · «${texto.replace(/\n/g, ' ')}»`);
+        const { gpsImage } = await chrome.storage.local.get('gpsImage');
+        if (gpsImage) {
+          await sleep(1500);
+          const img = await ask(tab.id, { type: 'sendImage' });
+          if (!img || !img.ok) resumen.alertas.push(`${etiqueta}: texto enviado, pero la imagen no (${(img && img.error) || 'sin respuesta'})`);
+        }
       } else {
         resumen.alertas.push(`${etiqueta}: falló el clic en Enviar (${(r && r.error) || 'sin respuesta'})`);
       }
@@ -351,19 +357,68 @@ function limpiarSent(sent) {
   return out;
 }
 
+// ───────────────────────── reporte del día ─────────────────────────
+const diaLima = (iso) => new Date(Date.parse(iso) + LIMA_OFFSET_H * 3600e3).toISOString().slice(0, 10);
+
+async function reporte(dia) {
+  const { logs = [], config = {}, sent = {} } = await chrome.storage.local.get(['logs', 'config', 'sent']);
+  const deDia = logs.filter((l) => diaLima(l.at) === dia).reverse();
+  const lineas = [
+    `REPORTE RURUSH FP · ${dia} · v${chrome.runtime.getManifest().version}`,
+    `modo: ${config.dryRun === false ? 'ENVÍO REAL' : 'SIMULACIÓN'} · activa: ${config.enabled !== false} · ventana ≤${config.sendWindowH || 4}h · corridas: ${deDia.length}`,
+    `FP marcados como enviados (últimos 3 días): ${Object.keys(sent).length}`,
+    '',
+  ];
+  for (const l of deDia) {
+    const d = new Date(Date.parse(l.at) + LIMA_OFFSET_H * 3600e3);
+    const t = `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+    lineas.push(`[${t}] ${l.msg}`);
+    for (const [k, arr] of Object.entries(l.detalle || {})) for (const x of arr) lineas.push(`    ${k}: ${x}`);
+  }
+  return { texto: lineas.join('\n'), corridas: deDia.length };
+}
+
+async function descargarReporte() {
+  const dia = limaNow().date;
+  const { texto, corridas } = await reporte(dia);
+  if (!corridas) return;
+  await chrome.downloads.download({
+    url: 'data:text/plain;charset=utf-8,' + encodeURIComponent(texto),
+    filename: `RurushFP/reporte-${dia}.txt`,
+    conflictAction: 'overwrite',
+    saveAs: false,
+  });
+}
+
+// próxima 9:05pm hora Lima, en ms
+function proximaHoraReporte() {
+  const ahora = Date.now();
+  const lima = new Date(ahora + LIMA_OFFSET_H * 3600e3);
+  let t = Date.UTC(lima.getUTCFullYear(), lima.getUTCMonth(), lima.getUTCDate(), 21, 5) - LIMA_OFFSET_H * 3600e3;
+  if (t <= ahora) t += 86400e3;
+  return t;
+}
+
 // ───────────────────────── disparadores ─────────────────────────
 async function programar() {
   const cfg = await getConfig();
   await chrome.alarms.clear('tick');
   chrome.alarms.create('tick', { delayInMinutes: 1, periodInMinutes: cfg.intervalMin });
+  await chrome.alarms.clear('reporte');
+  chrome.alarms.create('reporte', { when: proximaHoraReporte(), periodInMinutes: 1440 });
 }
 
 chrome.runtime.onInstalled.addListener(programar);
 chrome.runtime.onStartup.addListener(programar);
-chrome.alarms.onAlarm.addListener((a) => { if (a.name === 'tick' || a.name === 'retry') run('alarm'); });
+chrome.alarms.onAlarm.addListener((a) => {
+  if (a.name === 'tick' || a.name === 'retry') run('alarm');
+  if (a.name === 'reporte') descargarReporte();
+});
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg.type === 'runNow') { run('manual').then(() => reply({ ok: true })); return true; }
+  if (msg.type === 'report') { reporte(limaNow().date).then((r) => reply(r)); return true; }
+  if (msg.type === 'downloadReport') { descargarReporte().then(() => reply({ ok: true })); return true; }
   if (msg.type === 'reschedule') { programar().then(() => reply({ ok: true })); return true; }
   if (msg.type === 'waActivity') { chrome.storage.local.set({ waActivity: Date.now() }); }
   return false;

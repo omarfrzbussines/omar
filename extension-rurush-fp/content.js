@@ -61,6 +61,41 @@ async function clickSend() {
   return { ok: false, error: 'el mensaje quedó en el cuadro de texto' };
 }
 
+function outCount() {
+  return document.querySelectorAll('#main .message-out').length;
+}
+
+// Pega la imagen guardada en Opciones en el chat abierto y la envía.
+async function sendImage() {
+  const { gpsImage } = await chrome.storage.local.get('gpsImage');
+  if (!gpsImage) return { ok: false, error: 'no hay imagen cargada' };
+  const c = compose();
+  if (!c) return { ok: false, error: 'chat no abierto' };
+  const blob = await (await fetch(gpsImage)).blob();
+  const file = new File([blob], 'como-llegar-rurush.' + (blob.type.split('/')[1] || 'jpg'), { type: blob.type });
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  const antes = outCount();
+  c.focus();
+  c.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+
+  // aparece la vista previa de la imagen con su propio botón Enviar
+  let btn = null;
+  for (let i = 0; i < 25 && !btn; i++) {
+    await new Promise((r) => setTimeout(r, 400));
+    const icons = [...document.querySelectorAll('span[data-icon="send"], span[data-icon="wds-ic-send-filled"], [aria-label="Enviar"], [aria-label="Send"]')]
+      .filter((el) => !el.closest('#main footer'));
+    if (icons.length) btn = icons[0].closest('[role="button"], button') || icons[0];
+  }
+  if (!btn) return { ok: false, error: 'no apareció la vista previa de la imagen' };
+  btn.click();
+  for (let i = 0; i < 30; i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    if (outCount() > antes) return { ok: true };
+  }
+  return { ok: false, error: 'la imagen no apareció en el chat' };
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg.type === 'ping') {
     reply({ loggedIn: !!document.querySelector('#pane-side, #side, [aria-label="Lista de chats"], [aria-label="Chat list"]'), wid: wid() });
@@ -75,6 +110,9 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   } else if (msg.type === 'prepNav') {
     document.documentElement.dataset.rurushNav = '1';
     reply({ ok: true });
+  } else if (msg.type === 'sendImage') {
+    sendImage().then(reply, (e) => reply({ ok: false, error: String(e) }));
+    return true;
   } else if (msg.type === 'send') {
     clickSend().then(reply);
     return true;
