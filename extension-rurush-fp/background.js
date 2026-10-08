@@ -241,7 +241,16 @@ async function run(reason) {
     const fuera = fps.length - candidatos.length;
 
     if (!candidatos.length) {
-      await log({ level: 'info', msg: `${fps.length} FP hoy · ninguno a ≤${cfg.sendWindowH}h (${fuera} ya pasaron o faltan más).` });
+      const fps_hoy = fps.sort((a, b) => a.classMs - b.classMs).map((f) => {
+        const falta = (f.classMs - now.ms) / 3600e3;
+        const estado = falta <= 0 ? 'ya pasó' : `faltan ${falta.toFixed(1)}h`;
+        return `${f.personName || f.subject} · ${fmtHora(f.hour, f.min)} · ${estado}`;
+      });
+      await log({
+        level: 'info',
+        msg: `${fps.length} FP hoy · ninguno a ≤${cfg.sendWindowH}h (${fuera} ya pasaron o faltan más).`,
+        detalle: fps_hoy.length ? { fps_hoy } : undefined,
+      });
       return;
     }
 
