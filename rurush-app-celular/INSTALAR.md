@@ -3,29 +3,23 @@
 App web de Google Apps Script. Corre en Google (no necesita la PC prendida), los
 tokens quedan guardados en Google y **solo tú puedes abrirla** con tu cuenta.
 
-## 1. Crear el proyecto (en la PC)
+## 1. Crear el proyecto (en la PC, ~5 min)
 
-1. Entra a **script.google.com** con tu cuenta de Google → **Nuevo proyecto**.
-2. Arriba a la izquierda, cambia el nombre "Proyecto sin título" por **RURUSH Hoy**.
-3. En `Código.gs` borra todo y pega el contenido de **Code.gs**.
-4. Al lado de "Archivos" toca **＋ → HTML**, ponle de nombre **Index** (así, con I
-   mayúscula y sin .html) y pega el contenido de **Index.html**.
-5. ⚙️ **Configuración del proyecto** (rueda a la izquierda):
-   - Marca **"Mostrar el archivo de manifiesto appsscript.json en el editor"**.
-   - Abajo, en **Propiedades del script → Agregar propiedad**, crea dos:
-     | Propiedad | Valor |
-     |---|---|
-     | `APPSFIT_TOKEN` | el TokenEmpresa de Apps Fit (empieza con `CC0677F3`) |
-     | `PIPEDRIVE_TOKEN` | tu API token de Pipedrive |
-6. Vuelve al editor `< >`, abre **appsscript.json**, borra todo y pega el contenido de **appsscript.json**.
-7. 💾 Guardar.
+1. Entra a **script.google.com** → **Nuevo proyecto** → arriba cambia el nombre a **RURUSH Hoy**.
+2. En `Código.gs`: borra todo y pega **Code.gs**.
+3. **＋ → Secuencia de comandos**, nómbrala **Configurar** y pega **Configurar.gs**.
+4. **＋ → HTML**, nómbralo **Index** (sin .html) y pega **Index.html**.
+5. ⚙️ Configuración del proyecto → marca **"Mostrar el archivo de manifiesto appsscript.json"** →
+   vuelve al editor, abre **appsscript.json**, borra todo y pega **appsscript.json**.
+6. En **Configurar**, pega tus dos tokens donde dice `PEGA-AQUÍ…` → 💾 Guardar.
 
-## 2. Probar la conexión
+## 2. Guardar los tokens y probar (1 clic)
 
-1. Arriba, en el selector de funciones, elige **probarConexion** → **Ejecutar**.
+1. Arriba, en el selector de funciones, elige **configurarUnaVez** → **Ejecutar**.
 2. Te pide permisos → **Revisar permisos** → tu cuenta → **Avanzado → Ir a RURUSH Hoy** → **Permitir**.
    (Es tu propio script; el aviso sale porque Google no lo revisó.)
 3. Abajo, en el registro, debe salir: `{"appsfit":"OK","pipedrive":"OK — Omar…"}`
+4. Listo: **borra el archivo Configurar** (⋮ → Eliminar). Los tokens ya quedaron guardados en Google.
 
 ## 3. Publicarla
 
