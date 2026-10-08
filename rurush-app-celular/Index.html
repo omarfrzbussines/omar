@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="es">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="theme-color" content="#111111">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<style>
+  :root { --bg:#111; --card:#1c1c1e; --line:#2c2c2e; --tx:#f2f2f2; --mut:#9a9a9f; --red:#e53935; --or:#ff7a1a; --grn:#34c759; --ice:#64b5f6; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--tx); font:15px -apple-system, system-ui, Roboto, sans-serif; padding-bottom:72px; }
+  header { position:sticky; top:0; z-index:5; background:var(--bg); padding:14px 16px 8px; border-bottom:1px solid var(--line); }
+  .top { display:flex; justify-content:space-between; align-items:center; }
+  h1 { font-size:20px; margin:0; } h1 b { color:var(--red); }
+  .sub { color:var(--mut); font-size:12px; margin-top:2px; }
+  .btn { background:var(--card); color:var(--tx); border:1px solid var(--line); border-radius:10px; padding:8px 12px; font-size:14px; }
+  .chips { display:flex; gap:6px; overflow-x:auto; margin-top:10px; padding-bottom:2px; }
+  .chip { flex:none; padding:6px 12px; border-radius:16px; background:var(--card); border:1px solid var(--line); color:var(--mut); font-size:13px; }
+  .chip.on { background:var(--red); border-color:var(--red); color:#fff; }
+  main { padding:12px 16px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
+  .kpi { background:var(--card); border-radius:14px; padding:12px; }
+  .kpi .n { font-size:26px; font-weight:700; } .kpi .l { color:var(--mut); font-size:12px; margin-top:2px; }
+  .kpi.big { grid-column:span 2; }
+  .bar { height:8px; background:var(--line); border-radius:4px; overflow:hidden; margin-top:8px; }
+  .bar i { display:block; height:100%; background:var(--grn); }
+  h2 { font-size:15px; margin:18px 0 8px; display:flex; justify-content:space-between; align-items:baseline; }
+  h2 small { color:var(--mut); font-weight:400; font-size:12px; }
+  .list { background:var(--card); border-radius:14px; overflow:hidden; }
+  .row { display:flex; align-items:center; gap:10px; padding:11px 12px; border-top:1px solid var(--line); }
+  .row:first-child { border-top:0; }
+  .row .main { flex:1; min-width:0; }
+  .row .t { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .row .d { color:var(--mut); font-size:12px; margin-top:2px; }
+  .hora { font-weight:700; width:50px; flex:none; font-variant-numeric:tabular-nums; }
+  .wa { flex:none; width:38px; height:38px; border-radius:50%; background:#1f3d2b; color:var(--grn); display:flex; align-items:center; justify-content:center; text-decoration:none; font-size:18px; }
+  .tag { display:inline-block; padding:1px 7px; border-radius:8px; font-size:11px; margin-left:4px; background:var(--line); color:var(--mut); }
+  .tag.ok { background:#1f3d2b; color:var(--grn); } .tag.frio { background:#13293d; color:var(--ice); } .tag.urg { background:#3d1b1b; color:#ff8a80; }
+  .vacio { color:var(--mut); padding:14px 12px; font-size:13px; }
+  .err { background:#3d1b1b; color:#ff8a80; border-radius:12px; padding:10px 12px; margin-bottom:12px; font-size:13px; }
+  nav { position:fixed; bottom:0; left:0; right:0; display:flex; background:#161618; border-top:1px solid var(--line); padding-bottom:env(safe-area-inset-bottom); }
+  nav button { flex:1; background:none; border:0; color:var(--mut); padding:10px 0 12px; font-size:12px; }
+  nav button span { display:block; font-size:20px; }
+  nav button.on { color:var(--tx); }
+  .cargando { text-align:center; color:var(--mut); padding:60px 0; }
+  .mas { display:block; width:100%; background:none; border:0; border-top:1px solid var(--line); color:var(--or); padding:11px; font-size:13px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <div><h1><b>RURUSH</b> Hoy</h1><div class="sub" id="sub">Cargando…</div></div>
+    <button class="btn" id="refresh">🔄</button>
+  </div>
+  <div class="chips" id="chips"></div>
+</header>
+<main id="main"><div class="cargando">Cargando datos de Apps Fit y Pipedrive…</div></main>
+<nav>
+  <button data-tab="hoy" class="on"><span>📊</span>Hoy</button>
+  <button data-tab="fp"><span>🎟️</span>Free Pass</button>
+  <button data-tab="ret"><span>🔥</span>Retención</button>
+</nav>
+
+<script>
+let D = null, tab = 'hoy', ase = 'TODAS';
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+const deAse = (x) => ase === 'TODAS' || norm(x.asesora) === norm(ase);
+const fm = (iso) => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : '';
+const soles = (n) => 'S/ ' + Math.round(n).toLocaleString('es-PE');
+const pct = (a, b) => b ? Math.round(a * 100 / b) : 0;
+const wa = (tel) => tel ? `<a class="wa" href="https://wa.me/51${tel}" target="_blank">💬</a>` : '';
+
+function cargar(forzar) {
+  $('#sub').textContent = 'Actualizando…';
+  google.script.run
+    .withSuccessHandler((d) => { D = d; pintar(); })
+    .withFailureHandler((e) => { $('#main').innerHTML = `<div class="err">${esc(e.message || e)}</div>`; $('#sub').textContent = 'Error'; })
+    .getDashboard(!!forzar);
+}
+
+function pintarChips() {
+  const set = new Set();
+  (D.socios || []).forEach((s) => set.add(s.asesora));
+  ['LAURA', 'MÓNICA', 'DANNA'].forEach((a) => set.add(a));
+  const lista = ['TODAS', ...[...set].filter((a) => a && a !== 'SIN ASIGNAR').sort()];
+  $('#chips').innerHTML = lista.map((a) => `<button class="chip ${a === ase ? 'on' : ''}" data-a="${esc(a)}">${esc(a === 'TODAS' ? 'Todas' : a)}</button>`).join('');
+  document.querySelectorAll('.chip').forEach((b) => b.onclick = () => { ase = b.dataset.a; pintar(); });
+}
+
+function lista(items, fila, vacio, max = 15) {
+  if (!items.length) return `<div class="list"><div class="vacio">${vacio}</div></div>`;
+  const id = 'l' + Math.random().toString(36).slice(2);
+  const primeros = items.slice(0, max).map(fila).join('');
+  const resto = items.slice(max).map(fila).join('');
+  return `<div class="list">${primeros}${resto ? `<div id="${id}" style="display:none">${resto}</div><button class="mas" onclick="document.getElementById('${id}').style.display='block';this.remove()">Ver ${items.length - max} más</button>` : ''}</div>`;
+}
+
+const filaSocio = (s) => {
+  const sv = s.sinVenir == null ? 'nunca vino' : s.sinVenir === 0 ? 'vino hoy' : `${s.sinVenir} días sin venir`;
+  const cls = s.sinVenir == null || s.sinVenir > 10 ? 'frio' : 'ok';
+  const vence = s.diasVence != null && s.diasVence <= 7 ? `<span class="tag urg">vence ${s.diasVence === 0 ? 'hoy' : 'en ' + s.diasVence + 'd'}</span>` : `<span class="tag">vence ${fm(s.vence)}</span>`;
+  return `<div class="row"><div class="main"><div class="t">${esc(s.nombre)}</div>
+    <div class="d"><span class="tag ${cls}">${sv}</span>${vence}${ase === 'TODAS' ? ' · ' + esc(s.asesora) : ''}</div></div>${wa(s.tel)}</div>`;
+};
+const filaFP = (a) => `<div class="row"><div class="hora">${esc(a.hora || '—')}</div><div class="main">
+  <div class="t">${esc(a.persona)}${a.hecha ? '<span class="tag ok">asistió</span>' : ''}</div>
+  <div class="d">${esc(a.asunto)}</div></div>${wa(a.tel)}</div>`;
+
+function pintar() {
+  if (!D) return;
+  pintarChips();
+  $('#sub').textContent = `${D.fecha.split('-').reverse().join('/')} · actualizado ${D.generado}`;
+  const socios = (D.socios || []).filter(deAse);
+  let h = (D.errores || []).map((e) => `<div class="err">⚠️ ${esc(e)}</div>`).join('');
+
+  if (tab === 'hoy') {
+    const n = socios.length;
+    const c = (f) => socios.filter(f).length;
+    const hoy = c((s) => s.sinVenir === 0), d7 = c((s) => s.sinVenir != null && s.sinVenir <= 7);
+    const d30 = c((s) => s.sinVenir != null && s.sinVenir <= 30), nunca = c((s) => s.sinVenir == null);
+    const ayer = c((s) => s.sinVenir === 1);
+    const ins = (D.inscritosHoy || []).filter(deAse);
+    const riesgo = c((s) => s.sinVenir == null || s.sinVenir > 10);
+    h += `<div class="grid">
+      <div class="kpi big"><div class="n">${n}</div><div class="l">socios activos${ase === 'TODAS' ? '' : ' de ' + esc(ase)}</div>
+        <div class="bar"><i style="width:${pct(d7, n)}%"></i></div><div class="l">${pct(d7, n)}% vino en los últimos 7 días</div></div>
+      <div class="kpi"><div class="n">${hoy}</div><div class="l">vinieron hoy</div></div>
+      <div class="kpi"><div class="n">${ayer}</div><div class="l">vinieron ayer</div></div>
+      <div class="kpi"><div class="n">${pct(d30, n)}%</div><div class="l">vino en 30 días</div></div>
+      <div class="kpi"><div class="n" style="color:var(--ice)">${riesgo}</div><div class="l">🔥 en riesgo (+10 días)</div></div>
+      <div class="kpi"><div class="n">${ins.length}</div><div class="l">inscritos hoy</div></div>
+      <div class="kpi"><div class="n">${soles(ins.reduce((t, x) => t + x.pago, 0))}</div><div class="l">venta de hoy</div></div>
+    </div>`;
+    if (nunca) h += `<div class="sub" style="margin-bottom:10px">${nunca} socios activos nunca registraron asistencia.</div>`;
+    h += `<h2>Inscritos hoy <small>${ins.length}</small></h2>` + lista(ins, (x) =>
+      `<div class="row"><div class="main"><div class="t">${esc(x.nombre)}</div><div class="d">${esc(x.plan)} · ${soles(x.pago)} · ${esc(x.asesora)}</div></div>${wa(x.tel)}</div>`, 'Todavía nadie hoy.');
+  }
+
+  if (tab === 'fp') {
+    const f = (arr) => (arr || []).filter((a) => ase === 'TODAS' || norm(a.asesora) === norm(ase));
+    const hoy = f(D.fpHoy), ns = f(D.noShowsAyer), man = f(D.fpManana);
+    h += `<div class="grid">
+      <div class="kpi"><div class="n">${hoy.length}</div><div class="l">FP hoy</div></div>
+      <div class="kpi"><div class="n">${hoy.filter((a) => a.hecha).length}</div><div class="l">ya asistieron</div></div>
+      <div class="kpi"><div class="n" style="color:#ff8a80">${ns.length}</div><div class="l">no-shows de ayer</div></div>
+      <div class="kpi"><div class="n">${man.length}</div><div class="l">FP mañana</div></div></div>`;
+    h += `<h2>Free Pass de hoy <small>${hoy.length}</small></h2>` + lista(hoy, filaFP, 'No hay FP agendados hoy.', 30);
+    h += `<h2>No-shows de ayer <small>${ns.length}</small></h2>` + lista(ns, filaFP, 'Nadie faltó ayer 🎉', 30);
+    h += `<h2>Free Pass de mañana <small>${man.length}</small></h2>` + lista(man, filaFP, 'Nada agendado para mañana.', 30);
+  }
+
+  if (tab === 'ret') {
+    const riesgo = socios.filter((s) => s.sinVenir == null || s.sinVenir > 10)
+      .sort((a, b) => (a.diasVence ?? 999) - (b.diasVence ?? 999));
+    const vencen = socios.filter((s) => s.diasVence != null && s.diasVence >= 0 && s.diasVence <= 7)
+      .sort((a, b) => a.diasVence - b.diasVence);
+    const friosVencen = vencen.filter((s) => s.sinVenir == null || s.sinVenir > 10);
+    h += `<div class="grid">
+      <div class="kpi"><div class="n" style="color:var(--ice)">${riesgo.length}</div><div class="l">🔥 en riesgo</div></div>
+      <div class="kpi"><div class="n" style="color:#ff8a80">${friosVencen.length}</div><div class="l">fríos que vencen en 7 días</div></div></div>`;
+    h += `<div class="sub" style="margin-bottom:6px">Con ≤10 días sin venir renueva ~50%; con +10 días, ~11%.</div>`;
+    h += `<h2>🚨 Fríos que vencen en 7 días <small>${friosVencen.length}</small></h2>` + lista(friosVencen, filaSocio, 'Ninguno 👌');
+    h += `<h2>🔥 En riesgo: plan vigente y +10 días sin venir <small>${riesgo.length}</small></h2>` + lista(riesgo, filaSocio, 'Ninguno 👌', 20);
+    h += `<h2>📅 Vencen en 7 días <small>${vencen.length}</small></h2>` + lista(vencen, filaSocio, 'Ninguno esta semana.', 20);
+  }
+
+  $('#main').innerHTML = h;
+}
+
+document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
+  tab = b.dataset.tab;
+  document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('on', x === b));
+  pintar(); window.scrollTo(0, 0);
+});
+$('#refresh').onclick = () => cargar(true);
+cargar(false);
+</script>
+</body>
+</html>
