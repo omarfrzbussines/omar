@@ -65,35 +65,83 @@ function outCount() {
   return document.querySelectorAll('#main .message-out').length;
 }
 
-// Pega la imagen guardada en Opciones en el chat abierto y la envía.
-async function sendImage() {
-  const { gpsImage } = await chrome.storage.local.get('gpsImage');
-  if (!gpsImage) return { ok: false, error: 'no hay imagen cargada' };
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Pega texto en un cuadro de WhatsApp sin recargar (respeta los saltos de línea).
+async function pegarTexto(el, text) {
+  el.focus();
+  const dt = new DataTransfer();
+  dt.setData('text/plain', text);
+  el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+  await esperar(500);
+  if (!el.innerText.trim()) document.execCommand('insertText', false, text.replace(/\n/g, ' '));
+  await esperar(300);
+  return !!el.innerText.trim();
+}
+
+// Cuadro de descripción (caption) de la vista previa de la imagen
+function cajaCaption() {
+  return [...document.querySelectorAll('div[contenteditable="true"]')]
+    .filter((el) => !el.closest('#main footer') && !el.closest('#side') && el.offsetParent !== null)
+    .pop() || null;
+}
+
+function botonEnviarPreview() {
+  const icons = [...document.querySelectorAll('span[data-icon="send"], span[data-icon="wds-ic-send-filled"], [aria-label="Enviar"], [aria-label="Send"]')]
+    .filter((el) => !el.closest('#main footer'));
+  return icons.length ? (icons[0].closest('[role="button"], button') || icons[0]) : null;
+}
+
+async function esperarSalida(antes, intentos = 30) {
+  for (let i = 0; i < intentos; i++) {
+    await esperar(500);
+    if (outCount() > antes) return true;
+  }
+  return false;
+}
+
+// Envía el recordatorio en el chat ya abierto, sin recargar:
+// con imagen → una sola burbuja (imagen + texto como descripción); sin imagen → solo texto.
+async function enviarRecordatorio(text) {
   const c = compose();
   if (!c) return { ok: false, error: 'chat no abierto' };
-  const blob = await (await fetch(gpsImage)).blob();
-  const file = new File([blob], 'como-llegar-rurush.' + (blob.type.split('/')[1] || 'jpg'), { type: blob.type });
-  const dt = new DataTransfer();
-  dt.items.add(file);
-  const antes = outCount();
-  c.focus();
-  c.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+  const { gpsImage } = await chrome.storage.local.get('gpsImage');
 
-  // aparece la vista previa de la imagen con su propio botón Enviar
-  let btn = null;
-  for (let i = 0; i < 25 && !btn; i++) {
-    await new Promise((r) => setTimeout(r, 400));
-    const icons = [...document.querySelectorAll('span[data-icon="send"], span[data-icon="wds-ic-send-filled"], [aria-label="Enviar"], [aria-label="Send"]')]
-      .filter((el) => !el.closest('#main footer'));
-    if (icons.length) btn = icons[0].closest('[role="button"], button') || icons[0];
+  if (gpsImage) {
+    const blob = await (await fetch(gpsImage)).blob();
+    const file = new File([blob], 'como-llegar-rurush.' + (blob.type.split('/')[1] || 'jpg'), { type: blob.type });
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    const antes = outCount();
+    c.focus();
+    c.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+
+    let btn = null;
+    for (let i = 0; i < 25 && !btn; i++) { await esperar(400); btn = botonEnviarPreview(); }
+    if (btn) {
+      const caja = cajaCaption();
+      const conTexto = caja ? await pegarTexto(caja, text) : false;
+      btn = botonEnviarPreview() || btn;
+      btn.click();
+      if (!(await esperarSalida(antes))) return { ok: false, error: 'la imagen no apareció en el chat' };
+      if (conTexto) return { ok: true, imagen: true };
+      // la imagen salió sin descripción: mandar el texto aparte
+      await esperar(1500);
+      const r = await enviarTexto(text);
+      return { ...r, imagen: true, aviso: 'imagen y texto salieron por separado' };
+    }
+    // no abrió la vista previa: seguimos solo con texto
+    const r = await enviarTexto(text);
+    return { ...r, imagen: false, aviso: 'no se pudo adjuntar la imagen, se envió solo el texto' };
   }
-  if (!btn) return { ok: false, error: 'no apareció la vista previa de la imagen' };
-  btn.click();
-  for (let i = 0; i < 30; i++) {
-    await new Promise((r) => setTimeout(r, 500));
-    if (outCount() > antes) return { ok: true };
-  }
-  return { ok: false, error: 'la imagen no apareció en el chat' };
+  return enviarTexto(text);
+}
+
+async function enviarTexto(text) {
+  const c = compose();
+  if (!c) return { ok: false, error: 'chat no abierto' };
+  if (!(await pegarTexto(c, text))) return { ok: false, error: 'no se pudo escribir el mensaje' };
+  return clickSend();
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
@@ -110,11 +158,8 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   } else if (msg.type === 'prepNav') {
     document.documentElement.dataset.rurushNav = '1';
     reply({ ok: true });
-  } else if (msg.type === 'sendImage') {
-    sendImage().then(reply, (e) => reply({ ok: false, error: String(e) }));
-    return true;
-  } else if (msg.type === 'send') {
-    clickSend().then(reply);
+  } else if (msg.type === 'sendReminder') {
+    enviarRecordatorio(msg.text).then(reply, (e) => reply({ ok: false, error: String(e) }));
     return true;
   }
   return false;

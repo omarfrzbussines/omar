@@ -151,15 +151,14 @@ async function waitFor(tabId, msg, ok, timeoutMs = 60000) {
   return null;
 }
 
-async function openChat(tabId, phone, text) {
+async function openChat(tabId, phone) {
   const url = new URL('https://web.whatsapp.com/send');
   url.searchParams.set('phone', phone);
-  if (text) url.searchParams.set('text', text);
   await ask(tabId, { type: 'prepNav' });
   await chrome.tabs.update(tabId, { url: url.toString() });
   await sleep(4000);
-  const r = await waitFor(tabId, { type: 'chatState' }, (x) => x.invalid || (x.ready && (!text || x.hasDraft)));
-  if (!r || r.invalid || text) return r;
+  const r = await waitFor(tabId, { type: 'chatState' }, (x) => x.invalid || x.ready);
+  if (!r || r.invalid) return r;
   // esperar a que terminen de cargar los mensajes (misma cantidad dos lecturas seguidas)
   let prev = r;
   for (let i = 0; i < 8; i++) {
@@ -308,27 +307,18 @@ async function run(reason) {
       const texto = mensaje(fp, a.confirmo);
       if (cfg.dryRun) { resumen.simulados.push(`${etiqueta} · ${phone} → ${texto.replace(/\n/g, ' ')}`); continue; }
 
-      const draft = await openChat(tab.id, phone, texto);
-      if (!draft || draft.invalid || !draft.hasDraft) { resumen.alertas.push(`${etiqueta}: no se pudo cargar el mensaje`); continue; }
-      const r = await ask(tab.id, { type: 'send' });
+      const r = await ask(tab.id, { type: 'sendReminder', text: texto });
       if (r && r.ok) {
         sent[fp.id] = new Date().toISOString();
-        resumen.enviados.push(`${etiqueta} · ${phone} · «${texto.replace(/\n/g, ' ')}»`);
-        const { gpsImage } = await chrome.storage.local.get('gpsImage');
-        if (gpsImage) {
-          await sleep(1500);
-          const img = await ask(tab.id, { type: 'sendImage' });
-          if (!img || !img.ok) resumen.alertas.push(`${etiqueta}: texto enviado, pero la imagen no (${(img && img.error) || 'sin respuesta'})`);
-        }
+        resumen.enviados.push(`${etiqueta} · ${phone}${r.imagen ? ' · 🖼️' : ''} · «${texto.replace(/\n/g, ' ')}»`);
+        if (r.aviso) resumen.alertas.push(`${etiqueta}: ${r.aviso}`);
       } else {
-        resumen.alertas.push(`${etiqueta}: falló el clic en Enviar (${(r && r.error) || 'sin respuesta'})`);
+        resumen.alertas.push(`${etiqueta}: no se pudo enviar (${(r && r.error) || 'sin respuesta'})`);
       }
       await sleep(3000 + Math.random() * 4000);
     }
 
     await chrome.storage.local.set({ sent: limpiarSent(sent) });
-    await ask(tab.id, { type: 'prepNav' });
-    await chrome.tabs.update(tab.id, { url: 'https://web.whatsapp.com/' });
   } catch (e) {
     resumen.alertas.push(String(e.message || e));
   } finally {
