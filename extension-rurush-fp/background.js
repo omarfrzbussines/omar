@@ -60,9 +60,15 @@ function normPhone(raw) {
   if (p.length === 9 && p.startsWith('9')) p = '51' + p;
   return /^519\d{8}$/.test(p) ? p : null;
 }
+// Primer nombre "de verdad" para saludar. Si en Pipedrive el nombre es un número,
+// un apodo de usuario o algo genérico, devuelve '' y el mensaje saluda sin nombre.
+const NO_ES_NOMBRE = /^(fp|free|pass|lead|leads|cliente|clienta|contacto|whatsapp|wsp|sin|nombre|usuario|user|prueba|test|sr|sra|srta|dr|dra)$/i;
 function firstName(full) {
-  const n = String(full || '').trim().split(/\s+/)[0] || '';
-  return n ? n[0].toUpperCase() + n.slice(1).toLowerCase() : '';
+  const palabras = String(full || '').replace(/[^\p{L}\s'-]/gu, ' ').trim().split(/\s+/);
+  const n = palabras.find((w) => w.length >= 2 && !NO_ES_NOMBRE.test(w)) || '';
+  const primera = String(full || '').trim().split(/\s+/)[0] || '';
+  if (!n || /\d/.test(primera) || /^[@_.]/.test(primera) || /[_.]\w/.test(primera)) return '';
+  return n[0].toUpperCase() + n.slice(1).toLowerCase();
 }
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
@@ -239,7 +245,7 @@ function mensaje(fp, confirmo) {
     cuerpo = pick([`Hoy es tu clase de prueba GRATIS a las ${h} 🔥`, `Te esperamos hoy a las ${h} para tu clase gratis 💪`, `Hoy a las ${h} es tu clase de prueba 🔥`]);
     cierre = pick([`¿Confirmas? Te paso la ubicación 📍 ${GPS}`, `¿Me confirmas? 📍 ${GPS}`, `¿Confirmas tu asistencia? Ubicación 📍 ${GPS}`]);
   }
-  const ref = 'Av. Larco 1164, Víctor Larco, al costado de Mass.';
+  const ref = 'Av. Larco 1164, Víctor Larco, al costado de Mass';
   const full = `${hola} ${cuerpo}\n${cierre}\n${ref}`;
   return full.length <= 180 ? full : `${hola} ${cuerpo}\n${cierre}`;
 }
@@ -339,7 +345,7 @@ function msgBienestar(fp) {
 
 function msgSabado(fp) {
   const n = firstName(fp.personName);
-  return `Hola${n ? ' ' + n : ''}! 😊 No te quedes sin tu clase GRATIS 🔥 Retomémosla este lunes: rutina + nutrición + evaluación InBody hechos para ti 💪 ¿La prefieres en la mañana, en la tarde o en la noche?`;
+  return `¡Hola${n ? ' ' + n : ''}! 😊 No te quedes sin tu clase GRATIS 🔥 Retomémosla este lunes: rutina + nutrición + evaluación InBody hechos para ti 💪 ¿La prefieres en la mañana, en la tarde o en la noche?`;
 }
 
 function msgDomingoLunes(fp) {
