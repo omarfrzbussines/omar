@@ -97,38 +97,36 @@
 <div class="toast" id="toast"></div>
 
 <script>
-/* RURUSH Facturas — la asesora toma la foto de la factura, llena lo importante
+/* RURUSH Facturas — control de los gastos del día a día (agua, limpieza, útiles,
+   arreglo de máquinas…). Se toma la foto del comprobante, se llena lo importante
    y la app calcula el resto y lo sube sola a OneDrive:
      • la foto (comprimida) en  <carpeta>/AAAA-MM MES/
-     • una fila en              <carpeta>/Control de facturas.xlsx  (tabla "Ventas")
+     • una fila en              <carpeta>/Control de gastos.xlsx  (tabla "Gastos")
    Si no hay internet, queda en cola en el celular y se sube apenas vuelva.
-   Ajustes compartidos (planes, precios, asesoras) viven en <carpeta>/config.json. */
+   Ajustes compartidos (personas, categorías, comprobantes) viven en <carpeta>/config.json. */
 
 // ⬇️ PEGA AQUÍ el "Id. de aplicación (cliente)" de Azure (ver INSTALAR.md, paso 1).
 const CLIENT_ID = 'PEGA-AQUI-EL-ID-DE-APLICACION';
 
 const SCOPES = ['User.Read', 'Files.ReadWrite.All'];
 const GRAPH = 'https://graph.microsoft.com/v1.0';
-const EXCEL = 'Control de facturas.xlsx';
-const TABLA = 'Ventas';
+const EXCEL = 'Control de gastos.xlsx';
+const TABLA = 'Gastos';
 const HOJA = 'Registro';
 const MESES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SETIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
-const COLUMNAS = ['ID', 'Fecha', 'Hora', 'Mes', 'Asesora', 'Tipo', 'Cliente', 'DNI', 'Celular', 'Plan',
-  'Precio lista', 'Descuento', 'Monto cobrado', 'Base imponible', 'IGV', 'Método de pago', 'Nº comprobante',
-  'Inicio', 'Vence', 'Fotos', 'Ver foto', 'Observación', 'Subido por'];
+const COLUMNAS = ['ID', 'Fecha', 'Mes', 'Semana', 'Registrado por', 'Categoría', 'Descripción', 'Cantidad', 'Precio unitario',
+  'Proveedor', 'RUC', 'Comprobante', 'Nº comprobante', 'Base imponible', 'IGV', 'Total', 'Pagado con',
+  'Fotos', 'Ver foto', 'Observación', 'Registrado el', 'Subido por'];
 const CONFIG_BASE = {
-  igv: 18, precioIncluyeIgv: true,
-  asesoras: ['DANNA', 'LAURA', 'MÓNICA', 'VALERIA', 'DILAN', 'OMAR'],
-  tipos: ['Nuevo', 'Renovación'],
-  metodos: ['Efectivo', 'Yape', 'Plin', 'Tarjeta', 'Transferencia'],
-  // duracion: "1m" = 1 mes, "15d" = 15 días
-  planes: [
-    { nombre: 'Mensual', precio: 150, duracion: '1m' },
-    { nombre: 'Trimestral', precio: 390, duracion: '3m' },
-    { nombre: 'Semestral', precio: 690, duracion: '6m' },
-    { nombre: 'Anual', precio: 1200, duracion: '12m' },
-    { nombre: 'Pase diario', precio: 15, duracion: '1d' }
-  ]
+  igv: 18,
+  personas: ['DANNA', 'LAURA', 'MÓNICA', 'VALERIA', 'DILAN', 'OMAR'],
+  categorias: ['Agua', 'Limpieza', 'Útiles y oficina', 'Mantenimiento de máquinas', 'Reparaciones del local', 'Servicios', 'Movilidad', 'Otros'],
+  // igv: true = ese comprobante trae el IGV desglosado (sirve como crédito fiscal)
+  comprobantes: [
+    { nombre: 'Boleta', igv: false }, { nombre: 'Factura', igv: true },
+    { nombre: 'Recibo / nota', igv: false }, { nombre: 'Sin comprobante', igv: false }
+  ],
+  metodos: ['Caja chica', 'Yape', 'Plin', 'Tarjeta', 'Transferencia']
 };
 
 /* ---------- utilidades ---------- */
@@ -151,16 +149,11 @@ function toast(t, ms) {
   clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), ms || 2600);
 }
 
-// Fin del plan: "3m" suma meses (mismo día), "15d" suma días.
-function vence(inicioIso, duracion) {
-  const m = String(duracion || '').trim().toLowerCase().match(/^(\d+)\s*([md])$/);
-  if (!inicioIso || !m) return '';
-  const d = new Date(inicioIso + 'T12:00:00');
-  if (m[2] === 'd') { d.setDate(d.getDate() + Number(m[1])); return isoLocal(d); }
-  const dia = d.getDate();
-  d.setDate(1); d.setMonth(d.getMonth() + Number(m[1]));
-  d.setDate(Math.min(dia, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()));   // 31 ene + 1m = 28/29 feb
-  return isoLocal(d);
+// Semana del año (ISO): para sumar los gastos por semana en el Excel.
+function semana(iso) {
+  const d = new Date(iso + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  return Math.ceil(((d - Date.UTC(d.getUTCFullYear(), 0, 1)) / 86400e3 + 1) / 7);
 }
 
 // El link "?carpeta=..." que manda el admin queda guardado en este celular.
@@ -230,7 +223,7 @@ async function carpeta(driveId, padreId, nombre) {
   try {
     return (await gj('POST', `/drives/${driveId}/items/${padreId}/children`, { name: nombre, folder: {}, '@microsoft.graph.conflictBehavior': 'fail' })).id;
   } catch (e) {
-    if (e.status === 409) return (await gj('GET', `/drives/${driveId}/items/${padreId}:/${ruta(nombre)}`)).id;   // la creó otra asesora a la vez
+    if (e.status === 409) return (await gj('GET', `/drives/${driveId}/items/${padreId}:/${ruta(nombre)}`)).id;   // la creó otro celular a la vez
     throw e;
   }
 }
@@ -308,7 +301,7 @@ async function crearExcel(R) {
     if (e.status === 409) return (await gj('GET', `/drives/${R.driveId}/items/${R.id}:/${ruta(EXCEL)}`)).id;
     throw e;
   }
-  // Convierte el encabezado en la tabla "Ventas" (Excel online tarda unos segundos en abrir un archivo recién subido).
+  // Convierte el encabezado en la tabla "Gastos" (Excel online tarda unos segundos en abrir un archivo recién subido).
   const base = `/drives/${R.driveId}/items/${item.id}/workbook`;
   for (let i = 0; ; i++) {
     try {
@@ -383,7 +376,7 @@ async function procesarCola() {
 // Paso a paso y guardando el avance: si se corta a la mitad, no duplica fotos ni filas.
 async function subir(it) {
   const R = await raiz();
-  const v = it.venta;
+  const v = it.gasto;
   const mesId = await carpeta(R.driveId, R.id, v.fecha.slice(0, 7) + ' ' + MESES[Number(v.fecha.slice(5, 7)) - 1]);
   it.subidas = it.subidas || [];
   for (let i = it.subidas.length; i < it.fotos.length; i++) {
@@ -395,10 +388,10 @@ async function subir(it) {
   }
   if (!it.filaOk) {
     const foto = it.subidas[0] ? `=HYPERLINK("${it.subidas[0].web.replace(/"/g, '')}","Ver")` : '';
-    const texto = (x) => /^\d+$/.test(x) ? "'" + x : x;   // DNI/celular: que Excel no se coma los ceros
-    await agregarFila([v.id, v.fecha, v.hora, v.mes, v.asesora, v.tipo, v.cliente, texto(v.dni), texto(v.celular), v.plan,
-      v.precio, v.descuento, v.monto, v.base, v.igv, v.metodo, texto(v.comprobante),
-      v.inicio, v.vence, it.fotos.length, foto, v.obs, (cuenta() && cuenta().username) || '']);
+    const texto = (x) => /^\d+$/.test(x) ? "'" + x : x;   // RUC / nº: que Excel no los vuelva número
+    await agregarFila([v.id, v.fecha, v.mes, v.semana, v.persona, v.categoria, v.descripcion, v.cantidad, v.unitario,
+      v.proveedor, texto(v.ruc), v.comprobante, texto(v.numero), v.base, v.igv, v.total, v.metodo,
+      it.fotos.length, foto, v.obs, v.registrado, (cuenta() && cuenta().username) || '']);
     it.filaOk = true;
     await colaPut(it);
   }
@@ -436,101 +429,103 @@ function comprimir(file) {
 let tab = 'nueva';
 let F = nuevoForm();
 function nuevoForm() {
-  return { fotos: [], tipo: CFG.tipos[0], cliente: '', dni: '', celular: '', plan: '', precio: 0, monto: '',
-    metodo: '', comprobante: '', inicio: isoLocal(new Date()), obs: '' };
+  const c = CFG.comprobantes[0];
+  return { fotos: [], categoria: '', descripcion: '', cantidad: '1', total: '', metodo: '',
+    comprobante: c ? c.nombre : '', proveedor: '', ruc: '', numero: '', fecha: isoLocal(new Date()), obs: '' };
 }
-const asesora = () => ls.get('asesora', '');
+const persona = () => ls.get('persona', '');
+const proveedores = () => ls.get('proveedores', {});   // PROVEEDOR → RUC, se aprende de cada gasto
+const compActual = () => CFG.comprobantes.find((c) => c.nombre === F.comprobante);
 
 function calcular() {
-  const plan = CFG.planes.find((p) => p.nombre === F.plan);
-  const precio = plan ? Number(plan.precio) || 0 : 0;
-  const monto = num(F.monto);
-  const tasa = Number(CFG.igv) || 0;
-  let base, igv;
-  if (!tasa) { base = monto; igv = 0; }
-  else if (CFG.precioIncluyeIgv !== false) { base = monto / (1 + tasa / 100); igv = monto - base; }
-  else { base = monto; igv = monto * tasa / 100; }
+  const total = r2(num(F.total)), cant = num(F.cantidad) || 1;
+  const comp = compActual();
+  const tasa = comp && comp.igv ? Number(CFG.igv) || 0 : 0;
+  const base = r2(tasa ? total / (1 + tasa / 100) : total);
   const ahora = new Date();
-  const fecha = isoLocal(ahora);
+  const fecha = F.fecha || isoLocal(ahora);
   return {
-    precio, monto: r2(monto), descuento: r2(Math.max(precio - monto, 0)),
-    pctDesc: precio ? Math.round(Math.max(precio - monto, 0) / precio * 100) : 0,
-    base: r2(base), igv: r2(igv), total: r2(base + igv),
-    fecha, hora: pad(ahora.getHours()) + ':' + pad(ahora.getMinutes()),
-    mes: MESES[ahora.getMonth()], vence: plan ? vence(F.inicio, plan.duracion) : ''
+    total, cantidad: cant, unitario: r2(total / cant), tasa, base, igv: r2(total - base),
+    fecha, mes: MESES[Number(fecha.slice(5, 7)) - 1], semana: semana(fecha),
+    hoy: isoLocal(ahora), hora: pad(ahora.getHours()) + ':' + pad(ahora.getMinutes())
   };
 }
 function faltan() {
   const f = [];
-  if (!asesora()) f.push('asesora');
+  if (!persona()) f.push('quién registra');
   if (!F.fotos.length) f.push('foto');
-  if (!F.cliente.trim()) f.push('cliente');
-  if (!F.plan) f.push('plan');
-  if (!num(F.monto)) f.push('monto');
-  if (!F.metodo) f.push('método de pago');
+  if (!F.categoria) f.push('categoría');
+  if (!F.descripcion.trim()) f.push('qué se compró');
+  if (!num(F.total)) f.push('total');
+  if (!F.metodo) f.push('pagado con');
   return f;
 }
 function nombreArchivo(c) {
-  return limpio([c.fecha, c.hora.replace(':', ''), F.cliente.toUpperCase(), F.plan, 'S' + c.monto, asesora()].join(' - '));
+  return limpio([c.fecha, F.categoria.toUpperCase(), F.proveedor || F.descripcion, 'S' + c.total, persona()].join(' - ')).slice(0, 150);
 }
 
-const chips = (lista, actual, attr) => lista.map((x) => {
-  const v = typeof x === 'string' ? x : x.v, extra = typeof x === 'string' ? '' : x.extra;
-  return `<button class="chip ${v === actual ? 'on' : ''}" data-${attr}="${esc(v)}">${esc(v)}${extra ? '<small>' + esc(extra) + '</small>' : ''}</button>`;
-}).join('');
+const chips = (lista, actual, attr) => lista.map((v) =>
+  `<button class="chip ${v === actual ? 'on' : ''}" data-${attr}="${esc(v)}">${esc(v)}</button>`).join('');
 
 function pintarNueva() {
   const c = calcular(), f = faltan();
   const fotos = F.fotos.map((b, i) => `<div><img src="${b.url}"><button data-quitar="${i}">✕</button></div>`).join('');
   return `
     <div id="estado"></div>
-    <label>Asesora <i>*</i></label>
-    <div class="chips scroll">${chips(CFG.asesoras, asesora(), 'ase')}</div>
+    <label>¿Quién registra? <i>*</i></label>
+    <div class="chips scroll">${chips(CFG.personas, persona(), 'per')}</div>
 
-    <label>Foto de la factura / boleta <i>*</i></label>
+    <label>Foto del comprobante <i>*</i></label>
     ${F.fotos.length
       ? `<div class="fotos">${fotos}<button class="mas" id="otraFoto">＋ Otra foto<br>(voucher)</button></div>`
       : `<button class="foto" id="tomarFoto"><span>📷</span>Tomar foto</button>`}
 
-    <label>Tipo de venta</label>
-    <div class="chips">${chips(CFG.tipos, F.tipo, 'tipo')}</div>
+    <label>Categoría <i>*</i></label>
+    <div class="chips">${chips(CFG.categorias, F.categoria, 'cat')}</div>
 
-    <label>Cliente <i>*</i></label>
-    <input id="cliente" placeholder="Nombre y apellido" autocomplete="off" value="${esc(F.cliente)}">
+    <label>¿Qué se compró o se pagó? <i>*</i></label>
+    <input id="descripcion" placeholder="Ej. bidones de agua, lejía, arreglo de la polea" autocomplete="off" value="${esc(F.descripcion)}">
     <div class="dos">
-      <div><label>DNI</label><input id="dni" inputmode="numeric" maxlength="12" value="${esc(F.dni)}"></div>
-      <div><label>Celular</label><input id="celular" inputmode="tel" maxlength="15" value="${esc(F.celular)}"></div>
+      <div><label>Total pagado <i>*</i></label><input id="total" inputmode="decimal" placeholder="0.00" value="${esc(F.total)}"></div>
+      <div><label>Cantidad</label><input id="cantidad" inputmode="numeric" value="${esc(F.cantidad)}"></div>
     </div>
 
-    <label>Plan <i>*</i></label>
-    <div class="chips">${chips(CFG.planes.map((p) => ({ v: p.nombre, extra: soles(p.precio) })), F.plan, 'plan')}</div>
-
-    <div class="dos">
-      <div><label>Monto cobrado <i>*</i></label><input id="monto" inputmode="decimal" placeholder="0.00" value="${esc(F.monto)}"></div>
-      <div><label>Inicio del plan</label><input id="inicio" type="date" value="${esc(F.inicio)}"></div>
-    </div>
-
-    <label>Método de pago <i>*</i></label>
+    <label>Pagado con <i>*</i></label>
     <div class="chips">${chips(CFG.metodos, F.metodo, 'metodo')}</div>
 
-    <label>Nº de comprobante</label>
-    <input id="comprobante" placeholder="Ej. B001-000123" autocomplete="off" value="${esc(F.comprobante)}">
+    <label>Comprobante</label>
+    <div class="chips">${chips(CFG.comprobantes.map((x) => x.nombre), F.comprobante, 'comp')}</div>
+
+    <label>Proveedor / tienda</label>
+    <input id="proveedor" list="provs" placeholder="Opcional" autocomplete="off" value="${esc(F.proveedor)}">
+    <datalist id="provs">${Object.keys(proveedores()).map((p) => `<option value="${esc(p)}">`).join('')}</datalist>
+    <div class="dos">
+      <div><label>RUC</label><input id="ruc" inputmode="numeric" maxlength="11" value="${esc(F.ruc)}"></div>
+      <div><label>Nº comprobante</label><input id="numero" placeholder="F001-123" autocomplete="off" value="${esc(F.numero)}"></div>
+    </div>
+    <label>Fecha del comprobante</label>
+    <input id="fecha" type="date" value="${esc(F.fecha)}">
     <label>Observación</label>
     <input id="obs" placeholder="Opcional" autocomplete="off" value="${esc(F.obs)}">
 
     <div class="calc" id="calc">${pintarCalc(c)}</div>
     <button class="guardar" id="guardar" ${f.length ? 'disabled' : ''}>✅ Guardar y subir</button>
-    <div class="falta" id="falta">${f.length ? 'Falta: ' + f.join(', ') : 'Se sube sola a OneDrive'}</div>`;
+    <div class="falta" id="falta">${f.length ? 'Falta: ' + f.join(', ') : 'Se sube solo a OneDrive'}</div>`;
 }
 function pintarCalc(c) {
+  const comp = compActual();
+  const avisos = [];
+  if (comp && comp.igv && !F.ruc.trim()) avisos.push('Factura sin RUC del proveedor');
+  if (F.ruc.trim() && !/^\d{11}$/.test(F.ruc.trim())) avisos.push('El RUC debe tener 11 dígitos');
+  if (c.fecha > c.hoy) avisos.push('La fecha del comprobante es futura');
   return `<h3>🧮 SE CALCULA SOLO</h3>
-    <div class="r"><span>Fecha y hora</span><b>${fm(c.fecha)} ${c.hora}</b></div>
-    <div class="r"><span>Precio de lista</span><b>${c.precio ? soles(c.precio) : '—'}</b></div>
-    <div class="r ${c.descuento ? 'desc' : ''}"><span>Descuento</span><b>${c.descuento ? soles(c.descuento) + ' (' + c.pctDesc + '%)' : '—'}</b></div>
-    ${Number(CFG.igv) ? `<div class="r"><span>Base imponible</span><b>${soles(c.base)}</b></div>
-    <div class="r"><span>IGV ${Number(CFG.igv)}%</span><b>${soles(c.igv)}</b></div>` : ''}
+    <div class="r"><span>Fecha</span><b>${fm(c.fecha)}</b></div>
+    <div class="r"><span>Mes / semana</span><b>${c.mes} · sem ${c.semana}</b></div>
+    ${c.cantidad > 1 ? `<div class="r"><span>Precio unitario</span><b>${soles(c.unitario)} × ${c.cantidad}</b></div>` : ''}
+    ${c.tasa ? `<div class="r"><span>Base imponible</span><b>${soles(c.base)}</b></div>
+    <div class="r"><span>IGV ${c.tasa}%</span><b>${soles(c.igv)}</b></div>` : ''}
     <div class="r tot"><span>Total</span><b>${soles(c.total)}</b></div>
-    <div class="r"><span>Vence</span><b>${c.vence ? fm(c.vence) : '—'}</b></div>
+    ${avisos.map((a) => `<div class="r desc"><span>⚠️ ${esc(a)}</span></div>`).join('')}
     <div class="arch">📁 ${esc((ls.get('raiz') || {}).nombre || carpetaConf())} / ${c.fecha.slice(0, 7)} ${c.mes} / ${esc(nombreArchivo(c))}.jpg</div>`;
 }
 function refrescarCalc() {
@@ -538,27 +533,29 @@ function refrescarCalc() {
   el.innerHTML = pintarCalc(calcular());
   const f = faltan();
   $('#guardar').disabled = !!f.length;
-  $('#falta').textContent = f.length ? 'Falta: ' + f.join(', ') : 'Se sube sola a OneDrive';
+  $('#falta').textContent = f.length ? 'Falta: ' + f.join(', ') : 'Se sube solo a OneDrive';
 }
 
 async function guardar() {
   const f = faltan();
   if (f.length) return toast('Falta: ' + f.join(', '));
   const c = calcular();
-  const id = 'F' + c.fecha.replace(/-/g, '') + '-' + c.hora.replace(':', '') + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
-  const venta = {
-    id, fecha: c.fecha, hora: c.hora, mes: c.mes, asesora: asesora(), tipo: F.tipo,
-    cliente: F.cliente.trim().toUpperCase(), dni: F.dni.trim(), celular: F.celular.trim(), plan: F.plan,
-    precio: c.precio, descuento: c.descuento, monto: c.monto, base: c.base, igv: c.igv,
-    metodo: F.metodo, comprobante: F.comprobante.trim().toUpperCase(), inicio: F.inicio, vence: c.vence, obs: F.obs.trim()
+  const id = 'G' + c.hoy.replace(/-/g, '') + '-' + c.hora.replace(':', '') + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+  const gasto = {
+    id, fecha: c.fecha, mes: c.mes, semana: c.semana, persona: persona(), categoria: F.categoria,
+    descripcion: F.descripcion.trim(), cantidad: c.cantidad, unitario: c.unitario,
+    proveedor: F.proveedor.trim().toUpperCase(), ruc: F.ruc.trim(), comprobante: F.comprobante, numero: F.numero.trim().toUpperCase(),
+    base: c.base, igv: c.igv, total: c.total, metodo: F.metodo, obs: F.obs.trim(), registrado: c.hoy + ' ' + c.hora
   };
-  await colaPut({ id, creado: Date.now(), venta, archivo: nombreArchivo(c), fotos: F.fotos.map((x) => x.blob), subidas: [], filaOk: false });
-  historial(id, { estado: 'pend', fecha: c.fecha, hora: c.hora, cliente: venta.cliente, plan: venta.plan, monto: venta.monto, asesora: venta.asesora });
+  await colaPut({ id, creado: Date.now(), gasto, archivo: nombreArchivo(c), fotos: F.fotos.map((x) => x.blob), subidas: [], filaOk: false });
+  historial(id, { estado: 'pend', reg: c.hoy, fecha: c.fecha, descripcion: gasto.descripcion, categoria: gasto.categoria,
+    metodo: gasto.metodo, total: gasto.total, persona: gasto.persona });
+  if (gasto.proveedor) { const p = proveedores(); p[gasto.proveedor] = gasto.ruc || p[gasto.proveedor] || ''; ls.set('proveedores', p); }
   F.fotos.forEach((x) => URL.revokeObjectURL(x.url));
   F = nuevoForm();
   window.scrollTo(0, 0);
   pintar();
-  toast('✅ Guardada. Subiendo a OneDrive…');
+  toast('✅ Guardado. Subiendo a OneDrive…');
   procesarCola();
 }
 
@@ -566,70 +563,68 @@ async function guardar() {
 
 function pintarHist() {
   const h = ls.get('hist', []);
-  const hoy = isoLocal(new Date());
-  const deHoy = h.filter((x) => x.fecha === hoy);
-  const total = deHoy.reduce((t, x) => t + (Number(x.monto) || 0), 0);
+  const hoy = isoLocal(new Date()), mes = hoy.slice(0, 7);
+  const deHoy = h.filter((x) => x.reg === hoy);
+  const suma = (l) => l.reduce((t, x) => t + (Number(x.total) || 0), 0);
   const fila = (x) => {
-    const tag = x.estado === 'ok' ? '<span class="tag ok">subida</span>' : x.estado === 'err' ? '<span class="tag err">reintentando</span>' : '<span class="tag pend">en cola</span>';
-    const t = `<div class="main"><div class="t">${esc(x.cliente)}${tag}</div><div class="d">${fm(x.fecha).slice(0, 5)} ${esc(x.hora)} · ${esc(x.plan)} · ${esc(x.asesora)}${x.estado === 'err' && x.error ? '<br>' + esc(x.error) : ''}</div></div><div class="m">${soles(x.monto)}</div>`;
+    const tag = x.estado === 'ok' ? '<span class="tag ok">subido</span>' : x.estado === 'err' ? '<span class="tag err">reintentando</span>' : '<span class="tag pend">en cola</span>';
+    const t = `<div class="main"><div class="t">${esc(x.descripcion)}${tag}</div><div class="d">${fm(x.fecha).slice(0, 5)} · ${esc(x.categoria)} · ${esc(x.metodo)} · ${esc(x.persona)}${x.estado === 'err' && x.error ? '<br>' + esc(x.error) : ''}</div></div><div class="m">${soles(x.total)}</div>`;
     return x.foto ? `<a class="row" style="color:inherit;text-decoration:none" href="${esc(x.foto)}" target="_blank" rel="noopener">${t}</a>` : `<div class="row">${t}</div>`;
   };
+  const delMes = h.filter((x) => (x.fecha || '').slice(0, 7) === mes);
+  const porCat = {};
+  delMes.forEach((x) => { porCat[x.categoria] = (porCat[x.categoria] || 0) + (Number(x.total) || 0); });
+  const cats = Object.keys(porCat).sort((a, b) => porCat[b] - porCat[a]);
   const R = ls.get('raiz');
   return `<div id="estado"></div>
-    <h2>Hoy en este celular <small>${deHoy.length} · ${soles(total)}</small></h2>
+    <h2>Hoy en este celular <small>${deHoy.length} · ${soles(suma(deHoy))}</small></h2>
     <div class="list">${deHoy.length ? deHoy.map(fila).join('') : '<div class="vacio">Todavía nada hoy.</div>'}</div>
+    <h2>${MESES[new Date().getMonth()]} por categoría <small>${soles(suma(delMes))}</small></h2>
+    <div class="list">${cats.map((k) => `<div class="row"><div class="main"><div class="t">${esc(k)}</div></div><div class="m">${soles(porCat[k])}</div></div>`).join('') || '<div class="vacio">—</div>'}</div>
+    <div class="ayuda">Solo lo registrado en este celular. El total de todas está en el Excel.</div>
     <h2>Anteriores</h2>
-    <div class="list">${h.filter((x) => x.fecha !== hoy).slice(0, 40).map(fila).join('') || '<div class="vacio">—</div>'}</div>
+    <div class="list">${h.filter((x) => x.reg !== hoy).slice(0, 40).map(fila).join('') || '<div class="vacio">—</div>'}</div>
     ${R && R.web ? `<a class="btn" style="display:block;text-align:center;margin-top:16px;text-decoration:none" href="${esc(R.web)}" target="_blank" rel="noopener">📁 Abrir carpeta en OneDrive</a>` : ''}`;
 }
 
 function pintarConf() {
-  const lineasPlanes = CFG.planes.map((p) => `${p.nombre} | ${p.precio} | ${p.duracion}`).join('\n');
   const R = ls.get('raiz');
   return `
     <h2>Este celular</h2>
     <div class="ayuda">Sesión: <b>${esc((cuenta() && cuenta().username) || '—')}</b></div>
     <label>Carpeta de OneDrive</label>
     <input id="cCarpeta" value="${esc(carpetaConf())}">
-    <div class="ayuda">Un nombre (se crea en <i>tu</i> OneDrive) o el <b>link de una carpeta compartida</b> (con permiso de edición) para que todas las asesoras suban a la misma.
+    <div class="ayuda">Un nombre (se crea en <i>tu</i> OneDrive) o el <b>link de una carpeta compartida</b> (con permiso de edición) para que todas suban a la misma.
       ${R ? `<br>Ahora: <b>${esc(R.nombre)}</b>` : ''}</div>
-    <button class="btn" id="cCopiar" style="margin-top:8px">🔗 Copiar link para las asesoras</button>
+    <button class="btn" id="cCopiar" style="margin-top:8px">🔗 Copiar link para el equipo</button>
     <div class="ayuda">Mándales ese link: al abrirlo, su celular queda apuntando a la misma carpeta.</div>
 
     <h2>Para todas <small>se guarda en config.json</small></h2>
-    <label>Planes — una línea: <code>Nombre | precio | duración</code></label>
-    <textarea id="cPlanes">${esc(lineasPlanes)}</textarea>
-    <div class="ayuda">Duración: <code>1m</code> = 1 mes, <code>3m</code> = 3 meses, <code>15d</code> = 15 días.</div>
-    <label>Asesoras (una por línea)</label>
-    <textarea id="cAsesoras" style="min-height:90px">${esc(CFG.asesoras.join('\n'))}</textarea>
-    <label>Métodos de pago (uno por línea)</label>
+    <label>Categorías (una por línea)</label>
+    <textarea id="cCategorias">${esc(CFG.categorias.join('\n'))}</textarea>
+    <label>Quién registra (una por línea)</label>
+    <textarea id="cPersonas" style="min-height:90px">${esc(CFG.personas.join('\n'))}</textarea>
+    <label>Pagado con (uno por línea)</label>
     <textarea id="cMetodos" style="min-height:90px">${esc(CFG.metodos.join('\n'))}</textarea>
-    <label>Tipos de venta (uno por línea)</label>
-    <textarea id="cTipos" style="min-height:60px">${esc(CFG.tipos.join('\n'))}</textarea>
-    <div class="dos">
-      <div><label>IGV %</label><input id="cIgv" inputmode="decimal" value="${esc(CFG.igv)}"></div>
-      <div><label>El precio…</label><select id="cIncl">
-        <option value="1" ${CFG.precioIncluyeIgv !== false ? 'selected' : ''}>ya incluye IGV</option>
-        <option value="0" ${CFG.precioIncluyeIgv === false ? 'selected' : ''}>es sin IGV</option></select></div>
-    </div>
-    <div class="ayuda">IGV 0 = no se calcula (p. ej. Nuevo RUS).</div>
+    <label>Comprobantes (uno por línea; <code>| igv</code> si trae IGV desglosado)</label>
+    <textarea id="cComprobantes" style="min-height:90px">${esc(CFG.comprobantes.map((c) => c.nombre + (c.igv ? ' | igv' : '')).join('\n'))}</textarea>
+    <label>IGV %</label>
+    <input id="cIgv" inputmode="decimal" value="${esc(CFG.igv)}">
     <button class="guardar" id="cGuardar">💾 Guardar ajustes</button>
     <button class="btn" id="cSalir" style="width:100%;margin-top:18px">Cerrar sesión de Microsoft</button>`;
 }
 
 async function guardarAjustes() {
   const lineas = (id) => $(id).value.split('\n').map((s) => s.trim()).filter(Boolean);
-  const planes = [];
-  for (const l of lineas('#cPlanes')) {
-    const [nombre, precio, duracion] = l.split('|').map((s) => (s || '').trim());
-    if (!nombre || !num(precio) || !/^\d+\s*[mdMD]$/.test(duracion || '')) return toast('Revisa el plan: "' + l + '"', 4000);
-    planes.push({ nombre, precio: num(precio), duracion: duracion.toLowerCase().replace(/\s/g, '') });
-  }
   const nueva = Object.assign({}, CFG, {
-    planes, asesoras: lineas('#cAsesoras').map((s) => s.toUpperCase()), metodos: lineas('#cMetodos'),
-    tipos: lineas('#cTipos'), igv: num($('#cIgv').value), precioIncluyeIgv: $('#cIncl').value === '1'
+    categorias: lineas('#cCategorias'), personas: lineas('#cPersonas').map((s) => s.toUpperCase()), metodos: lineas('#cMetodos'),
+    comprobantes: lineas('#cComprobantes').map((l) => {
+      const [nombre, marca] = l.split('|').map((s) => s.trim());
+      return { nombre, igv: /^igv$/i.test(marca || '') };
+    }),
+    igv: num($('#cIgv').value)
   });
-  if (!nueva.asesoras.length || !nueva.metodos.length || !nueva.tipos.length || !planes.length) return toast('No dejes listas vacías.');
+  if (!nueva.categorias.length || !nueva.personas.length || !nueva.metodos.length || !nueva.comprobantes.length) return toast('No dejes listas vacías.');
   const carpetaNueva = $('#cCarpeta').value.trim() || 'RURUSH Facturas';
   const btn = $('#cGuardar'); btn.disabled = true; btn.textContent = 'Guardando…';
   try {
@@ -642,6 +637,7 @@ async function guardarAjustes() {
       await guardarConfig(nueva);
       toast('💾 Ajustes guardados para todas');
     }
+    if (!compActual()) F.comprobante = (CFG.comprobantes[0] || {}).nombre || '';
     pintarSub(); pintar();
   } catch (e) {
     btn.disabled = false; btn.textContent = '💾 Guardar ajustes';
@@ -661,7 +657,7 @@ async function pintarEstado() {
 }
 function pintarSub() {
   const R = ls.get('raiz');
-  $('#sub').textContent = (asesora() ? asesora() + ' · ' : '') + '📁 ' + ((R && R.nombre) || carpetaConf());
+  $('#sub').textContent = (persona() ? persona() + ' · ' : '') + '📁 ' + ((R && R.nombre) || carpetaConf());
 }
 function pintar() {
   $('#main').innerHTML = tab === 'nueva' ? pintarNueva() : tab === 'hist' ? pintarHist() : pintarConf();
@@ -674,7 +670,7 @@ function pantallaLogin(msj) {
   $('#sub').textContent = 'Control de facturas';
   $('#main').innerHTML = `<div class="login">
     <div style="font-size:54px">🧾</div>
-    <p>Toma la foto, llena los datos de la venta y se sube sola a OneDrive.</p>
+    <p>Toma la foto del comprobante (agua, limpieza, arreglos…), llena lo importante y se sube solo a OneDrive.</p>
     ${msj ? `<div class="estado err"><span>${esc(msj)}</span></div>` : ''}
     <button class="guardar" id="login">Entrar con Microsoft</button></div>`;
 }
@@ -688,16 +684,10 @@ document.addEventListener('click', async (ev) => {
   if (t.id === 'login') return MS.loginRedirect({ scopes: SCOPES, prompt: 'select_account' });
   if (t.id === 'tomarFoto' || t.id === 'otraFoto') { $('#cam').value = ''; return $('#cam').click(); }
   if (t.dataset.quitar != null) { const [x] = F.fotos.splice(Number(t.dataset.quitar), 1); URL.revokeObjectURL(x.url); return pintar(); }
-  if (t.dataset.ase != null) { ls.set('asesora', t.dataset.ase); pintarSub(); return pintar(); }
-  if (t.dataset.tipo != null) { F.tipo = t.dataset.tipo; return pintar(); }
+  if (t.dataset.per != null) { ls.set('persona', t.dataset.per); pintarSub(); return pintar(); }
+  if (t.dataset.cat != null) { F.categoria = t.dataset.cat; return pintar(); }
+  if (t.dataset.comp != null) { F.comprobante = t.dataset.comp; return pintar(); }
   if (t.dataset.metodo != null) { F.metodo = t.dataset.metodo; return pintar(); }
-  if (t.dataset.plan != null) {
-    const p = CFG.planes.find((x) => x.nombre === t.dataset.plan);
-    // Precio del plan como monto sugerido (si ya escribió otro monto, se respeta).
-    if (!F.monto || F.monto === String(F.precio)) F.monto = String(p.precio);
-    F.plan = p.nombre; F.precio = p.precio;
-    return pintar();
-  }
   if (t.id === 'guardar') { t.disabled = true; try { await guardar(); } catch (e) { t.disabled = false; toast('❌ ' + e.message, 5000); } return; }
   if (t.id === 'reintentar') return procesarCola();
   if (t.id === 'cGuardar') return guardarAjustes();
@@ -711,10 +701,12 @@ document.addEventListener('click', async (ev) => {
 
 document.addEventListener('input', (ev) => {
   const id = ev.target.id;
-  if (['cliente', 'dni', 'celular', 'monto', 'inicio', 'comprobante', 'obs'].includes(id)) {
-    F[id] = ev.target.value;
-    if (['cliente', 'monto', 'inicio'].includes(id)) refrescarCalc();
-  }
+  if (!['descripcion', 'total', 'cantidad', 'proveedor', 'ruc', 'numero', 'fecha', 'obs'].includes(id)) return;
+  F[id] = ev.target.value;
+  // Proveedor conocido en este celular → su RUC se llena solo.
+  const ruc = proveedores()[F.proveedor.trim().toUpperCase()];
+  if (id === 'proveedor' && ruc && !F.ruc) { F.ruc = ruc; $('#ruc').value = ruc; }
+  refrescarCalc();
 });
 
 $('#cam').addEventListener('change', async (ev) => {
