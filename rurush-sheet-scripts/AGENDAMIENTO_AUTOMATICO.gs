@@ -5,7 +5,10 @@
  * revisan las 6 llamadas. Así sigue funcionando aunque se agreguen columnas.
  *
  * QUÉ HACE:
- *   - Trigger onEdit INSTALABLE (instantáneo) en la pestaña 2026.
+ *   - Trigger onEdit INSTALABLE (instantáneo).
+ *   - En todas las pestañas de llamadas: al marcar un ESTADO a mano se llenan solas la
+ *     FECHA (hoy) y la HORA exacta de esa llamada, si estaban vacías.
+ *   - En la pestaña 2026:
  *   - Si alguna llamada tiene ESTADO=AGENDADO + ASESOR + FECHA FP + HORA FP (y la fila
  *     tiene TELÉFONO) -> crea la actividad "meeting" con asunto "FP <ASESOR> APL".
  *     Si hay varias llamadas en AGENDADO, manda la última.
@@ -40,9 +43,11 @@ function estructuraFP(sh) {
   const rondas = [];
   for (let i = 0; i < head.length; i++) {
     if (head[i] !== 'ESTADO') continue;
-    const r = { estado: i + 1, asesor: 0, fpFecha: 0, fpHora: 0 };
+    const r = { estado: i + 1, asesor: 0, fecha: 0, hora: 0, fpFecha: 0, fpHora: 0 };
     for (let j = i - 1; j >= 0; j--) {          // hacia atrás hasta el ASESOR de esta llamada
       if (head[j] === 'ESTADO') break;
+      if (!r.hora && head[j] === 'HORA') r.hora = j + 1;
+      if (!r.fecha && head[j] === 'FECHA') r.fecha = j + 1;
       if (head[j] === 'ASESOR') { r.asesor = j + 1; break; }
     }
     if (!r.asesor && rondas.length === 0) r.asesor = col('NUMERO') + 1;   // 1ª llamada: título a veces es un nombre
@@ -65,12 +70,19 @@ function instalarTriggerFP() {
   SpreadsheetApp.getActive().toast('Trigger FP instalado ✅');
 }
 
-/** Handler del onEdit instalable. Procesa todas las filas del rango editado (soporta pegados). */
+/** Handler del onEdit instalable.
+ *  1) En CUALQUIER pestaña de llamadas: al marcar un ESTADO a mano, llena la FECHA (hoy)
+ *     y la HORA exacta de esa llamada si están vacías.
+ *  2) En la pestaña 2026: crea / actualiza / cancela el FP en Pipedrive. */
 function onEditFP(e) {
   try {
     const sh = e.range.getSheet();
-    if (sh.getName() !== SHEET_NAME) return;
+    if (e.range.getRow() + e.range.getNumRows() - 1 < FILA_INICIO) return;
     const est = estructuraFP(sh);
+    if (!est.rondas.length) return;              // pestaña sin columnas de llamadas
+    sellarFechaHora(sh, e.range, est);
+    if (sh.getName() !== SHEET_NAME) return;
+
     const relevantes = [est.nombre, est.tel];
     est.rondas.forEach(r => relevantes.push(r.asesor, r.estado, r.fpFecha, r.fpHora));
     const c1 = e.range.getColumn(), c2 = c1 + e.range.getNumColumns() - 1;
@@ -80,6 +92,26 @@ function onEditFP(e) {
     for (let r = r1; r <= r2; r++) procesarFilaFP(sh, r, est);
   } catch (err) {
     console.error('onEditFP: ' + err);
+  }
+}
+
+/** Si se escribió un ESTADO, pone FECHA = hoy y HORA = hora exacta en esa llamada (solo si están vacías). */
+function sellarFechaHora(sh, rango, est) {
+  const c1 = rango.getColumn(), c2 = c1 + rango.getNumColumns() - 1;
+  const rondas = est.rondas.filter(r => r.estado >= c1 && r.estado <= c2 && (r.fecha || r.hora));
+  if (!rondas.length) return;
+  const ahora = new Date();
+  const hoy = Utilities.formatDate(ahora, 'America/Lima', 'dd/MM/yyyy');
+  const h = Number(Utilities.formatDate(ahora, 'America/Lima', 'H'));
+  const hora = (((h + 11) % 12) + 1) + ':' + Utilities.formatDate(ahora, 'America/Lima', 'mm') + ' ' + (h < 12 ? 'am' : 'pm');
+  const r1 = Math.max(FILA_INICIO, rango.getRow()), r2 = rango.getRow() + rango.getNumRows() - 1;
+  if (r2 - r1 > 200) return;                     // pegado masivo: no sellar
+  for (let row = r1; row <= r2; row++) {
+    rondas.forEach(r => {
+      if (!String(sh.getRange(row, r.estado).getValue()).trim()) return;
+      if (r.fecha && !String(sh.getRange(row, r.fecha).getValue()).trim()) sh.getRange(row, r.fecha).setValue(hoy);
+      if (r.hora && !String(sh.getRange(row, r.hora).getValue()).trim()) sh.getRange(row, r.hora).setValue(hora);
+    });
   }
 }
 
