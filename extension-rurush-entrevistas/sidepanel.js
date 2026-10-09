@@ -16,7 +16,8 @@ const st = {
   ronda: 1,
   borrador: null,     // { puntajes: {actitud: 7.5…}, notasFinal, estado, inicio }
   msg: { fecha: '', hora: '' },
-  guardando: false
+  guardando: false,
+  primeraCarga: true
 };
 
 // ---------- utilidades ----------
@@ -49,6 +50,24 @@ function claseEstado(e) {
   if (/hecha|realizada|pre-aprobado/i.test(e)) return 'est-hecha';
   if (/agendada/i.test(e)) return 'est-agendada';
   return '';
+}
+
+// ---------- agenda ----------
+const fechaCita = ag => new Date(`${ag.fecha}T${ag.hora}`);
+const diaISO = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const agendada = c => c.ag && c.ag.estado === 'Agendada';
+// Pasó más de 1 hora desde la cita y nadie marcó si vino.
+const porConfirmar = c => agendada(c) && fechaCita(c.ag).getTime() < Date.now() - 60 * 60000;
+const esHoy = c => agendada(c) && c.ag.fecha === diaISO(new Date()) && !porConfirmar(c);
+const proxima = c => agendada(c) && !porConfirmar(c);
+function horaTxt(ag) {
+  return fechaCita(ag).toLocaleTimeString('es-PE', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+function citaTxt(ag) {
+  const f = fechaCita(ag), hoy = new Date(), man = new Date(); man.setDate(hoy.getDate() + 1);
+  const dia = ag.fecha === diaISO(hoy) ? 'hoy' : ag.fecha === diaISO(man) ? 'mañana'
+    : f.toLocaleDateString('es-PE', { weekday: 'short', day: 'numeric', month: 'numeric' });
+  return `${ag.ronda} · ${dia} ${horaTxt(ag)}`;
 }
 
 // ---------- confirmación (sirve igual en Chrome y en el celular) ----------
@@ -84,6 +103,11 @@ async function cargar() {
     const j = await api('GET', { a: 'lista' });
     st.estados = j.estados || [];
     st.cands = j.cands.map(c => ({ ...c, flags: evaluar(c.d) }));
+    if (st.primeraCarga) {
+      st.primeraCarga = false;
+      if (st.cands.some(porConfirmar)) st.filtro = 'vino';
+      else if (st.cands.some(esHoy)) st.filtro = 'hoy';
+    }
     PLAT.guardarLocal('cache', { estados: st.estados, cands: j.cands });
   } catch (e) {
     const cache = await PLAT.leerLocal('cache');
@@ -105,7 +129,7 @@ async function guardar(cambios, okTxt) {
   try {
     const j = await api('POST', { a: 'guardar', fila: c.fila, huella: c.huella, ...cambios });
     Object.assign(c, j.cand, { flags: evaluar(j.cand.d) });
-    toast(okTxt || '✔ Guardado en el Sheet');
+    toast([okTxt || '✔ Guardado en el Sheet', ...(j.avisos || []).map(a => '⚠ ' + a)].join('\n'), j.avisos && j.avisos.length ? 8000 : 2500);
     return true;
   } catch (e) {
     toast('✖ ' + e.message, 6000);
@@ -141,6 +165,9 @@ function enFiltro(c) {
   const e = c.d.estado || '';
   if (st.filtro === 'todos') return true;
   if (st.filtro === 'activos') return !ESTADOS_CERRADOS.test(e);
+  if (st.filtro === 'hoy') return esHoy(c);
+  if (st.filtro === 'vino') return porConfirmar(c);
+  if (st.filtro === 'agenda') return proxima(c);
   if (st.filtro === '(sin estado)') return !e;
   return e === st.filtro;
 }
@@ -150,7 +177,11 @@ function pintarLista() {
   const conteo = {};
   st.cands.forEach(c => { const e = c.d.estado || '(sin estado)'; conteo[e] = (conteo[e] || 0) + 1; });
   const orden = [...st.estados, ...Object.keys(conteo).filter(e => !st.estados.includes(e))].filter(e => conteo[e]);
+  const nHoy = st.cands.filter(esHoy).length, nVino = st.cands.filter(porConfirmar).length, nAg = st.cands.filter(proxima).length;
   const chips = [
+    ...(nVino ? [['vino', '⏰ ¿Vino?', nVino]] : []),
+    ...(nHoy || st.filtro === 'hoy' ? [['hoy', '📅 Hoy', nHoy]] : []),
+    ...(nAg ? [['agenda', '🗓 Agenda', nAg]] : []),
     ['activos', 'Activos', st.cands.filter(c => !ESTADOS_CERRADOS.test(c.d.estado || '')).length],
     ['todos', 'Todos', st.cands.length],
     ...orden.map(e => [e, e, conteo[e]])
@@ -158,7 +189,9 @@ function pintarLista() {
   const lista = st.cands
     .filter(enFiltro)
     .filter(c => !q || [c.d.nombre, c.d.email, c.d.wa, c.d.notas, c.d.ciudad].join(' ').toLowerCase().includes(q))
-    .sort((a, b) => b.fila - a.fila);
+    .sort(['hoy', 'vino', 'agenda'].includes(st.filtro)
+      ? (a, b) => fechaCita(a.ag) - fechaCita(b.ag)
+      : (a, b) => b.fila - a.fila);
 
   // El buscador no se vuelve a crear al escribir: así el teclado del celular no se cierra ni pierde letras.
   if (!document.getElementById('q')) {
@@ -181,6 +214,7 @@ function tarjeta(c) {
       ${d.estado ? `<span class="pill ${claseEstado(d.estado)}">${esc(d.estado)}</span>` : ''}
     </div>
     <div class="sub">${esc([d.edad && d.edad + ' años', d.ciudad, d.marca && d.marca.split(' ')[0]].filter(Boolean).join(' · '))}</div>
+    ${agendada(c) ? `<div class="cita ${porConfirmar(c) ? 'tarde' : ''}">${porConfirmar(c) ? '⏰ ¿Vino? ' : '📅 '}${esc(citaTxt(c.ag))}</div>` : ''}
     ${d.notas ? `<div class="sub">📝 ${esc(d.notas)}</div>` : ''}
   </div>`;
 }
@@ -232,6 +266,7 @@ function vistaResumen(c) {
   ].filter(f => f[1]);
   const hayPuntos = CRITERIOS.some(cr => d[cr.id + 'E1'] || d[cr.id + 'E2']) || d.pf;
   return `
+    ${cajaAgenda(c)}
     <div class="caja"><h3>Pre-filtro automático</h3>
       ${c.flags.length ? c.flags.map(f => `<div class="flag ${f.t}">${f.t === 'ok' ? '✔' : f.t === 'alerta' ? '⚠' : '•'} ${esc(f.txt)}</div>`).join('') : '<p class="sub">Sin datos del formulario.</p>'}
     </div>
@@ -246,6 +281,23 @@ function vistaResumen(c) {
       <textarea id="notas">${esc(d.notas)}</textarea>
       <div class="acciones"><button data-accion="guardarNotas" ${st.guardando ? 'disabled' : ''}>Guardar notas</button></div>
     </div>`;
+}
+
+function cajaAgenda(c) {
+  const ag = c.ag, dis = st.guardando ? 'disabled' : '';
+  if (porConfirmar(c)) {
+    return `<div class="caja agenda tarde"><h3>⏰ Tenía entrevista ${esc(citaTxt(ag))} — ¿vino?</h3>
+      <div class="acciones"><button class="sec" data-accion="novino" ${dis}>✖ No vino</button>
+      <button data-accion="vino" data-v="${ag.ronda.slice(1)}">✔ Sí, calificar ${esc(ag.ronda)}</button></div></div>`;
+  }
+  if (agendada(c)) {
+    return `<div class="caja agenda"><h3>📅 Entrevista ${esc(citaTxt(ag))}</h3>
+      <div class="acciones"><button class="sec" data-accion="cancelarCita" ${dis}>Cancelar</button>
+      <button class="sec" data-accion="tab" data-v="mensajes">Reagendar</button>
+      <button data-accion="vino" data-v="${ag.ronda.slice(1)}">🎤 Empezar</button></div></div>`;
+  }
+  return `<div class="caja agenda">${ag ? `<div class="sub">Última cita: ${esc(citaTxt(ag))} — ${esc(ag.estado)}</div>` : ''}
+    <div class="acciones"><button class="sec" data-accion="tab" data-v="mensajes">📅 Agendar entrevista</button></div></div>`;
 }
 
 const SECCIONES = [
@@ -331,7 +383,8 @@ function vistaMensajes(c) {
   const d = c.d;
   if (!telefono(d)) return '<div class="caja"><p>Este postulante no tiene un número de WhatsApp válido en el formulario.</p></div>';
   return `
-    <div class="caja"><h3>Fecha y hora (para las plantillas que la piden)</h3>
+    <div class="caja"><h3>Fecha y hora de la entrevista</h3>
+      ${agendada(c) ? `<div class="sub">Cita actual: ${esc(citaTxt(c.ag))}</div>` : ''}
       <div class="dosc"><input type="date" id="mFecha" value="${esc(st.msg.fecha)}"><input type="time" id="mHora" value="${esc(st.msg.hora)}"></div>
     </div>
     ${PLANTILLAS.map(pl => `<div class="caja plantilla">
@@ -340,6 +393,7 @@ function vistaMensajes(c) {
       ${pl.pideFecha && !(st.msg.fecha && st.msg.hora) ? '<div class="flag info">• Elige fecha y hora arriba</div>' : ''}
       <div class="acciones">
         <a class="btn sec" target="_blank" href="${esc(linkWa(d, textoPlantilla(pl, d)))}" data-wa="${pl.id}">Abrir WhatsApp</a>
+        ${pl.ronda ? `<a class="btn" target="_blank" href="${esc(linkWa(d, textoPlantilla(pl, d)))}" data-wa="${pl.id}" data-accion="agendar" data-ronda="${pl.ronda}">📅 ${agendada(c) ? 'Reagendar' : 'Agendar'} E${pl.ronda} y enviar</a>` : ''}
         ${pl.estado ? `<a class="btn" target="_blank" href="${esc(linkWa(d, textoPlantilla(pl, d)))}" data-wa="${pl.id}" data-accion="enviar" data-id="${pl.id}" data-estado="1">Abrir y marcar “${esc(pl.estado)}”</a>` : ''}
       </div>
     </div>`).join('')}`;
@@ -358,6 +412,7 @@ async function abrir(fila) {
   st.sel = fila; st.vista = 'ficha'; st.tab = 'resumen'; st.abiertos = {};
   const c = cand();
   st.ronda = c.d.fechaE1 || c.d.fechaE2 ? 2 : 1;
+  st.msg = agendada(c) ? { fecha: c.ag.fecha, hora: c.ag.hora } : { fecha: '', hora: '' };
   st.borrador = null;
   pintar();
   window.scrollTo(0, 0);
@@ -408,6 +463,23 @@ document.addEventListener('click', async e => {
     const okG = await guardar(datos, `✔ E${st.ronda} guardada en el Sheet`);
     if (okG) { borrarBorrador(); st.tab = 'resumen'; await abrirBorrador(); pintar(); }
     return;
+  }
+  if (a === 'agendar') {
+    const { fecha, hora } = st.msg;
+    const falta = !fecha || !hora ? 'Elige la fecha y la hora arriba'
+      : new Date(`${fecha}T${hora}`).getTime() < Date.now() - 15 * 60000 ? 'Esa fecha y hora ya pasaron' : '';
+    if (falta) { e.preventDefault(); return toast('✖ ' + falta, 4000); }
+    // El enlace abre WhatsApp con la invitación; en paralelo se guarda la cita.
+    return guardar({ agendar: { ronda: Number(el.dataset.ronda), fecha, hora } }, `✔ Agendada E${el.dataset.ronda} · en Calendar`);
+  }
+  if (a === 'vino') {
+    st.ronda = Number(el.dataset.v); st.tab = 'entrevista'; st.borrador = null; pintar();
+    await abrirBorrador(); window.scrollTo(0, 0); return pintar();
+  }
+  if (a === 'novino') return guardar({ agendaEstado: 'No vino' }, '✔ Marcado: no vino');
+  if (a === 'cancelarCita') {
+    if (!(await confirmar('¿Cancelar la entrevista? Se borra del calendario.', 'Cancelar entrevista', 'Volver'))) return;
+    return guardar({ agendaEstado: 'Cancelada' }, '✔ Entrevista cancelada');
   }
   if (a === 'enviar') {
     // El enlace abre WhatsApp solo (es un <a target=_blank>); aquí solo se marca el estado.

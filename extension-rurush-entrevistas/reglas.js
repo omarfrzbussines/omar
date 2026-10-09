@@ -160,13 +160,15 @@ function semaforo(flags) {
 }
 
 // Plantillas de WhatsApp. {nombre} {fecha} {hora} {firma} {direccion}
+// ronda: el botón "Agendar y enviar" guarda la cita (pestaña AGENDA + Google Calendar).
+// estado: el botón "Abrir y marcar" cambia el ESTADO del postulante.
 const PLANTILLAS = [
   {
-    id: 'e1', titulo: '📅 Invitar a 1ª entrevista', estado: 'Entrevista 1 agendada', pideFecha: true,
+    id: 'e1', titulo: '📅 Invitar a 1ª entrevista', ronda: 1, pideFecha: true,
     texto: 'Hola {nombre} 👋, te escribe {firma}. Revisamos tu postulación para Asesor(a) Comercial y nos gustaría conocerte.\n\n¿Puedes venir a una entrevista el *{fecha}* a las *{hora}*?\n📍 {direccion}\n\nConfírmame por aquí, por favor 🙌'
   },
   {
-    id: 'e2', titulo: '⭐ Invitar a 2ª entrevista', estado: 'Entrevista 2 agendada', pideFecha: true,
+    id: 'e2', titulo: '⭐ Invitar a 2ª entrevista', ronda: 2, pideFecha: true,
     texto: '¡Hola {nombre}! 🎉 Pasaste a la *2ª entrevista* para Asesor(a) Comercial en Rurush.\n\nTe esperamos el *{fecha}* a las *{hora}* en {direccion}.\nVen preparado/a para una simulación de venta 💪\n\n¿Me confirmas?'
   },
   {

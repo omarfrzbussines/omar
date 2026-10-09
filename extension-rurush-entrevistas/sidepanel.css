@@ -107,3 +107,12 @@ body.movil { font-size: 15px; }
 .movil .botones button { padding: 12px 0; font-size: 16px; }
 .movil .medio { font-size: 14px; } .movil .medio input { width: 20px; height: 20px; }
 .movil .crit summary { font-size: 14px; padding: 4px 0; }
+
+/* Agenda */
+.cita { margin-top: 4px; font-size: 12px; font-weight: 600; color: var(--info); }
+.cita.tarde { color: var(--alerta); }
+.caja.agenda { border-color: #f2c48d; background: #fffaf3; }
+.caja.agenda.tarde { border-color: #f1b0a8; background: var(--alerta-bg); }
+.caja.agenda .acciones { flex-wrap: wrap; }
+#toast { white-space: pre-line; text-align: center; }
+.movil .cita { font-size: 14px; }

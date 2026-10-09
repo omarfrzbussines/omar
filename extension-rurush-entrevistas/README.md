@@ -8,6 +8,7 @@ No usa Claude.
 
 | Pestaña | Para qué |
 |---|---|
+| **⏰ ¿Vino? · 📅 Hoy · 🗓 Agenda** | Entrevistas que ya pasaron sin marcar, las de hoy y las próximas. Se crean con **📅 Agendar y enviar** en Mensajes (Google Calendar + pestaña AGENDA ENTREVISTAS, sin tocar la del formulario). Ver `rurush-app-entrevistas/INSTALAR.md`. |
 | **Lista** | Todos los postulantes, del más nuevo al más antiguo. Filtros por ESTADO (por defecto *Activos*: oculta descartados y contratados), buscador por nombre / celular / nota. Punto 🟢🟡🔴 = pre-filtro del formulario; número naranja = puntaje FINAL. |
 | **📋 Resumen** | Pre-filtro automático (horario, sábados, sueldo, permanencia, experiencia, casos muy cortos, CV faltante…), datos clave, puntajes E1/E2 y **notas rápidas** (columna NOTAS). |
 | **🎤 Entrevista** | Guía de la E1 o E2: los 6 criterios del Sheet (Actitud, Comunicación, Cierre, Experiencia, Cultura, Permanencia) con qué mirar, **preguntas armadas con lo que respondió en el formulario** (incluye role-play de sus 3 casos) y botones 1–10 (+½). Promedio en vivo y recomendación (✅ ≥7,5 · 🟡 ≥6,5 · 🔴). Cronómetro. |

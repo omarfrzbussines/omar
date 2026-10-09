@@ -1,6 +1,6 @@
 # 📱 RURUSH Entrevistas — app del celular
 
-La misma herramienta de la extensión de Chrome, pero en el celular: lista de postulantes,
+La misma herramienta de la extensión de Chrome, pero en el celular: agenda del día, lista de postulantes,
 pre-filtro automático, entrevista guiada E1/E2 con puntaje 1–10, notas (dictadas con el 🎤
 del teclado), 📞 Llamar, 💬 WhatsApp con plantillas, y todo se guarda en el Sheet
 **ENTREVISTA ASESOR V3**.
@@ -37,6 +37,25 @@ Opcional: para cambiar la firma de los mensajes, ⚙️ Configuración del proye
 1. Abre el link → iPhone: compartir ⬆️ → **Agregar a inicio**; Android: ⋮ → **Agregar a pantalla principal**.
 2. Toca un postulante → **🎤 Entrevista** → marca los 6 criterios → **💾 Guardar E1/E2**.
 3. Si se cierra la app a la mitad, los puntajes marcados siguen ahí al volver.
+
+## 📅 Agenda de entrevistas
+
+- **Agendar:** en la ficha → 💬 Mensajes → elige fecha y hora → **📅 Agendar E1 y enviar**.
+  Abre WhatsApp con la invitación, crea el evento en tu Google Calendar (30 min, con
+  recordatorio) y pone el ESTADO en "Entrevista 1 agendada". Si ya tenía cita, la cambia
+  (el evento viejo se borra del calendario).
+- Al abrir la app sale primero **⏰ ¿Vino?** (citas que ya pasaron sin marcar) o **📅 Hoy**.
+  🗓 **Agenda** muestra todas las próximas, por fecha.
+- En la ficha: **🎤 Empezar** / **✔ Sí, calificar**, **✖ No vino**, **Reagendar** o **Cancelar**.
+  Al guardar la entrevista, la cita queda como "Asistió".
+- Todo se guarda en la pestaña nueva **AGENDA ENTREVISTAS** (se crea sola la primera vez).
+  **La pestaña del formulario no se toca**: ni columnas nuevas ni cambios de orden, así el
+  Google Form sigue llenándola igual. No borres ni reordenes las columnas de AGENDA ENTREVISTAS.
+- Para usar otro calendario (no el principal): Propiedades del script → `CALENDARIO_ID` = id del calendario.
+
+**Si ya tenías instalada la versión anterior:** pega el nuevo Code.gs y App.html, luego en el
+editor ejecuta **crearLlave** una vez (pedirá permiso para **Google Calendar**: Avanzado →
+Permitir) y después **Implementar → Gestionar implementaciones → ✏️ → Versión: nueva**.
 
 ## Si cambias algo
 

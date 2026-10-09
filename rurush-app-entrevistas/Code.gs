@@ -9,6 +9,10 @@
  * GET  ?k=LLAVE&a=lista              → todos los postulantes (extensión)
  * POST {k, a:'guardar', fila, huella, ...} → guarda estado / notas / entrevista (extensión)
  * La app llama a appLista / appGuardar con google.script.run.
+ *
+ * ⚠️ La pestaña del formulario NO se modifica en su estructura (ni columnas nuevas ni orden):
+ * solo se escribe en columnas que ya se llenan a mano (ESTADO, NOTAS, FECHA E1/E2, puntajes).
+ * La agenda vive en una pestaña aparte, "AGENDA ENTREVISTAS", que se crea sola.
  */
 
 var SHEET_ID = '1XNgxVXAu2nwAwFkxtvQQuksQzHqHyIz72V8r73nLDPY';
@@ -184,13 +188,14 @@ function lista_() {
   if (dv && dv.getCriteriaType() === SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) {
     estados = dv.getCriteriaValues()[0];
   }
+  var agenda = leerAgenda_();
   var cands = [];
   for (var r = 1; r < datos.length; r++) {
     var fila = datos[r];
     if (!fila.some(function (v) { return String(v).trim() !== ''; })) continue;
     var d = {};
     Object.keys(cols).forEach(function (k) { d[k] = fila[cols[k] - 1]; });
-    cands.push({ fila: r + 1, huella: huella_(fila, cols), d: d });
+    cands.push({ fila: r + 1, huella: huella_(fila, cols), d: d, ag: agenda[claveAgenda_(fila, cols)] || null });
   }
   return { estados: estados, cands: cands, leido: new Date().toISOString() };
 }
@@ -223,8 +228,24 @@ function guardar_(p) {
       }
     });
 
+    var avisos = [];
+    var clave = claveAgenda_(actual, cols);
+    if (p.agendar) {
+      var nombre = String(actual[cols.nombre - 1] || '').trim() || '(sin nombre)';
+      agendar_(clave, nombre, cols.wa ? actual[cols.wa - 1] : '', p.agendar, avisos);
+      if (!p.estado) p.estado = 'Entrevista ' + Number(p.agendar.ronda) + ' agendada';
+    }
+    if (p.agendaEstado === 'No vino' || p.agendaEstado === 'Cancelada') {
+      var cita = ultimaAgenda_(clave);
+      if (!cita || cita.estado !== 'Agendada') throw new Error('No hay una entrevista agendada para marcar');
+      cambiarAgenda_(cita, p.agendaEstado);
+      if (p.agendaEstado === 'Cancelada') borrarEvento_(cita.evento);
+    }
+
     var ronda = Number(p.ronda);
     if (ronda === 1 || ronda === 2) {
+      var citaHecha = ultimaAgenda_(clave);
+      if (citaHecha && citaHecha.estado === 'Agendada' && citaHecha.ronda === 'E' + ronda) cambiarAgenda_(citaHecha, 'Asistió');
       var pts = p.puntajes || {};
       CRITERIOS.forEach(function (c) {
         var col = cols[c + 'E' + ronda];
@@ -247,7 +268,7 @@ function guardar_(p) {
     var nueva = sh.getRange(fila, 1, 1, enc.length).getDisplayValues()[0];
     var d = {};
     Object.keys(cols).forEach(function (k) { d[k] = nueva[cols[k] - 1]; });
-    return { cand: { fila: fila, huella: huella_(nueva, cols), d: d } };
+    return { cand: { fila: fila, huella: huella_(nueva, cols), d: d, ag: publicaAgenda_(ultimaAgenda_(clave)) }, avisos: avisos };
   } finally {
     lock.releaseLock();
   }
@@ -272,4 +293,108 @@ function asegurarFormulas_(sh, fila, cols) {
     var cel = sh.getRange(fila, cols[o[0]]);
     if (!cel.getFormula()) cel.setFormula(o[1]);
   });
+}
+
+// ===================== AGENDA (pestaña aparte: no toca la del formulario) =====================
+
+var HOJA_AGENDA = 'AGENDA ENTREVISTAS';
+var ENC_AGENDA = ['CLAVE', 'NOMBRE', 'WHATSAPP', 'RONDA', 'FECHA', 'HORA', 'ESTADO', 'EVENTO CALENDAR', 'ACTUALIZADO'];
+var TZ = 'America/Lima';
+var DURACION_MIN = 30;
+var DIRECCION = 'Av. Larco 1164, Víctor Larco (al costado de Mass)';
+
+/** Identifica al postulante con datos que no cambian (marca temporal, correo, nombre, celular). */
+function claveAgenda_(fila, cols) {
+  return ['marca', 'email', 'nombre', 'wa'].map(function (k) {
+    return cols[k] ? String(fila[cols[k] - 1] == null ? '' : fila[cols[k] - 1]).trim() : '';
+  }).join('|');
+}
+
+function hojaAgenda_(crear) {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sh = ss.getSheetByName(HOJA_AGENDA);
+  if (!sh && crear) {
+    sh = ss.insertSheet(HOJA_AGENDA, ss.getSheets().length);
+    sh.getRange(1, 1, sh.getMaxRows(), ENC_AGENDA.length).setNumberFormat('@'); // todo como texto
+    sh.getRange(1, 1, 1, ENC_AGENDA.length).setValues([ENC_AGENDA]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+function filaAgenda_(v, i) {
+  return { fila: i + 1, clave: v[0], ronda: v[3], fecha: v[4], hora: v[5], estado: v[6], evento: v[7] };
+}
+
+function publicaAgenda_(c) {
+  return c ? { ronda: c.ronda, fecha: c.fecha, hora: c.hora, estado: c.estado } : null;
+}
+
+/** clave → la cita más reciente de cada postulante. */
+function leerAgenda_() {
+  var sh = hojaAgenda_(false);
+  var out = {};
+  if (!sh || sh.getLastRow() < 2) return out;
+  sh.getRange(1, 1, sh.getLastRow(), ENC_AGENDA.length).getDisplayValues().forEach(function (v, i) {
+    if (i > 0 && v[0]) out[v[0]] = publicaAgenda_(filaAgenda_(v, i));
+  });
+  return out;
+}
+
+function ultimaAgenda_(clave) {
+  var sh = hojaAgenda_(false);
+  if (!sh || sh.getLastRow() < 2) return null;
+  var datos = sh.getRange(1, 1, sh.getLastRow(), ENC_AGENDA.length).getDisplayValues();
+  for (var i = datos.length - 1; i > 0; i--) if (datos[i][0] === clave) return filaAgenda_(datos[i], i);
+  return null;
+}
+
+function cambiarAgenda_(cita, estado) {
+  var sh = hojaAgenda_(true);
+  sh.getRange(cita.fila, 7).setValue(estado);
+  sh.getRange(cita.fila, 9).setValue(Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm'));
+}
+
+function calendario_() {
+  var id = PropertiesService.getScriptProperties().getProperty('CALENDARIO_ID');
+  var cal = id ? CalendarApp.getCalendarById(id) : CalendarApp.getDefaultCalendar();
+  if (!cal) throw new Error('No encuentro el calendario ' + id);
+  return cal;
+}
+
+function borrarEvento_(id) {
+  if (!id) return;
+  try { var ev = calendario_().getEventById(id); if (ev) ev.deleteEvent(); } catch (err) { /* ya no existe */ }
+}
+
+/** ag = { ronda: 1|2, fecha: 'yyyy-MM-dd', hora: 'HH:mm' }. Si ya tenía una cita, la marca "Reagendada". */
+function agendar_(clave, nombre, wa, ag, avisos) {
+  var ronda = Number(ag.ronda);
+  if (ronda !== 1 && ronda !== 2) throw new Error('Ronda inválida');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ag.fecha || '') || !/^\d{2}:\d{2}$/.test(ag.hora || '')) throw new Error('Fecha u hora inválida');
+  var inicio = Utilities.parseDate(ag.fecha + ' ' + ag.hora, TZ, 'yyyy-MM-dd HH:mm');
+  if (inicio.getTime() < Date.now() - 15 * 60000) throw new Error('Esa fecha y hora ya pasaron');
+
+  var sh = hojaAgenda_(true);
+  var previa = ultimaAgenda_(clave);
+  if (previa && previa.estado === 'Agendada') {
+    cambiarAgenda_(previa, 'Reagendada');
+    borrarEvento_(previa.evento);
+  }
+  var evento = '';
+  try {
+    var ev = calendario_().createEvent('Entrevista E' + ronda + ' · ' + nombre, inicio,
+      new Date(inicio.getTime() + DURACION_MIN * 60000), {
+        location: DIRECCION,
+        description: 'Postulante a Asesor(a) Comercial — Rurush\nWhatsApp: ' + wa
+      });
+    ev.addPopupReminder(30);
+    evento = ev.getId();
+  } catch (err) {
+    avisos.push('Quedó agendada, pero no se pudo crear el evento en Calendar: ' + (err.message || err));
+  }
+  // Como texto: si no, Sheets convierte "2026-10-12" en fecha y "16:30" en hora.
+  sh.getRange(sh.getLastRow() + 1, 1, 1, ENC_AGENDA.length).setNumberFormat('@').setValues([[
+    clave, nombre, String(wa || ''), 'E' + ronda, ag.fecha, ag.hora, 'Agendada', evento,
+    Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm')]]);
 }
