@@ -236,12 +236,12 @@ function ll_registrar(d) {
 
 /* ---------- utilidades ---------- */
 
-// Hora actual de Lima, redondeada a la media hora, con el texto del desplegable
+// Hora EXACTA de la llamada en Lima, como "7:12 pm" (la columna HORA de la llamada ya no
+// tiene desplegable; la HORA FP sí, porque los free pass se agendan en medias horas).
 function ll_horaDeLista(fecha) {
-  const h = Number(Utilities.formatDate(fecha, "America/Lima", "H"));
-  const m = Number(Utilities.formatDate(fecha, "America/Lima", "m"));
-  const t = Math.min(Math.max(h * 60 + (m < 30 ? 0 : 30), 6 * 60), 22 * 60 + 30);
-  return LL_HORAS[(t - 6 * 60) / 30];
+  const l = new Date(fecha.getTime() - 5 * 3600 * 1000);
+  const h = l.getUTCHours(), m = l.getUTCMinutes();
+  return (((h + 11) % 12) + 1) + ":" + ll_2(m) + " " + (h < 12 ? "am" : "pm");
 }
 
 // "2026-10-09" (lo que manda un <input type=date>) → "09/10/2026"
