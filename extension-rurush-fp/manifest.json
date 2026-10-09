@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Rurush FP — WhatsApp Free Pass",
-  "version": "2.1.1",
+  "version": "2.2.0",
   "description": "Recordatorios y reagendos automáticos de WhatsApp para los Free Pass. Lee Pipedrive, envía por WhatsApp Web. Sin uso de Claude.",
   "permissions": [
     "alarms",

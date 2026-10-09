@@ -15,6 +15,7 @@ donde está abierto WhatsApp Web (Pipechat) de las asesoras.
 | Refuerzo noche anterior | dom–vie 20:00 | FP de mañana | FP 8PM (parte FP de mañana) |
 | No-show de la tarde | lun–sáb 20:10 | FP de hoy 11:30–18:30 | FP 8PM (parte no-shows) |
 | Domingo | dom 9:00 | FP del lunes + no-shows de la semana | DOMINGO REC FP 9 AM |
+| Etiquetar FREE PASS | cada 2h desde 8:40 | todo el que tenga FP en Pipedrive (hoy a 14 días) | (nuevo) |
 
 Cada módulo tiene su modo en Opciones: 🧪 Simulación (no envía), 📤 Envío real o Apagado.
 
@@ -26,6 +27,11 @@ Reglas comunes:
 - Nunca escribe antes de las 6:00 ni después de las 21:30; si la PC estuvo apagada >3h a la hora programada, ese módulo se omite.
 - No escribe en Pipedrive.
 - Dirección: Av. Larco 1164, Víctor Larco, al costado de Mass.
+
+Etiquetar FREE PASS: abre el chat y le pone la etiqueta de WhatsApp Business "FREE PASS"
+(⋮ → Etiquetar chat). No quita otras etiquetas; si no puede saber si ya la tenía, no toca nada.
+Máximo 15 por corrida; a cada persona se la etiqueta una sola vez. Para probarlo: abre un
+chat en WhatsApp Web y toca 🏷️ Probar etiqueta en el chat abierto (en el ícono 🔥).
 
 La imagen "cómo llegar" (Opciones) va en el recordatorio 2h, el refuerzo de la noche anterior y el del domingo.
 
