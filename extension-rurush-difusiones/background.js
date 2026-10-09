@@ -368,13 +368,16 @@ async function unPaso() {
     return true;
   }
 
+  const antes = await ask(tab.id, { type: 'lastOutgoing' });
   const r = await ask(tab.id, { type: 'send' });
   if (!r || !r.ok) throw new Error(`falló el clic en Enviar con ${etiqueta} (${(r && r.error) || 'sin respuesta'})`);
 
-  // Confirmar la burbuja enviada
+  // Confirmar la burbuja enviada: el texto coincide, o apareció un mensaje nuestro nuevo.
   const inicio = normTexto(it.mensaje).slice(0, 30);
-  const burbuja = await waitFor(tab.id, { type: 'lastOutgoing' },
-    (b) => b && normTexto(b.text).startsWith(inicio) && b.estado !== 'pendiente', 60000);
+  const totalAntes = (antes && antes.total) || 0;
+  const confirmada = (b) => b && b.estado === 'ok'
+    && (normTexto(b.text).startsWith(inicio) || (b.total || 0) > totalAntes);
+  const burbuja = await waitFor(tab.id, { type: 'lastOutgoing' }, confirmada, 60000);
   const ultima = burbuja || (await ask(tab.id, { type: 'lastOutgoing' }));
 
   // Cuenta como enviado aunque quede con reloj: WhatsApp lo manda al reconectar.
@@ -386,11 +389,15 @@ async function unPaso() {
 
   if (!burbuja) {
     const estado = ultima && ultima.estado;
-    await pausar(estado === 'error'
-      ? `WhatsApp marcó error al enviar a ${etiqueta}. Revisa el chat y reanuda.`
-      : `El mensaje a ${etiqueta} sigue con reloj después de 1 minuto (¿sin internet?). Revisa el chat y reanuda.`);
-    notify('Rurush Difusiones', 'Pausado: revisa el último envío.');
-    return false;
+    if (estado === 'error' || estado === 'pendiente') {
+      await pausar(estado === 'error'
+        ? `WhatsApp marcó error al enviar a ${etiqueta}. Revisa el chat y reanuda.`
+        : `El mensaje a ${etiqueta} sigue con reloj después de 1 minuto (¿sin internet?). Revisa el chat y reanuda.`);
+      notify('Rurush Difusiones', 'Pausado: revisa el último envío.');
+      return false;
+    }
+    // El cuadro quedó vacío (se envió) pero no pude leer la burbuja: sigo, sin pausar.
+    await log('warn', `ℹ️ ${etiqueta}: enviado, pero no pude leer la burbuja para confirmarlo.`);
   }
 
   const pausa = cfg.pausaMinS + Math.random() * Math.max(0, cfg.pausaMaxS - cfg.pausaMinS);

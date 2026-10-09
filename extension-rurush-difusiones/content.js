@@ -18,6 +18,22 @@ function invalidPopup() {
   return [...nodes].some((n) => /(no es v[aá]lido|isn.t valid|is invalid|not on whatsapp|no est[aá] en whatsapp)/i.test(n.innerText || ''));
 }
 
+// ¿El mensaje es nuestro? WhatsApp marca cada fila con data-id "true_…" (nuestro) o
+// "false_…" (del contacto). Las clases .message-out/.message-in quedan de respaldo.
+function esSaliente(el) {
+  const id = (el.closest('[data-id]') || { getAttribute: () => '' }).getAttribute('data-id') || '';
+  if (/^true_/.test(id)) return true;
+  if (/^false_/.test(id)) return false;
+  if (el.closest('.message-out')) return true;
+  if (el.closest('.message-in')) return false;
+  return false;
+}
+
+function textoDe(el) {
+  const s = el.querySelector('span.selectable-text, [data-testid="selectable-text"]');
+  return ((s || el).innerText || '').trim();
+}
+
 // [{out, text, date, dateAlt}] en orden cronológico (viejo → nuevo).
 // date = d/m/aaaa leído como AAAA-MM-DD; dateAlt = la lectura m/d/aaaa (WhatsApp en inglés).
 function readMessages() {
@@ -31,22 +47,28 @@ function readMessages() {
       date = `${m[6]}-${pad(m[5])}-${pad(m[4])}`;
       dateAlt = `${m[6]}-${pad(m[4])}-${pad(m[5])}`;
     }
-    const text = (el.querySelector('span.selectable-text') || el).innerText || '';
-    out.push({ out: !!el.closest('.message-out'), text, date, dateAlt });
+    out.push({ out: esSaliente(el), text: textoDe(el), date, dateAlt });
   }
   return out;
 }
 
-// Estado del último mensaje saliente: 'pendiente' (reloj), 'error', 'ok' o null.
+// Último mensaje saliente: { text, estado: 'pendiente' (reloj) | 'error' | 'ok', total } o null.
+// total = cuántos mensajes nuestros hay en pantalla (sirve para ver que apareció uno nuevo).
 function lastOutgoing() {
-  const all = document.querySelectorAll('#main .message-out');
-  const el = all[all.length - 1];
+  const nuestros = [...document.querySelectorAll('#main [data-pre-plain-text]')].filter(esSaliente);
+  let el = nuestros[nuestros.length - 1];
+  let fila = el && (el.closest('[data-id]') || el.closest('.message-out'));
+  if (!el) {
+    const outs = document.querySelectorAll('#main .message-out');
+    fila = outs[outs.length - 1];
+    el = fila;
+  }
   if (!el) return null;
-  const textEl = el.querySelector('span.selectable-text');
+  const iconos = [...(fila || el).querySelectorAll('[data-icon]')].map((i) => i.getAttribute('data-icon') || '');
   let estado = 'ok';
-  if (el.querySelector('span[data-icon="msg-time"]')) estado = 'pendiente';
-  if (el.querySelector('span[data-icon="msg-error"], span[data-icon="alert-icon"]')) estado = 'error';
-  return { text: textEl ? textEl.innerText : '', estado };
+  if (iconos.some((n) => /time|clock|pending/i.test(n))) estado = 'pendiente';
+  if (iconos.some((n) => /error|alert/i.test(n))) estado = 'error';
+  return { text: textoDe(el), estado, total: nuestros.length };
 }
 
 function sendButton() {
