@@ -186,7 +186,7 @@ async function enviarRecordatorio(text, phone, header, conImagen = true) {
 }
 
 // ───────── etiqueta de WhatsApp Business ("FREE PASS") ─────────
-// Hace lo mismo que a mano: ⋮ del chat → Etiquetar chat → marca la etiqueta → Guardar.
+// Hace lo mismo que a mano: ⋮ del chat → Añadir a la lista (antes "Etiquetar chat") → marca FREE PASS → Guardar.
 // Si algo no se reconoce con seguridad, NO toca nada (para no quitar una etiqueta por error).
 const visible = (el) => !!el && el.offsetParent !== null;
 const sinTilde = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
@@ -252,10 +252,10 @@ async function etiquetarChat(nombre, phone) {
   const menu = botonMenuChat();
   if (!menu) return { ok: false, error: 'no encontré el menú ⋮ del chat' };
   clic(menu);
-  const item = await buscar(() => porTexto(/^(etiquetar chat|label chat|etiquetar|agregar etiqueta|add label)$/));
+  const item = await buscar(() => porTexto(/^(anadir a la lista|agregar a la lista|add to list|etiquetar chat|label chat|etiquetar|agregar etiqueta|add label)$/));
   if (!item) {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
-    return { ok: false, error: 'el menú no tiene "Etiquetar chat" (¿es WhatsApp Business?)' };
+    return { ok: false, error: 'el menú ⋮ no tiene "Añadir a la lista" ni "Etiquetar chat"' };
   }
   clic(item.closest('li, [role="menuitem"], [role="button"]') || item);
 
@@ -277,9 +277,9 @@ async function etiquetarChat(nombre, phone) {
 
   const guardar = await buscar(() => {
     const b = [...document.querySelectorAll('[aria-label], [data-icon]')].find((el) => visible(el) && (
-      /^(guardar|save|listo|done)$/i.test(el.getAttribute('aria-label') || '') ||
+      /^(guardar|save|listo|done|hecho|aceptar|ok)$/i.test(el.getAttribute('aria-label') || '') ||
       /^(checkmark|checkmark-medium|checkmark-light|wds-ic-checkmark)/.test(el.getAttribute('data-icon') || '')));
-    return b ? (b.closest('button, [role="button"]') || b) : porTexto(/^(guardar|save)$/);
+    return b ? (b.closest('button, [role="button"]') || b) : porTexto(/^(guardar|save|listo|done|hecho|aceptar)$/);
   }, 2000);
   if (!guardar) { cerrarDialogo(); return { ok: false, error: 'no encontré el botón Guardar' }; }
   clic(guardar);

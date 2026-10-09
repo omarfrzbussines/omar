@@ -29,7 +29,7 @@ Reglas comunes:
 - Dirección: Av. Larco 1164, Víctor Larco, al costado de Mass.
 
 Etiquetar FREE PASS: abre el chat y le pone la etiqueta de WhatsApp Business "FREE PASS"
-(⋮ → Etiquetar chat). No quita otras etiquetas; si no puede saber si ya la tenía, no toca nada.
+(⋮ → Añadir a la lista → FREE PASS). No quita otras etiquetas; si no puede saber si ya la tenía, no toca nada.
 Máximo 15 por corrida; a cada persona se la etiqueta una sola vez. Para probarlo: abre un
 chat en WhatsApp Web y toca 🏷️ Probar etiqueta en el chat abierto (en el ícono 🔥).
 
