@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Rurush Entrevistas — Asesores",
+  "version": "1.0.0",
+  "description": "Panel lateral para entrevistar postulantes a asesor comercial: lee y guarda en el Sheet ENTREVISTA ASESOR V3.",
+  "permissions": ["sidePanel", "storage"],
+  "host_permissions": [
+    "https://script.google.com/*",
+    "https://script.googleusercontent.com/*"
+  ],
+  "background": { "service_worker": "background.js" },
+  "side_panel": { "default_path": "sidepanel.html" },
+  "icons": { "48": "icon48.png", "128": "icon128.png" },
+  "action": { "default_title": "Rurush Entrevistas" },
+  "options_page": "options.html"
+}

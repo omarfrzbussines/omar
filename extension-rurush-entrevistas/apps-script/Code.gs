@@ -1,0 +1,232 @@
+/**
+ * RURUSH Entrevistas — puente entre la extensión de Chrome y el Sheet
+ * "ENTREVISTA ASESOR V3" (pestaña "Respuestas de formulario 2").
+ *
+ * Se pega en un proyecto de Apps Script y se implementa como Aplicación web
+ * (Ejecutar como: Yo · Acceso: Cualquier usuario). Sin la llave no responde nada.
+ *
+ * GET  ?k=LLAVE&a=lista              → todos los postulantes
+ * POST {k, a:'guardar', fila, huella, ...} → guarda estado / notas / entrevista
+ */
+
+var SHEET_ID = '1XNgxVXAu2nwAwFkxtvQQuksQzHqHyIz72V8r73nLDPY';
+var HOJA = 'Respuestas de formulario 2';
+var CRITERIOS = ['actitud', 'comunicacion', 'cierre', 'experiencia', 'cultura', 'permanencia'];
+
+// Columnas del formulario: se buscan por el texto del encabezado (sin tildes ni mayúsculas),
+// así no se rompe si alguien mueve o agrega columnas.
+var CAMPOS = [
+  ['marca', /^(columna 1|marca temporal)$/],
+  ['email', /correo/],
+  ['estado', /^estado$/],
+  ['nombre', /^nombre completo/],
+  ['edad', /^edad/],
+  ['ciudad', /^ciudad/],
+  ['wa', /numero de whatsapp/],
+  ['ig', /^instagram/],
+  ['cv', /link a tu cv/],
+  ['certijoven', /certijoven/],
+  ['video', /video de presentacion/],
+  ['tiempoVentas', /tiempo llevas trabajando/],
+  ['permanencia', /te imaginas trabajando/],
+  ['gimnasio', /vendido membresias/],
+  ['promedioVentas', /promedio por mes/],
+  ['mejorMes', /mejor mes/],
+  ['peorMes', /peor mes/],
+  ['ultimoTrabajo', /ultimo trabajo/],
+  ['whatsappVentas', /cerrado ventas por whatsapp/],
+  ['crm', /crm/],
+  ['tiposVenta', /tipos de venta/],
+  ['caso1', /^caso 1/],
+  ['caso2', /^caso 2/],
+  ['caso3', /^caso 3/],
+  ['reaccion', /no logras una venta/],
+  ['horario', /franjas horarias/],
+  ['jornada', /tipo de jornada/],
+  ['sueldo', /sueldo base/],
+  ['comision', /comisiones/],
+  ['metas', /metas diarias/],
+  ['fitness', /mundo del fitness/],
+  ['porQue', /por que quieres trabajar/],
+  ['vision', /vision profesional/],
+  ['contratarte', /deberiamos contratarte/],
+  ['algoMas', /algo importante/],
+  ['referencias', /referencias laborales/],
+  ['fechaE1', /^fecha e1$/],
+  ['fechaE2', /^fecha e2$/],
+  ['pp1', /^puntaje\/p1$/],
+  ['pp2', /^puntaje\/p2$/],
+  ['pf', /^final\/pf$/]
+];
+
+function doGet(e) {
+  return responder_(function () {
+    var p = (e && e.parameter) || {};
+    validarLlave_(p.k);
+    if (p.a === 'lista') return lista_();
+    throw new Error('Acción desconocida');
+  });
+}
+
+function doPost(e) {
+  return responder_(function () {
+    var p = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    validarLlave_(p.k);
+    if (p.a === 'guardar') return guardar_(p);
+    throw new Error('Acción desconocida');
+  });
+}
+
+function responder_(fn) {
+  var out;
+  try { out = fn(); out.ok = true; } catch (err) { out = { ok: false, error: String(err.message || err) }; }
+  return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function validarLlave_(k) {
+  var llave = PropertiesService.getScriptProperties().getProperty('LLAVE');
+  if (!llave) throw new Error('Falta crear la llave: ejecuta crearLlave en el editor');
+  if (k !== llave) throw new Error('Llave incorrecta');
+}
+
+/** Ejecutar UNA vez desde el editor: crea la llave y la muestra en el registro. */
+function crearLlave() {
+  var props = PropertiesService.getScriptProperties();
+  var llave = props.getProperty('LLAVE');
+  if (!llave) {
+    llave = Utilities.getUuid().replace(/-/g, '');
+    props.setProperty('LLAVE', llave);
+  }
+  Logger.log('LLAVE → ' + llave);
+  Logger.log('URL   → ' + (ScriptApp.getService().getUrl() || '(implementa primero como Aplicación web)'));
+}
+
+function norm_(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[¿?¡!]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function hoja_() {
+  var sh = SpreadsheetApp.openById(SHEET_ID).getSheetByName(HOJA);
+  if (!sh) throw new Error('No encuentro la pestaña "' + HOJA + '"');
+  return sh;
+}
+
+/** id → número de columna (1-based). */
+function columnas_(encabezados) {
+  var cols = {};
+  var h = encabezados.map(norm_);
+  CAMPOS.forEach(function (c) {
+    for (var i = 0; i < h.length; i++) if (c[1].test(h[i])) { cols[c[0]] = i + 1; break; }
+  });
+  // NOTAS aparece dos veces: la primera son notas rápidas, la última el comentario final.
+  var notas = [];
+  h.forEach(function (t, i) { if (t === 'notas') notas.push(i + 1); });
+  if (notas.length) cols.notas = notas[0];
+  if (notas.length > 1) cols.notasFinal = notas[notas.length - 1];
+  // Criterios: "ACTITUD/E1", "COMUNICACIÓN/E2", ...
+  h.forEach(function (t, i) {
+    var m = t.match(/^([a-z]+)\/e([12])$/);
+    if (m && CRITERIOS.indexOf(m[1]) >= 0) cols[m[1] + 'E' + m[2]] = i + 1;
+  });
+  ['estado', 'nombre', 'fechaE1', 'fechaE2'].forEach(function (k) {
+    if (!cols[k]) throw new Error('No encuentro la columna ' + k.toUpperCase() + ' en el Sheet');
+  });
+  return cols;
+}
+
+function huella_(fila, cols) {
+  return [fila[cols.marca - 1], fila[cols.email - 1], fila[cols.nombre - 1]]
+    .map(function (v) { return String(v == null ? '' : v).trim(); }).join('|');
+}
+
+function lista_() {
+  var sh = hoja_();
+  var datos = sh.getDataRange().getDisplayValues();
+  var cols = columnas_(datos[0]);
+  var estados = [];
+  var dv = sh.getRange(2, cols.estado).getDataValidation();
+  if (dv && dv.getCriteriaType() === SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) {
+    estados = dv.getCriteriaValues()[0];
+  }
+  var cands = [];
+  for (var r = 1; r < datos.length; r++) {
+    var fila = datos[r];
+    if (!fila.some(function (v) { return String(v).trim() !== ''; })) continue;
+    var d = {};
+    Object.keys(cols).forEach(function (k) { d[k] = fila[cols[k] - 1]; });
+    cands.push({ fila: r + 1, huella: huella_(fila, cols), d: d });
+  }
+  return { estados: estados, cands: cands, leido: new Date().toISOString() };
+}
+
+/**
+ * p = { fila, huella, estado?, notas?, notasFinal?,
+ *       ronda?: 1|2, puntajes?: {actitud: 7.5, ...} }
+ * Con ronda + puntajes: escribe la FECHA de esa ronda (hoy), los 6 puntajes
+ * y, si no se mandó un estado, pone "Entrevista N hecha".
+ */
+function guardar_(p) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var sh = hoja_();
+    var enc = sh.getRange(1, 1, 1, sh.getLastColumn()).getDisplayValues()[0];
+    var cols = columnas_(enc);
+    var fila = Number(p.fila);
+    if (!(fila >= 2 && fila <= sh.getLastRow())) throw new Error('Fila inválida');
+    var actual = sh.getRange(fila, 1, 1, enc.length).getDisplayValues()[0];
+    if (huella_(actual, cols) !== p.huella) {
+      throw new Error('El Sheet cambió (¿se ordenó o se borró una fila?). Toca 🔄 y vuelve a intentar.');
+    }
+
+    var ronda = Number(p.ronda);
+    if (ronda === 1 || ronda === 2) {
+      var pts = p.puntajes || {};
+      CRITERIOS.forEach(function (c) {
+        var col = cols[c + 'E' + ronda];
+        if (!col || pts[c] == null || pts[c] === '') return;
+        var n = Number(pts[c]);
+        if (!(n >= 1 && n <= 10)) throw new Error('Puntaje fuera de rango en ' + c);
+        sh.getRange(fila, col).setValue(n);
+      });
+      var celFecha = sh.getRange(fila, cols['fechaE' + ronda]);
+      celFecha.setValue(new Date()).setNumberFormat('dd/MM/yyyy');
+      asegurarFormulas_(sh, fila, cols);
+      if (!p.estado) p.estado = 'Entrevista ' + ronda + ' hecha';
+    }
+
+    if (p.estado != null) sh.getRange(fila, cols.estado).setValue(String(p.estado));
+    if (p.notas != null && cols.notas) sh.getRange(fila, cols.notas).setValue(String(p.notas));
+    if (p.notasFinal != null && cols.notasFinal) sh.getRange(fila, cols.notasFinal).setValue(String(p.notasFinal));
+
+    SpreadsheetApp.flush();
+    var nueva = sh.getRange(fila, 1, 1, enc.length).getDisplayValues()[0];
+    var d = {};
+    Object.keys(cols).forEach(function (k) { d[k] = nueva[cols[k] - 1]; });
+    return { cand: { fila: fila, huella: huella_(nueva, cols), d: d } };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Las filas nuevas del formulario no traen las fórmulas de PUNTAJE: se las pone si faltan. */
+function asegurarFormulas_(sh, fila, cols) {
+  function letra(c) { return sh.getRange(1, c).getA1Notation().replace(/\d+/g, ''); }
+  function prom(ronda) {
+    return CRITERIOS.map(function (c) { return cols[c + 'E' + ronda]; })
+      .filter(Boolean).map(function (c) { return letra(c) + fila; }).join(',');
+  }
+  var objetivos = [
+    ['pp1', '=IFERROR(ROUND(AVERAGE(' + prom(1) + '),1),"")'],
+    ['pp2', '=IFERROR(ROUND(AVERAGE(' + prom(2) + '),1),"")']
+  ];
+  if (cols.pp1 && cols.pp2) {
+    objetivos.push(['pf', '=IFERROR(ROUND(AVERAGE(' + letra(cols.pp1) + fila + ',' + letra(cols.pp2) + fila + '),1),"")']);
+  }
+  objetivos.forEach(function (o) {
+    if (!cols[o[0]]) return;
+    var cel = sh.getRange(fila, cols[o[0]]);
+    if (!cel.getFormula()) cel.setFormula(o[1]);
+  });
+}
