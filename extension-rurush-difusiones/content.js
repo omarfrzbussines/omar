@@ -100,6 +100,7 @@ function diag() {
   return {
     pre: q('#main [data-pre-plain-text]'), dataId: q('#main [data-id]'),
     idTrue: q('#main [data-id^="true_"]'), out: q('#main .message-out'), iconos: q('#main [data-icon]'),
+    textos: q('#main span.selectable-text, #main span[dir]'), filas: q('#main [role="row"]'),
   };
 }
 

@@ -31,6 +31,9 @@ const DEFAULTS = {
   // Revisión de respuestas: 2 h después del último envío del día y cada mañana,
   // sobre lo enviado en los últimos 3 días que sigue «ENVIADO SIN RESPUESTA».
   revisarActivo: true,
+  // Esperar si alguien está usando WhatsApp Web en esta PC. Apagado: las asesoras usan la
+  // misma línea todo el día, así que la extensión envía igual.
+  esperarSiUsan: false,
   revisarHorasDespues: 2,
   revisarDias: 3,
 };
@@ -308,7 +311,7 @@ async function unPaso() {
     return true;
   }
   const { waActivity = 0 } = await chrome.storage.local.get('waActivity');
-  if (Date.now() - waActivity < 60e3) {
+  if (cfg.esperarSiUsan && Date.now() - waActivity < 60e3) {
     await log('info', 'Alguien está usando WhatsApp Web: espero 1 min.');
     await programar(60);
     return false;
@@ -368,7 +371,7 @@ async function unPaso() {
   if (!run.diagHecho) {
     run.diagHecho = true;
     const d = await ask(tab.id, { type: 'diag' });
-    if (d) await log('info', `🔎 Chat leído: ${d.pre} mensajes con fecha, ${d.idTrue} propios por id, ${d.out} por clase, ${d.iconos} íconos.`);
+    if (d) await log('info', `🔎 Chat leído: ${d.pre} con fecha · ${d.idTrue} propios por id · ${d.out} por clase · ${d.textos} textos · ${d.filas} filas · ${d.iconos} íconos.`);
   }
   const escrito = yaEscritoEnChat(estadoChat.messages, now.date, cfg.diasAntiDup);
   if (escrito.si) {
@@ -476,6 +479,10 @@ async function revisarRespuestas(motivo) {
       await sleep(1500);
       const r = await ask(tab.id, { type: 'respuestas', inicio });
       res.revisados += 1;
+      if (res.revisados === 1) {
+        const d = await ask(tab.id, { type: 'diag' });
+        if (d) await log('info', `🔎 Revisión, primer chat: ${d.pre} con fecha · ${d.idTrue} propios por id · ${d.textos} textos · ${d.filas} filas · ${d.iconos} íconos · método ${(r && r.metodo) || '—'}.`);
+      }
       if (!r || !r.nuestro) { res.sinHallar += 1; continue; }
       if (r.respuestas.length) {
         const texto = r.respuestas.join(' / ');
