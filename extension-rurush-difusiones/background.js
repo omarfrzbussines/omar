@@ -185,7 +185,7 @@ async function cargar(tab, asesora) {
   const data = await api({ a: 'pendientes', tab, asesora, dias: cfg.diasAntiDup });
   const run = {
     estado: 'listo', motivo: '', tab, asesora, linea: data.linea, dias: data.dias,
-    items: data.items, excluidos: data.excluidos, idx: 0,
+    items: data.items, excluidos: data.excluidos, idx: 0, cargadoEl: limaNow().date,
     res: { enviados: 0, simulados: 0, saltados: 0, alertas: 0 },
     simulacion: cfg.dryRun,
   };
@@ -291,6 +291,15 @@ async function unPaso() {
     await pausar(`Tope diario alcanzado (${cfg.topeDiario} envíos en la línea ${run.linea}). Reanuda mañana.`);
     notify('Rurush Difusiones', 'Pausado: se llegó al tope diario.');
     return false;
+  }
+  // Los mensajes traen la frase de días ({DIAS}) del día en que se cargaron. Si la corrida
+  // sigue otro día (se reanudó al día siguiente), se recargan para no ofrecer días vencidos.
+  if (run.cargadoEl !== now.date) {
+    const nuevo = await cargar(run.tab, run.asesora);
+    Object.assign(nuevo, { estado: 'corriendo', res: run.res, auto: run.auto, dia: now.date, diagHecho: run.diagHecho });
+    await setRun(nuevo);
+    await log('info', `📅 Nuevo día: recargué los mensajes con la frase de hoy («${nuevo.dias}»).`);
+    return true;
   }
   const { waActivity = 0 } = await chrome.storage.local.get('waActivity');
   if (Date.now() - waActivity < 60e3) {

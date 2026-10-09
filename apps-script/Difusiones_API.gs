@@ -12,7 +12,8 @@
  *  - Nunca entrega un celular marcado NO CONTACTAR en cualquier pestaña.
  *  - Nunca entrega un celular que ya recibió una difusión (ENV=TRUE) en cualquier
  *    pestaña en los últimos N días (por defecto 30).
- *  - Reemplaza {DIAS} por la frase del día (rango con nombre DIAS_HOY de ⚙️ CONFIG).
+ *  - Reemplaza {DIAS} por la frase del día, calculada al momento con la fecha de Lima
+ *    (mismas reglas que DIAS_HOY de ⚙️ CONFIG: lunes a sábado, sin feriados).
  *  - Aparta los mensajes con un día fijo escrito ("mañana jueves…") o con {HORA}
  *    sin reemplazar, para que nunca salga una fecha vieja.
  *  - Al marcar, vuelve a revisar con candado (LockService) que la fila no esté ya
@@ -167,9 +168,37 @@ function indiceGlobal_() {
   return idx;
 }
 
-function diasHoy_() {
-  var r = SpreadsheetApp.getActive().getRangeByName('DIAS_HOY');
-  return r ? String(r.getDisplayValue()).trim() : '';
+/**
+ * Frase de días para {DIAS}, calculada en el momento con la fecha de Lima (no depende de que
+ * la fórmula de ⚙️ CONFIG se haya recalculado). Ofrece los dos próximos días hábiles de lunes
+ * a sábado, saltando domingos y los FERIADOS de ⚙️ CONFIG. Ej. viernes → «mañana sábado o el lunes».
+ */
+var NOMBRE_DIA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+
+function feriados_() {
+  var set = {};
+  var r = SpreadsheetApp.getActive().getRangeByName('FERIADOS');
+  if (!r) return set;
+  var vals = r.getValues(), disp = r.getDisplayValues();
+  for (var i = 0; i < vals.length; i++) {
+    var d = parseFecha_(vals[i][0]) || parseFecha_(disp[i][0]);
+    if (d) set[Utilities.formatDate(d, 'America/Lima', 'yyyy-MM-dd')] = true;
+  }
+  return set;
+}
+
+function diasHoy_(ahora) {
+  var hoy = Utilities.formatDate(ahora || new Date(), 'America/Lima', 'yyyy-MM-dd').split('-');
+  var base = Date.UTC(Number(hoy[0]), Number(hoy[1]) - 1, Number(hoy[2]), 12);
+  var fer = feriados_(), elegidos = [];
+  for (var n = 1; elegidos.length < 2 && n < 30; n++) {
+    var d = new Date(base + n * 86400000);
+    var iso = d.toISOString().slice(0, 10);
+    if (d.getUTCDay() === 0 || fer[iso]) continue;
+    elegidos.push({ n: n, dia: NOMBRE_DIA[d.getUTCDay()] });
+  }
+  if (elegidos.length < 2) return '';
+  return (elegidos[0].n === 1 ? 'mañana ' : 'el ') + elegidos[0].dia + ' o el ' + elegidos[1].dia;
 }
 
 function lineas_() {
@@ -242,7 +271,7 @@ function pendientes_(tab, asesora, diasAntiDup) {
     if (!msj) return excluir('Sin mensaje');
     if (/\{HORA\}/i.test(msj)) return excluir('Mensaje con {HORA} sin reemplazar');
     if (/\{DIAS\}/i.test(msj)) {
-      if (!dias) return excluir('Falta DIAS_HOY en ⚙️ CONFIG');
+      if (!dias) return excluir('No se pudo calcular la frase de días');
       msj = msj.replace(/\{DIAS\}/gi, dias);
     } else if (DIAS_SEMANA.test(msj)) {
       return excluir('Mensaje con día fijo: cambia el día por {DIAS}');
