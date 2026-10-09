@@ -32,6 +32,20 @@ Viene con **Simulación activada**: abre cada chat y hace todos los controles, p
 Enviar ni marca el Sheet**. Revisa en el popup qué le habría mandado a cada uno. Si todo cuadra,
 en Opciones desmarca **Simulación** → **Guardar** → vuelve a **Cargar pendientes** e **Iniciar**.
 
+## 🤖 Modo automático (v1.1.0)
+
+En **Opciones → Modo automático**: marca «Enviar solo todos los días», hora **8**, días **Lun–Vie**,
+y la pestaña (por ejemplo `📨 TANDA 8 EX ALUMNOS`). Tope por línea: **30**.
+
+- Cada 10 minutos la extensión revisa: si es día marcado, ya pasó la hora y hoy todavía no arrancó,
+  mira qué número está abierto en WhatsApp Web, busca su asesora en **⚙️ CONFIG → LINEAS** y carga
+  sus pendientes de la primera pestaña que tenga algo. Luego envía sola hasta el tope del día.
+- No hay que elegir asesora: **la línea abierta decide**. Así nunca sale un mensaje de Laura desde el
+  WhatsApp de Mónica.
+- Si la PC se prende tarde (por ejemplo 10:30), arranca al prender. Si Chrome se cierra a mitad, la retoma.
+- Una PC / un perfil de Chrome por línea, cada uno con su WhatsApp Web abierto.
+- Respeta la simulación: con «Simulación» marcada no envía nada de verdad.
+
 ## Cómo evita repetir un número (basta uno para no enviar)
 
 1. **Lista de bloqueo** de Opciones.

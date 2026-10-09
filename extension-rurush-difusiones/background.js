@@ -17,11 +17,17 @@ const DEFAULTS = {
   dryRun: true,              // simulación: hace todo menos apretar Enviar
   pausaMinS: 45,             // pausa al azar entre envíos reales
   pausaMaxS: 90,
-  topeDiario: 40,            // máximo de envíos por línea por día
+  topeDiario: 30,            // máximo de envíos por línea por día
   diasAntiDup: 30,           // no repetir a quien recibió difusión en los últimos N días
   horaInicio: 8,             // solo envía entre estas horas (Lima)
   horaFin: 20,
   blocklist: ['51942853538', '51953876647'],
+  // Modo automático: cada día hábil, a la hora indicada, detecta la línea abierta en
+  // WhatsApp Web, busca a su asesora en ⚙️ CONFIG y envía sus pendientes.
+  autoActivo: false,
+  autoHora: 8,
+  autoDias: [1, 2, 3, 4, 5],  // 0 = domingo … 6 = sábado
+  autoPestanas: ['📨 TANDA 8 EX ALUMNOS'],
 };
 
 // ───────────────────────── utilidades ─────────────────────────
@@ -34,7 +40,7 @@ async function getConfig() {
 
 function limaNow() {
   const d = new Date(Date.now() + LIMA_OFFSET_H * 3600e3);
-  return { date: d.toISOString().slice(0, 10), hour: d.getUTCHours(), min: d.getUTCMinutes() };
+  return { date: d.toISOString().slice(0, 10), hour: d.getUTCHours(), min: d.getUTCMinutes(), dow: d.getUTCDay() };
 }
 
 function normPhone(raw) {
@@ -392,14 +398,87 @@ async function unPaso() {
   return false;
 }
 
+// ───────────────────────── modo automático ─────────────────────────
+// Se revisa cada 10 minutos. Arranca una vez por día (o al prender la PC, si fue más tarde),
+// solo en los días y horas configurados, y nunca encima de una corrida en curso.
+let revisandoAuto = false;
+
+async function autoCheck() {
+  if (revisandoAuto || procesando) return;
+  revisandoAuto = true;
+  try {
+    const cfg = await getConfig();
+    if (!cfg.autoActivo) return;
+    const now = limaNow();
+    if (!cfg.autoDias.includes(now.dow) || now.hour < cfg.autoHora || now.hour >= cfg.horaFin) return;
+
+    const run = await getRun();
+    if (run && run.estado === 'corriendo') return;
+    const { autoDia } = await chrome.storage.local.get('autoDia');
+    if (autoDia === now.date) {
+      // Mismo día: solo se retoma la corrida automática que cortó un reinicio de Chrome.
+      if (run && run.auto && run.dia === now.date && run.estado === 'pausado' && /reinici/i.test(run.motivo)) await iniciar();
+      return;
+    }
+
+    // ¿Qué línea está abierta en WhatsApp Web?
+    const tab = await waTab();
+    const status = await waitFor(tab.id, { type: 'ping' }, (r) => r.loggedIn && r.wid, 90000);
+    if (!status) {
+      await log('warn', '🤖 Automático: WhatsApp Web no tiene sesión abierta. Reintento en 10 min.');
+      return;
+    }
+    const info = await api({ a: 'info' });
+    const asesora = (Object.entries(info.lineas).find(([, tel]) => normPhone(tel) === status.wid) || [])[0];
+    await chrome.storage.local.set({ autoDia: now.date });
+    if (!asesora) {
+      await log('warn', `🤖 Automático: la línea ${status.wid} no está en ⚙️ CONFIG (LINEAS). No envío nada hoy.`);
+      notify('Rurush Difusiones', `La línea ${status.wid} no está en ⚙️ CONFIG. Hoy no se envía.`);
+      return;
+    }
+    if (!cfg.dryRun && (await contador(status.wid)) >= cfg.topeDiario) {
+      await log('info', `🤖 Automático: ${asesora} ya llegó al tope de hoy.`);
+      return;
+    }
+
+    for (const pestana of cfg.autoPestanas) {
+      const nuevo = await cargar(pestana, asesora);
+      if (!nuevo.items.length) continue;
+      nuevo.auto = true;
+      nuevo.dia = now.date;
+      await setRun(nuevo);
+      await log('info', `🤖 Automático: ${asesora} · ${pestana} · ${nuevo.items.length} pendientes (tope ${cfg.topeDiario}).`);
+      notify('Rurush Difusiones', `🤖 Arrancó solo: ${asesora} · ${pestana}`);
+      await iniciar();
+      return;
+    }
+    await log('info', `🤖 Automático: ${asesora} no tiene pendientes en ${cfg.autoPestanas.join(', ')}.`);
+    notify('Rurush Difusiones', `🤖 ${asesora}: no hay nada por enviar hoy.`);
+  } catch (e) {
+    await log('warn', `🤖 Automático: ${e.message || e}`);
+  } finally {
+    revisandoAuto = false;
+  }
+}
+
+function programarAuto() {
+  chrome.alarms.create('auto', { delayInMinutes: 1, periodInMinutes: 10 });
+}
+
 // ───────────────────────── disparadores ─────────────────────────
-chrome.alarms.onAlarm.addListener((a) => { if (a.name === 'next') procesar(); });
+chrome.alarms.onAlarm.addListener((a) => {
+  if (a.name === 'next') procesar();
+  if (a.name === 'auto') autoCheck();
+});
 
 chrome.runtime.onStartup.addListener(async () => {
-  // Si Chrome se cerró en medio de una corrida, queda pausada: no arranca sola.
+  // Si Chrome se cerró en medio de una corrida, queda pausada; el modo automático la retoma.
   const run = await getRun();
   if (run && run.estado === 'corriendo') await pausar('Chrome se reinició. Revisa y reanuda.');
+  programarAuto();
 });
+
+chrome.runtime.onInstalled.addListener(programarAuto);
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   const responder = (p) => p.then((data) => reply({ ok: true, data })).catch((e) => reply({ ok: false, error: String(e.message || e) }));

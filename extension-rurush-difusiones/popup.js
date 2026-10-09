@@ -12,6 +12,10 @@ const ESTADOS = {
 async function pintar() {
   const { run, logs = [], config = {} } = await chrome.storage.local.get(['run', 'logs', 'config']);
   $('sim').hidden = config.dryRun === false;
+  const c = { autoHora: 8, autoDias: [1, 2, 3, 4, 5], topeDiario: 30, ...config };
+  const NOM = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  $('auto').hidden = !c.autoActivo;
+  $('auto').textContent = `🤖 Automático: ${c.autoDias.map((d) => NOM[d]).join(' ')} desde las ${c.autoHora}:00 · ${c.topeDiario} por línea`;
   if (run && run.items) {
     $('panel').hidden = false;
     const total = run.items.length;

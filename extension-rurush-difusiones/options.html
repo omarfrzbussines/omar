@@ -47,6 +47,27 @@
 </fieldset>
 
 <fieldset>
+  <legend>🤖 Modo automático</legend>
+  <label class="check"><input type="checkbox" id="autoActivo">
+    <span>Enviar solo todos los días<br><small>Deja Chrome abierto con WhatsApp Web. A la hora indicada la extensión ve qué línea está abierta, busca a su asesora en ⚙️ CONFIG y envía sus pendientes hasta el tope. Si prendes la PC más tarde, arranca al prenderla.</small></span></label>
+  <div class="two">
+    <label>Hora de arranque<input type="number" id="autoHora" min="0" max="23"></label>
+  </div>
+  <div class="two" id="autoDias">
+    <label class="check"><input type="checkbox" value="1">Lun</label>
+    <label class="check"><input type="checkbox" value="2">Mar</label>
+    <label class="check"><input type="checkbox" value="3">Mié</label>
+    <label class="check"><input type="checkbox" value="4">Jue</label>
+    <label class="check"><input type="checkbox" value="5">Vie</label>
+    <label class="check"><input type="checkbox" value="6">Sáb</label>
+    <label class="check"><input type="checkbox" value="0">Dom</label>
+  </div>
+  <label>Pestañas que envía, en orden (una por línea)
+    <textarea id="autoPestanas" rows="3"></textarea>
+    <small>Usa la primera que tenga pendientes para esa asesora. El nombre debe ser igual al de la pestaña del Sheet.</small></label>
+</fieldset>
+
+<fieldset>
   <legend>No repetir</legend>
   <label>Días sin repetir a un mismo número
     <input type="number" id="diasAntiDup" min="1" max="365">
