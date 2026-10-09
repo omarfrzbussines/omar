@@ -17,10 +17,29 @@ function getEquipo(forzar) {
   const t0 = Date.now();
   const res = { generado: Utilities.formatDate(new Date(), 'America/Lima', 'HH:mm'), errores: [] };
   try { res.ventas = eq_ventas(); } catch (e) { res.errores.push('Ventas: ' + e.message); }
+  const t1 = Date.now();
   try { res.llamadas = eq_llamadas(); } catch (e) { res.errores.push('Llamadas: ' + e.message); }
   res.seg = Math.round((Date.now() - t0) / 100) / 10;
-  try { cache.put('equipo', JSON.stringify(res), 300); } catch (e) { /* >100 KB: sin caché */ }
+  res.segVentas = Math.round((t1 - t0) / 100) / 10;
+  // 25 min: el activador lo recalcula cada 10 min, así el celular nunca espera.
+  try { cache.put('equipo', JSON.stringify(res), 1500); } catch (e) { /* >100 KB: sin caché */ }
   return res;
+}
+
+/* Activador: recalcula Equipo cada 10 min entre 7am y 10pm (hora Lima) y lo deja en caché.
+   Ejecutar instalarEquipo UNA vez desde el editor. */
+function eq_precalentar() {
+  const h = new Date(Date.now() + LIMA * 3600e3).getUTCHours();
+  if (h < 7 || h >= 22) return;
+  getEquipo(true);
+}
+function instalarEquipo() {
+  ScriptApp.getProjectTriggers()
+    .filter((t) => t.getHandlerFunction() === 'eq_precalentar')
+    .forEach((t) => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('eq_precalentar').timeBased().everyMinutes(10).create();
+  const r = getEquipo(true);
+  Logger.log('Activador listo. Tardó ' + r.seg + ' s (ventas ' + r.segVentas + ' s). Errores: ' + JSON.stringify(r.errores));
 }
 
 /* ---------- utilidades ---------- */

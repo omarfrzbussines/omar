@@ -248,7 +248,7 @@ document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
   document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('on', x === b));
   pintar(); window.scrollTo(0, 0);
 });
-$('#refresh').onclick = () => { cargar(true); if (E || tab === 'eq') { E = null; cargarEquipo(true); } };
+$('#refresh').onclick = () => { cargar(true); if (E || tab === 'eq') { E = null; cargarEquipo(false); } };
 cargar(false);
 </script>
 </body>
