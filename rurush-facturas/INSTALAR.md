@@ -13,18 +13,23 @@ se llena lo importante y la app calcula el resto y lo sube sola a OneDrive.**
 | Pagado con (toque): Caja chica, Yape, Plin… | Nombre del archivo y carpeta del mes |
 | Comprobante, proveedor, RUC, Nº (opcional) | Avisos: factura sin RUC, RUC mal escrito, fecha futura |
 
-En OneDrive queda así:
+En OneDrive cada foto queda **dos veces** (control doble):
 
 ```
-RURUSH Facturas/
-├── Control de gastos.xlsx        ← una fila por gasto (tabla "Gastos", con link "Ver" a la foto)
-├── config.json                   ← categorías, personas, comprobantes (se edita desde ⚙️ Ajustes)
-├── 2026-10 OCTUBRE/
-│   ├── 2026-10-09 - AGUA - San Luis Distribuidora - S59 - LAURA.jpg
-│   ├── 2026-10-09 - MANTENIMIENTO DE MÁQUINAS - Cambio de cable polea - S120 - OMAR.jpg
-│   └── …
-└── 2026-11 NOVIEMBRE/
+TU ONEDRIVE (Rurushfitclub)                     CARPETA DE LA CONTADORA (compartida)
+RURUSH Facturas/                                CONTABILIDAD - RURUSH/COMPRAS/
+├── Control de gastos.xlsx  ← una fila por gasto └── 2026/
+├── config.json             ← ajustes                ├── 09 SETIEMBRE/
+├── solicitudes/            ← celulares nuevos       ├── 10 OCTUBRE/
+└── 2026-10 OCTUBRE/                                 │   └── 2026-10-09 - AGUA - … - OMAR.jpg
+    └── 2026-10-09 - AGUA - … - OMAR.jpg             └── 11 NOVIEMBRE/  ← la crea la app si falta
 ```
+
+- La carpeta del mes se elige por la **fecha del comprobante** (una boleta de setiembre va a `09 SETIEMBRE`).
+- En la carpeta de la contadora la app **usa las carpetas que ya existen** (`10 OCTUBRE`, `09 SETIEMBRE`…) y solo crea la del mes nuevo si todavía no está.
+- Orden al subir: 1) tu copia, 2) la fila en tu Excel, 3) la copia para la contadora. Si la 3 falla (por ejemplo, si la contadora quitó el permiso), lo tuyo ya quedó y la app reintenta solo la copia de la contadora.
+- Se configura en **⚙️ Ajustes → 📷 Copia de las fotos para la contadora** (por defecto `CONTABILIDAD - RURUSH/COMPRAS`). El botón **🔍 Probar carpeta de fotos** dice a qué carpeta irán las fotos de hoy. Vacío = sin copia para la contadora.
+- La app encuentra `CONTABILIDAD - RURUSH` en "Compartidos conmigo". Si no la encuentra: en OneDrive web → Compartidos → `CONTABILIDAD - RURUSH` → **Añadir acceso directo a Mis archivos**.
 
 En el Excel puedes filtrar o hacer una tabla dinámica por **Categoría**, **Mes**,
 **Semana**, **Pagado con** o **Registrado por** (en una hoja aparte).

@@ -118,6 +118,8 @@ const MESES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', '
 const COLUMNAS = ['ID', 'Fecha', 'Mes', 'Semana', 'Registrado por', 'Categoría', 'Descripción', 'Cantidad', 'Precio unitario',
   'Proveedor', 'RUC', 'Comprobante', 'Nº comprobante', 'Base imponible', 'IGV', 'Total', 'Pagado con',
   'Fotos', 'Ver foto', 'Observación', 'Registrado el', 'Subido por'];
+// Carpeta COMPRAS que comparte la contadora; adentro van AAAA / "MM MES" (ej. 2026 / 10 OCTUBRE).
+const FOTOS_BASE = 'CONTABILIDAD - RURUSH/COMPRAS';
 const CONFIG_BASE = {
   igv: 18,
   personas: ['DANNA', 'LAURA', 'MÓNICA', 'VALERIA', 'DILAN', 'OMAR'],
@@ -298,6 +300,8 @@ function normalizar(c) {
     igv: Number(c.igv) >= 0 ? Number(c.igv) : CONFIG_BASE.igv,
     personas: lista(c.personas, CONFIG_BASE.personas), categorias: lista(c.categorias, CONFIG_BASE.categorias),
     metodos: lista(c.metodos, CONFIG_BASE.metodos), comprobantes: comp.length ? comp : CONFIG_BASE.comprobantes,
+    // Dónde van las fotos: carpeta de la contadora (ruta o link). Vacío = <carpeta>/AAAA-MM MES.
+    fotos: c.fotos === undefined ? FOTOS_BASE : String(c.fotos || '').trim(),
     celulares: c.celulares && typeof c.celulares === 'object' && !Array.isArray(c.celulares) ? c.celulares : {}
   });
 }
@@ -498,7 +502,7 @@ async function procesarCola() {
         ultimoError = e.message || String(e);
         it.error = ultimoError; await colaPut(it);
         historial(it.id, { estado: 'err', error: ultimoError });
-        if (e.status === 404) { ls.set('raiz', null); ls.set('excel', null); }   // movieron o borraron la carpeta: buscarla de nuevo
+        if (e.status === 404) { ls.set('raiz', null); ls.set('excel', null); BASE_FOTOS = null; Object.keys(MES_CACHE).forEach((k) => delete MES_CACHE[k]); }   // movieron o borraron la carpeta: buscarla de nuevo
         if (!navigator.onLine || /Failed to fetch|NetworkError|Load failed|sesión/i.test(ultimoError)) break;
       }
     }
@@ -509,19 +513,93 @@ async function procesarCola() {
   }
 }
 
-// Paso a paso y guardando el avance: si se corta a la mitad, no duplica fotos ni filas.
-async function subir(it) {
+/* ---------- carpeta de fotos (contabilidad) ----------
+   CFG.fotos es un link de carpeta o una ruta como "CONTABILIDAD - RURUSH/COMPRAS".
+   La ruta se busca en Mis archivos (sirve un acceso directo a la carpeta compartida)
+   y si no, en "Compartidos conmigo". Adentro: año / mes, usando las carpetas que ya
+   existen ("10 OCTUBRE", "09 SETIEMBRE"…) y creando solo las que falten. */
+
+const sinTildes = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+// Un acceso directo (o un elemento compartido) apunta a la carpeta real en el OneDrive de otra persona.
+const destinoDe = (it, driveId) => it.remoteItem
+  ? { driveId: it.remoteItem.parentReference.driveId, id: it.remoteItem.id, nombre: it.name }
+  : { driveId: (it.parentReference && it.parentReference.driveId) || driveId, id: it.id, nombre: it.name };
+async function hijos(d) {
+  const r = await gj('GET', `/drives/${d.driveId}/items/${d.id}/children?$select=id,name,folder,remoteItem,parentReference&$top=500`);
+  return r.value || [];
+}
+let BASE_FOTOS = null;
+const MES_CACHE = {};
+async function baseFotos() {
+  const conf = CFG.fotos;
+  if (BASE_FOTOS && BASE_FOTOS.conf === conf) return BASE_FOTOS;
+  let d;
+  if (/^https?:\/\//i.test(conf)) {
+    const it = await gj('GET', `/shares/${shareId(conf)}/driveItem`);
+    d = destinoDe(it);
+  } else {
+    const partes = conf.split('/').map((x) => x.trim()).filter(Boolean);
+    const drive = await gj('GET', '/me/drive');
+    const root = await gj('GET', '/me/drive/root');
+    d = { driveId: drive.id, id: root.id };
+    for (let i = 0; i < partes.length; i++) {
+      let it = (await hijos(d)).find((x) => sinTildes(x.name) === sinTildes(partes[i]));
+      if (!it && i === 0) {
+        try { it = ((await gj('GET', '/me/drive/sharedWithMe')).value || []).find((x) => sinTildes(x.name) === sinTildes(partes[0])); } catch (e) { /* no disponible */ }
+      }
+      if (!it) throw new Error(`No encuentro la carpeta "${partes[i]}" (${conf}). En OneDrive web: Compartidos → CONTABILIDAD - RURUSH → "Añadir acceso directo a Mis archivos", o pega el link de COMPRAS en ⚙️ Ajustes.`);
+      d = destinoDe(it, d.driveId);
+    }
+  }
+  BASE_FOTOS = Object.assign({ conf }, d);
+  return BASE_FOTOS;
+}
+// Hija que cumple `ok`; si no hay, la crea con `nombre`.
+async function buscarOCrear(d, ok, nombre) {
+  const it = (await hijos(d)).find((x) => x.folder && ok(sinTildes(x.name)));
+  if (it) return destinoDe(it, d.driveId);
+  return { driveId: d.driveId, id: await carpeta(d.driveId, d.id, nombre), nombre };
+}
+// Nuestra copia: <carpeta de la app>/AAAA-MM MES.
+async function carpetaPropia(fechaIso) {
   const R = await raiz();
-  const v = it.gasto;
-  const mesId = await carpeta(R.driveId, R.id, v.fecha.slice(0, 7) + ' ' + MESES[Number(v.fecha.slice(5, 7)) - 1]);
-  it.subidas = it.subidas || [];
-  for (let i = it.subidas.length; i < it.fotos.length; i++) {
+  const nombre = fechaIso.slice(0, 7) + ' ' + MESES[Number(fechaIso.slice(5, 7)) - 1];
+  return { driveId: R.driveId, id: await carpeta(R.driveId, R.id, nombre), ruta: (R.nombre || '') + ' / ' + nombre };
+}
+// Copia para la contadora: <CFG.fotos>/AAAA/MM MES.
+async function carpetaFotos(fechaIso) {
+  const clave = CFG.fotos + '|' + fechaIso.slice(0, 7);
+  if (MES_CACHE[clave]) return MES_CACHE[clave];
+  const base = await baseFotos();
+  const anio = fechaIso.slice(0, 4), m = Number(fechaIso.slice(5, 7));
+  const mes = MESES[m - 1], alias = m === 9 ? ['SETIEMBRE', 'SEPTIEMBRE'] : [mes];
+  const dA = await buscarOCrear(base, (n) => n === anio, anio);
+  const dM = await buscarOCrear(dA, (n) => new RegExp('^0?' + m + '(\\D|$)').test(n) || alias.some((a) => n.includes(a)), pad(m) + ' ' + mes);
+  MES_CACHE[clave] = Object.assign(dM, { ruta: CFG.fotos.split('/').pop() + ' / ' + anio + ' / ' + dM.nombre });
+  return MES_CACHE[clave];
+}
+
+// Sube las fotos que falten de `lista` a la carpeta que da `donde`, guardando el avance.
+async function subirFotos(it, lista, donde) {
+  if (it[lista].length >= it.fotos.length) return;
+  const dest = await donde(it.gasto.fecha);
+  for (let i = it[lista].length; i < it.fotos.length; i++) {
     const nombre = it.archivo + (it.fotos.length > 1 ? ' (' + (i + 1) + ')' : '') + '.jpg';
-    const f = await gj('PUT', `/drives/${R.driveId}/items/${mesId}:/${ruta(nombre)}:/content?@microsoft.graph.conflictBehavior=rename`,
+    const f = await gj('PUT', `/drives/${dest.driveId}/items/${dest.id}:/${ruta(nombre)}:/content?@microsoft.graph.conflictBehavior=rename`,
       it.fotos[i], { 'Content-Type': 'image/jpeg' });
-    it.subidas.push({ nombre: f.name, web: f.webUrl });
+    it[lista].push({ nombre: f.name, web: f.webUrl });
     await colaPut(it);
   }
+}
+
+// Paso a paso y guardando el avance: si se corta a la mitad, no duplica fotos ni filas.
+// Orden: 1) nuestra copia, 2) fila en nuestro Excel, 3) copia para la contadora.
+// Si falla la 3, lo nuestro ya quedó y solo se reintenta la copia de la contadora.
+async function subir(it) {
+  const v = it.gasto;
+  it.subidas = it.subidas || [];
+  it.subidasConta = it.subidasConta || [];
+  await subirFotos(it, 'subidas', carpetaPropia);
   if (!it.filaOk) {
     // HYPERLINK acepta hasta 255 caracteres; si el link es más largo va como texto.
     const web = it.subidas[0] ? it.subidas[0].web.replace(/"/g, '') : '';
@@ -533,6 +611,10 @@ async function subir(it) {
       v.base, v.igv, v.total, texto(v.metodo), it.fotos.length, foto, texto(v.obs), v.registrado, (cuenta() && cuenta().username) || '']);
     it.filaOk = true;
     await colaPut(it);
+  }
+  if (CFG.fotos) {
+    try { await subirFotos(it, 'subidasConta', carpetaFotos); }
+    catch (e) { throw new Error('Tu copia y el Excel ya están. Falta la copia para la contadora: ' + e.message); }
   }
 }
 
@@ -668,7 +750,9 @@ function pintarCalc(c) {
     <div class="r"><span>IGV ${c.tasa}%</span><b>${soles(c.igv)}</b></div>` : ''}
     <div class="r tot"><span>Total</span><b>${soles(c.total)}</b></div>
     ${avisos.map((a) => `<div class="r desc"><span>⚠️ ${esc(a)}</span></div>`).join('')}
-    <div class="arch">📁 ${esc((ls.get('raiz') || {}).nombre || carpetaConf())} / ${c.fecha.slice(0, 7)} ${c.mes} / ${esc(nombreArchivo(c))}.jpg</div>`;
+    <div class="arch">📁 ${esc((ls.get('raiz') || {}).nombre || carpetaConf())} / ${c.fecha.slice(0, 7)} ${c.mes}
+      ${CFG.fotos ? `<br>📁 ${esc(CFG.fotos.split('/').pop())} / ${c.fecha.slice(0, 4)} / ${pad(Number(c.fecha.slice(5, 7)))} ${c.mes} <i>(contadora)</i>` : ''}
+      <br>🧾 ${esc(nombreArchivo(c))}.jpg</div>`;
 }
 function refrescarCalc() {
   const el = $('#calc'); if (!el) return;
@@ -745,7 +829,13 @@ function pintarConf() {
       ${este ? '' : `<button class="btn" data-admincel="${esc(k)}" title="Administrador">${x.admin ? '★' : '☆'}</button><button class="btn" data-quitarcel="${esc(k)}">Quitar</button>`}</div>`;
   }).join('');
   return propio + `
-    <label>Carpeta de OneDrive</label>
+    <label>📷 Copia de las fotos para la contadora</label>
+    <input id="cFotos" value="${esc(CFG.fotos)}" placeholder="Vacío = sin copia para la contadora">
+    <div class="ayuda">Las fotos siempre quedan en tu carpeta (abajo) y además se copian aquí.
+      Ruta (ej. <code>CONTABILIDAD - RURUSH/COMPRAS</code>) o link de la carpeta. Adentro la app usa
+      <code>2026 / 10 OCTUBRE</code>: las carpetas que ya existen, y crea la del mes nuevo si falta.</div>
+    <button class="btn" id="cProbarFotos" style="margin-top:8px">🔍 Probar carpeta de fotos</button>
+    <label>Carpeta de la app (Excel y ajustes)</label>
     <input id="cCarpeta" value="${esc(carpetaConf())}">
     <div class="ayuda">Un nombre (se crea en <i>tu</i> OneDrive) o el <b>link de una carpeta compartida</b> (con permiso de edición) para que todas suban a la misma.</div>
     <button class="btn" id="cCopiar" style="margin-top:8px">🔗 Copiar link para el equipo</button>
@@ -791,7 +881,8 @@ async function guardarAjustes() {
       const [nombre, marca] = l.split('|').map((s) => s.trim());
       return { nombre, igv: /^igv$/i.test(marca || '') };
     }),
-    igv: num($('#cIgv').value)
+    igv: num($('#cIgv').value),
+    fotos: $('#cFotos').value.trim()
   });
   if (!nueva.categorias.length || !nueva.personas.length || !nueva.metodos.length || !nueva.comprobantes.length) return toast('No dejes listas vacías.');
   const carpetaNueva = $('#cCarpeta').value.trim() || 'RURUSH Facturas';
@@ -884,6 +975,18 @@ document.addEventListener('click', async (ev) => {
     return;
   }
   if (t.id === 'cSolis') return pintarSolicitudes();
+  if (t.id === 'cProbarFotos') {
+    const antes = CFG.fotos;
+    CFG.fotos = $('#cFotos').value.trim();
+    t.disabled = true; t.textContent = 'Buscando…';
+    try {
+      const d = await carpetaFotos(isoLocal(new Date()));
+      toast('✅ Las fotos de hoy irán a: ' + d.ruta, 5000);
+    } catch (e) { toast('❌ ' + e.message, 7000); }
+    CFG.fotos = antes;
+    t.disabled = false; t.textContent = '🔍 Probar carpeta de fotos';
+    return;
+  }
   if (t.dataset.aprobar || t.dataset.rechazar || t.dataset.quitarcel || t.dataset.admincel) {
     const k = t.dataset.aprobar || t.dataset.rechazar || t.dataset.quitarcel || t.dataset.admincel;
     if (t.dataset.quitarcel && !confirm('¿Quitar el acceso a ' + ((CFG.celulares[k] || {}).nombre || k) + '?')) return;
