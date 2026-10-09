@@ -286,10 +286,36 @@ async function etiquetarChat(nombre, phone) {
   const rxEtiqueta = new RegExp('^' + sinTilde(nombre).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s*') + '$', 'i');
   if (phone && !chatEsDe(phone)) return { ok: false, error: 'el chat abierto no es el de este número' };
   if (!compose()) return { ok: false, error: 'no hay un chat abierto' };
-  const menu = botonMenuChat();
-  if (!menu) return falla('no encontré el menú ⋮ del chat');
-  rastro.push('⋮: ' + (menu.getAttribute('aria-label') || menu.outerHTML.slice(0, 80)));
-  clic(menu);
+  // Camino corto: el botón de la cabecera "Añadir a la lista ▾" (o el nombre de la lista, si ya tiene).
+  const chip = botonListaCabecera();
+  if (chip && rxEtiqueta.test(sinTilde(chip.innerText).replace(/\s*▾\s*$/, ''))) return { ok: true, ya: true };
+  let abierta = false;
+  if (chip) {
+    rastro.push('cabecera: «' + chip.innerText.trim() + '»');
+    clic(chip);
+    abierta = !!(await buscar(() => porTexto(rxEtiqueta), 2500));
+  }
+  if (!abierta) {
+    const menu = botonMenuChat();
+    if (!menu) return falla('no encontré el menú ⋮ del chat');
+    rastro.push('⋮: ' + (menu.getAttribute('aria-label') || menu.outerHTML.slice(0, 80)));
+    clic(menu);
+    const r = await abrirDesdeMenu(menu, rastro);
+    if (r) return falla(r);
+  }
+  return marcarYGuardar(rxEtiqueta, nombre, rastro, falla);
+}
+
+// Botón de la cabecera del chat con las listas ("Añadir a la lista ▾" o el nombre de la lista).
+function botonListaCabecera() {
+  const h = document.querySelector('#main header');
+  if (!h) return null;
+  return [...h.querySelectorAll('button, [role="button"]')].find((b) => visible(b) && (
+    /^(anadir a la lista|agregar a la lista|add to list)$/.test(sinTilde(b.innerText)) ||
+    !!b.querySelector('[data-icon*="list"], [data-icon*="label"]') && (b.innerText || '').trim().length > 0)) || null;
+}
+
+async function abrirDesdeMenu(menu, rastro) {
   const rxItem = /^(anadir a la lista|agregar a la lista|add to list|etiquetar chat|label chat|etiquetar|agregar etiqueta|add label)$/;
   const item = await buscar(() => {
     const e = porTexto(rxItem);
@@ -301,13 +327,15 @@ async function etiquetarChat(nombre, phone) {
     return h || null;
   });
   if (!item) {
-    const d = falla('el menú ⋮ no tiene "Añadir a la lista"');
     clic(menu); // vuelve a cerrar el menú (sin Escape)
-    return d;
+    return 'el menú ⋮ no tiene "Añadir a la lista"';
   }
   rastro.push('ítem: ' + item.tagName + ' «' + item.innerText.trim() + '»');
   clic(item);
+  return null;
+}
 
+async function marcarYGuardar(rxEtiqueta, nombre, rastro, falla) {
   const texto = await buscar(() => porTexto(rxEtiqueta));
   if (!texto) { const d = falla(`no encontré "${nombre}" en la ventana de listas`); cerrarDialogo(); return d; }
   rastro.push('lista: ' + texto.tagName + ' «' + texto.innerText.trim() + '»');
@@ -329,9 +357,10 @@ async function etiquetarChat(nombre, phone) {
     const b = [...document.querySelectorAll('[aria-label], [data-icon]')].find((el) => visible(el) && fueraDeZonas(el) && (
       /^(guardar|save|listo|done|hecho|aceptar|ok)$/i.test(el.getAttribute('aria-label') || '') ||
       /^(checkmark|checkmark-medium|checkmark-light|wds-ic-checkmark)/.test(el.getAttribute('data-icon') || '')));
-    return b ? (b.closest('button, [role="button"]') || b) : porTexto(/^(guardar|save|listo|done|hecho|aceptar)$/);
+    return b ? (b.closest('button, [role="button"]') || b) : porTexto(/^(ok|guardar|save|listo|done|hecho|aceptar)$/);
   }, 2000);
-  if (!guardar) return falla('marqué FREE PASS pero no encontré el botón Guardar/Listo');
+  if (!guardar) return falla('marqué FREE PASS pero no encontré el botón OK');
+  rastro.push('guardar: «' + (guardar.innerText || guardar.getAttribute('aria-label') || '').trim() + '»');
   clic(guardar);
   await esperar(800);
   return { ok: true };
