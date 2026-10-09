@@ -66,8 +66,12 @@ $('etq').onclick = async () => {
   $('etq').disabled = true;
   $('etq').textContent = 'Etiquetando…';
   const r = await chrome.runtime.sendMessage({ type: 'probarEtiqueta' });
-  $('etq').textContent = r && r.ok ? (r.ya ? '✓ Ya tenía FREE PASS' : '✓ Etiquetado FREE PASS') : `⚠️ ${(r && r.error) || 'error'}`;
-  setTimeout(() => { $('etq').textContent = '🏷️ Probar etiqueta en el chat abierto'; $('etq').disabled = false; }, 5000);
+  let txt = r && r.ok ? (r.ya ? '✓ Ya tenía FREE PASS' : '✓ Etiquetado FREE PASS') : `⚠️ ${(r && r.error) || 'error'}`;
+  if (r && r.diag) {
+    try { await navigator.clipboard.writeText(`ETIQUETA FREE PASS · ${txt}\n${r.diag}`); txt += ' · 📋 diagnóstico copiado: pégaselo a Claude'; } catch (e) { /* sin portapapeles */ }
+  }
+  $('etq').textContent = txt;
+  setTimeout(() => { $('etq').textContent = '🏷️ Probar etiqueta en el chat abierto'; $('etq').disabled = false; }, 12000);
 };
 chrome.runtime.sendMessage({ type: 'modulos' }, (m) => {
   MODS = m || {};

@@ -218,50 +218,100 @@ function botonMenuChat() {
   return c ? (c.closest('button, [role="button"]') || c) : null;
 }
 
+// Fuera de: lista de chats, cabecera y mensajes del chat (ahí hay textos iguales que no son
+// el menú, p. ej. el botón "Añadir a la lista ▾" de la cabecera).
+const fueraDeZonas = (el) => !el.closest('#side, #pane-side, #main header, #main footer, #main [role="application"]');
+
 // Elemento visible más chico cuyo texto completo cumple el patrón.
 function porTexto(rx, raiz = document) {
-  const els = [...raiz.querySelectorAll('li, [role="menuitem"], [role="button"], button, div, span')]
-    .filter((el) => visible(el) && rx.test(sinTilde(el.innerText)));
+  const els = [...raiz.querySelectorAll('li, [role="menuitem"], [role="button"], [role="checkbox"], [role="option"], button, div, span')]
+    .filter((el) => visible(el) && fueraDeZonas(el) && rx.test(sinTilde(el.innerText)));
   els.sort((a, b) => a.innerText.length - b.innerText.length || b.querySelectorAll('*').length - a.querySelectorAll('*').length);
   return els[0] || null;
 }
 
 // true / false / null (no se pudo saber)
 function estaMarcada(fila) {
-  const cb = fila.querySelector('[role="checkbox"], input[type="checkbox"]') || (fila.matches('[role="checkbox"]') ? fila : null);
+  const cb = fila.querySelector('[role="checkbox"], input[type="checkbox"]') || (fila.matches('[role="checkbox"], [aria-checked], [aria-selected]') ? fila : null);
   if (cb) {
     if (cb.tagName === 'INPUT') return cb.checked;
-    const v = cb.getAttribute('aria-checked');
+    const v = cb.getAttribute('aria-checked') || cb.getAttribute('aria-selected');
     if (v === 'true' || v === 'false') return v === 'true';
   }
   const ic = [...fila.querySelectorAll('[data-icon]')].map((x) => x.getAttribute('data-icon')).join(' ');
-  if (/checkbox-checked|checkbox-on|check-box-checked/.test(ic)) return true;
-  if (/checkbox-unchecked|checkbox-off|check-box-unchecked|checkbox$/.test(ic)) return false;
+  if (/checkbox-checked|checkbox-on|check-box-checked|checkbox-filled/.test(ic)) return true;
+  if (/checkbox-unchecked|checkbox-off|check-box-unchecked|checkbox-empty|checkbox$/.test(ic)) return false;
   return null;
 }
 
+// Cierra solo con un botón Cerrar/Cancelar visible fuera del chat. NUNCA con Escape:
+// en WhatsApp Web, Escape cierra el chat abierto.
 function cerrarDialogo() {
-  const b = [...document.querySelectorAll('[aria-label]')].find((el) => visible(el) && /^(cerrar|close|cancelar|cancel)$/i.test(el.getAttribute('aria-label') || ''));
-  if (b) clic(b.closest('button, [role="button"]') || b);
-  else document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+  const b = [...document.querySelectorAll('[aria-label]')].find((el) => visible(el) && fueraDeZonas(el) &&
+    /^(cerrar|close|cancelar|cancel)$/i.test(el.getAttribute('aria-label') || ''));
+  if (b) { clic(b.closest('button, [role="button"]') || b); return true; }
+  const t = porTexto(/^(cancelar|cancel|cerrar|close)$/);
+  if (t) { clic(t.closest('button, [role="button"]') || t); return true; }
+  return false;
+}
+
+// Foto de lo que hay en pantalla fuera del chat (menús y ventanas), para ajustar la extensión.
+function diagnostico() {
+  const raices = [...document.querySelectorAll('[role="dialog"], [role="menu"], [role="listbox"], [data-animate-modal-popup="true"], [data-animate-dropdown-item="true"]')]
+    .filter(visible);
+  const lineas = [];
+  const ver = (el, prof) => {
+    if (lineas.length > 220 || !visible(el)) return;
+    const propio = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent.trim()).join(' ').slice(0, 60);
+    const attrs = ['role', 'aria-label', 'aria-checked', 'aria-selected', 'data-icon', 'title', 'tabindex']
+      .map((a) => el.hasAttribute(a) ? `${a}=${(el.getAttribute(a) || '').slice(0, 40)}` : '').filter(Boolean).join(' ');
+    if (propio || attrs || el.tagName === 'INPUT') lineas.push(`${'  '.repeat(Math.min(prof, 12))}${el.tagName.toLowerCase()} ${attrs}${propio ? ' «' + propio + '»' : ''}`);
+    for (const h of el.children) ver(h, prof + 1);
+  };
+  if (raices.length) raices.forEach((r) => { lineas.push('— raíz —'); ver(r, 0); });
+  else {
+    // sin dialog/menu: lo visible fuera de las zonas del chat
+    for (const el of document.querySelectorAll('#app [tabindex], #app [role], #app [aria-label]')) {
+      if (lineas.length > 220) break;
+      if (!visible(el) || !fueraDeZonas(el)) continue;
+      lineas.push(`${el.tagName.toLowerCase()} role=${el.getAttribute('role') || ''} aria-label=${(el.getAttribute('aria-label') || '').slice(0, 40)} «${(el.innerText || '').trim().split('\n')[0].slice(0, 50)}»`);
+    }
+  }
+  return lineas.join('\n');
 }
 
 async function etiquetarChat(nombre, phone) {
+  const rastro = [];
+  const falla = (error) => ({ ok: false, error, diag: `${rastro.join('\n')}\n\nPANTALLA:\n${diagnostico()}` });
   const rxEtiqueta = new RegExp('^' + sinTilde(nombre).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s*') + '$', 'i');
   if (phone && !chatEsDe(phone)) return { ok: false, error: 'el chat abierto no es el de este número' };
+  if (!compose()) return { ok: false, error: 'no hay un chat abierto' };
   const menu = botonMenuChat();
-  if (!menu) return { ok: false, error: 'no encontré el menú ⋮ del chat' };
+  if (!menu) return falla('no encontré el menú ⋮ del chat');
+  rastro.push('⋮: ' + (menu.getAttribute('aria-label') || menu.outerHTML.slice(0, 80)));
   clic(menu);
-  const item = await buscar(() => porTexto(/^(anadir a la lista|agregar a la lista|add to list|etiquetar chat|label chat|etiquetar|agregar etiqueta|add label)$/));
+  const rxItem = /^(anadir a la lista|agregar a la lista|add to list|etiquetar chat|label chat|etiquetar|agregar etiqueta|add label)$/;
+  const item = await buscar(() => {
+    const e = porTexto(rxItem);
+    if (e) return e.closest('li, [role="menuitem"], [role="button"]') || e;
+    // el menú a veces se dibuja dentro de la cabecera: ahí solo vale un ítem de menú (li/menuitem),
+    // nunca el botón "Añadir a la lista ▾" de la cabecera
+    const h = [...document.querySelectorAll('#main header li, #main header [role="menuitem"]')]
+      .find((x) => visible(x) && rxItem.test(sinTilde(x.innerText)));
+    return h || null;
+  });
   if (!item) {
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
-    return { ok: false, error: 'el menú ⋮ no tiene "Añadir a la lista" ni "Etiquetar chat"' };
+    const d = falla('el menú ⋮ no tiene "Añadir a la lista"');
+    clic(menu); // vuelve a cerrar el menú (sin Escape)
+    return d;
   }
-  clic(item.closest('li, [role="menuitem"], [role="button"]') || item);
+  rastro.push('ítem: ' + item.tagName + ' «' + item.innerText.trim() + '»');
+  clic(item);
 
   const texto = await buscar(() => porTexto(rxEtiqueta));
-  if (!texto) { cerrarDialogo(); return { ok: false, error: `no encontré la etiqueta "${nombre}"` }; }
-  // fila = el contenedor de la etiqueta que también tiene su casilla
+  if (!texto) { const d = falla(`no encontré "${nombre}" en la ventana de listas`); cerrarDialogo(); return d; }
+  rastro.push('lista: ' + texto.tagName + ' «' + texto.innerText.trim() + '»');
+  // fila = el contenedor de la lista que también tiene su casilla
   let fila = texto;
   for (let i = 0; i < 8 && fila.parentElement; i++) {
     if (estaMarcada(fila) !== null) break;
@@ -269,19 +319,19 @@ async function etiquetarChat(nombre, phone) {
   }
   const marcada = estaMarcada(fila);
   if (marcada === true) { cerrarDialogo(); return { ok: true, ya: true }; }
-  if (marcada === null) { cerrarDialogo(); return { ok: false, error: 'no pude saber si la etiqueta ya estaba puesta: no se tocó' }; }
+  if (marcada === null) { const d = falla('no pude saber si ya estaba en FREE PASS: no se tocó'); cerrarDialogo(); return d; }
 
   clic(fila.querySelector('[role="checkbox"], input[type="checkbox"]') || fila);
-  await esperar(400);
-  if (estaMarcada(fila) !== true) { cerrarDialogo(); return { ok: false, error: 'no se pudo marcar la etiqueta' }; }
+  await esperar(500);
+  if (estaMarcada(fila) !== true) { const d = falla('no se pudo marcar FREE PASS'); cerrarDialogo(); return d; }
 
   const guardar = await buscar(() => {
-    const b = [...document.querySelectorAll('[aria-label], [data-icon]')].find((el) => visible(el) && (
+    const b = [...document.querySelectorAll('[aria-label], [data-icon]')].find((el) => visible(el) && fueraDeZonas(el) && (
       /^(guardar|save|listo|done|hecho|aceptar|ok)$/i.test(el.getAttribute('aria-label') || '') ||
       /^(checkmark|checkmark-medium|checkmark-light|wds-ic-checkmark)/.test(el.getAttribute('data-icon') || '')));
     return b ? (b.closest('button, [role="button"]') || b) : porTexto(/^(guardar|save|listo|done|hecho|aceptar)$/);
   }, 2000);
-  if (!guardar) { cerrarDialogo(); return { ok: false, error: 'no encontré el botón Guardar' }; }
+  if (!guardar) return falla('marqué FREE PASS pero no encontré el botón Guardar/Listo');
   clic(guardar);
   await esperar(800);
   return { ok: true };
