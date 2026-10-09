@@ -87,6 +87,17 @@ async function clickSend() {
   return { ok: false, error: 'el mensaje quedó en el cuadro de texto' };
 }
 
+// data-id del último mensaje saliente visible. WhatsApp no deja todos los mensajes en
+// pantalla (los viejos salen del DOM al llegar uno nuevo), así que contar no basta:
+// se compara también cuál es el último.
+function ultimoSaliente() {
+  const els = document.querySelectorAll('#main [data-id^="true_"], #main .message-out');
+  const el = els[els.length - 1];
+  if (!el) return '';
+  const conId = el.closest('[data-id]') || el;
+  return conId.getAttribute('data-id') || '';
+}
+
 function outCount() {
   return Math.max(
     document.querySelectorAll('#main .message-out').length,
@@ -121,10 +132,12 @@ function botonEnviarPreview() {
   return icons.length ? (icons[0].closest('[role="button"], button') || icons[0]) : null;
 }
 
-async function esperarSalida(antes, intentos = 30) {
+async function esperarSalida(antes, antesId, intentos = 30) {
   for (let i = 0; i < intentos; i++) {
     await esperar(500);
     if (outCount() > antes) return true;
+    const id = ultimoSaliente();
+    if (id && id !== antesId) return true;
   }
   return false;
 }
@@ -144,7 +157,7 @@ async function enviarRecordatorio(text, phone, header, conImagen = true) {
     const file = new File([blob], 'como-llegar-rurush.' + (blob.type.split('/')[1] || 'jpg'), { type: blob.type });
     const dt = new DataTransfer();
     dt.items.add(file);
-    const antes = outCount();
+    const antes = outCount(), antesId = ultimoSaliente();
     c.focus();
     c.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
 
@@ -156,7 +169,7 @@ async function enviarRecordatorio(text, phone, header, conImagen = true) {
       btn = botonEnviarPreview() || btn;
       if (!seguro()) return { ok: false, noEnviado: true, error: 'el chat cambió antes de enviar' };
       btn.click();
-      if (!(await esperarSalida(antes))) return { ok: false, error: 'la imagen no apareció en el chat' };
+      if (!(await esperarSalida(antes, antesId))) return { ok: false, error: 'la imagen no apareció en el chat' };
       if (conTexto) return { ok: true, imagen: true };
       // la imagen salió sin descripción: mandar el texto aparte
       await esperar(1500);

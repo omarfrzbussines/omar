@@ -131,15 +131,28 @@ function sumarDias(fecha, n) {
 }
 const diaSemana = (fecha) => new Date(Date.parse(fecha + 'T12:00:00Z')).getUTCDay();
 
+// Lo que había en Pipedrive cuando no se encontró celular (para el reporte).
+let ultimoTelCrudo = '';
 async function phoneOf(personId, token) {
+  ultimoTelCrudo = '';
   if (!personId) return null;
   const res = await pd(`persons/${personId}`, token);
-  const phones = (res.data && res.data.phone) || [];
+  const d = res.data || {};
+  const phones = d.phone || [];
   const primary = phones.find((p) => p.primary) || phones[0];
   for (const p of [primary, ...phones]) {
     const n = p && normPhone(p.value);
     if (n) return n;
   }
+  // Plan B: un celular peruano escrito en otro campo de la persona (nombre, campo
+  // personalizado "Celular"/"WhatsApp", etc.), con o sin +51 y con espacios o guiones.
+  for (const [k, v] of Object.entries(d)) {
+    // solo el nombre y los campos personalizados (claves de 40 caracteres en Pipedrive)
+    if (typeof v !== 'string' || !(k === 'name' || /^[0-9a-f]{40}$/.test(k))) continue;
+    const m = v.match(/(?:\+?\s*51[\s-]*)?(9\d{2})[\s-]*(\d{3})[\s-]*(\d{3})(?!\d)/);
+    if (m) return '51' + m[1] + m[2] + m[3];
+  }
+  ultimoTelCrudo = phones.map((p) => p && p.value).filter(Boolean).join(' / ');
   return null;
 }
 
@@ -199,8 +212,13 @@ const RX_HORA = /\b(?:a las?\s*)?(1[0-2]|0?[1-9])(?:[:.]([0-5]\d))?\s*(a\.?\s?m\
 // horas en 24h: "19:00", "18h", "18 hrs" (solo de 13 a 23, o con "h/hrs", para no confundir con montos)
 const RX_HORA_24 = /\b([01]?\d|2[0-3])(?:[:.]([0-5]\d))?\s*(hrs?|h)\b|\b(1[3-9]|2[0-3])[:.]([0-5]\d)\b/gi;
 
+// Textos que son nuestros (plantillas del gym) aunque lleguen como entrantes, p. ej. cuando
+// el lead responde citando nuestro mensaje: no cuentan como "otra hora".
+const RX_PROPIO = /rurush|te esperamos|larco\s*11\d\d|maps\.app\.goo\.gl/i;
+
 function horasMencionadas(text) {
   const out = [];
+  if (RX_PROPIO.test(text)) return out;
   if (/6(:00)?\s*a\.?\s?m\.?\s*a\s*10(:00)?\s*p\.?\s?m/i.test(text)) return out; // horario del gym, no una cita
   for (const m of text.matchAll(RX_HORA)) out.push({ h12: Number(m[1]) % 12, m: m[2] ? Number(m[2]) : null });
   for (const m of text.matchAll(RX_HORA_24)) {
@@ -606,7 +624,7 @@ async function correrModulo(key, reason, programado) {
           }
 
           const phone = await phoneOf(fp.personId, cfg.pipedriveToken);
-          if (!phone) { resumen.alertas.push(`${etiqueta}: sin celular válido en Pipedrive`); continue; }
+          if (!phone) { resumen.alertas.push(`${etiqueta}: sin celular válido en Pipedrive (${ultimoTelCrudo ? 'tiene «' + ultimoTelCrudo + '»' : 'campo teléfono vacío'})`); continue; }
           if (bloqueados.has(ultimos9(phone))) { resumen.saltados.push(`${etiqueta} (bloqueado)`); continue; }
           if (tocados.has(ultimos9(phone))) { resumen.saltados.push(`${etiqueta} (ya se le escribió en esta corrida)`); continue; }
           if (REAGENDOS.has(parte)) {
