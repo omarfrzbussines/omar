@@ -15,6 +15,8 @@
 var SOCIOS_ID = '1j6Js9ToQUJ96yCUmMKh5jmEAebfNSzlpYs5ItSEDuUI';
 var SOCIOS_HOJA = '3. BASE DE SOCIOS';
 var EMBUDO_DIAS = 60; // revisa envíos de los últimos 60 días
+var CACHE_HOJA = '🗂 CACHE PIPEDRIVE'; // teléfonos de personas ya consultadas (hoja oculta)
+var LIMITE_MS = 4.5 * 60 * 1000;       // Google corta a los 6 min: paramos antes y guardamos lo avanzado
 
 var RANGO_EMBUDO = { AGENDADO: 2, VINO: 3, 'SE INSCRIBIO': 4 };
 
@@ -55,6 +57,8 @@ function actualizarEmbudoMenu() {
 // ───────────────────────── proceso ─────────────────────────
 
 function actualizarEmbudo() {
+  var t0 = Date.now();
+  var ss = SpreadsheetApp.getActive();
   var token = PropertiesService.getScriptProperties().getProperty('PIPEDRIVE_TOKEN');
   if (!token) return { ok: false, error: 'Falta el token de Pipedrive (menú 🔁 Rurush → Guardar token).' };
 
@@ -75,7 +79,12 @@ function actualizarEmbudo() {
   var desde = envios.reduce(function (m, e) { return e.enviado < m ? e.enviado : m; }, '9999-99-99');
 
   // 2. Free Pass de Pipedrive y 3. inscripciones
-  var fps = freePassPorTelefono_(token, desde);
+  ss.toast('Bajando los Free Pass de Pipedrive…', '🔁 Embudo', 60);
+  var fps = freePassPorTelefono_(token, desde, t0);
+  if (fps.incompleto) {
+    return { ok: false, error: 'Faltó tiempo: ya guardé ' + fps.nuevos + ' teléfonos de Pipedrive y quedan ' + fps.faltan + '. Vuelve a correr «Actualizar embudo ahora» y avanzará desde ahí (la primera vez puede pedir 2 o 3 vueltas).' };
+  }
+  ss.toast('Cruzando con la BASE DE SOCIOS…', '🔁 Embudo', 30);
   var socios = iniciosPorTelefono_();
 
   // 4. Subir el estado de cada fila
@@ -121,8 +130,11 @@ function pipedrive_(ruta, params, token) {
   return JSON.parse(res.getContentText());
 }
 
-/** { '519xxxxxxxx': [{ creado: 'AAAA-MM-DD', cita: 'AAAA-MM-DD HH:MM', hecho: bool, texto }] } */
-function freePassPorTelefono_(token, desde) {
+/**
+ * { '519xxxxxxxx': [{ creado: 'AAAA-MM-DD', cita: 'AAAA-MM-DD HH:MM', hecho: bool, texto }] }
+ * Si no alcanza el tiempo, devuelve { incompleto: true, nuevos, faltan } y deja guardado lo avanzado.
+ */
+function freePassPorTelefono_(token, desde, t0) {
   var hasta = isoLima_(new Date(Date.now() + 45 * 86400000));
   var acts = [], start = 0;
   for (var vuelta = 0; vuelta < 40; vuelta++) {
@@ -136,21 +148,38 @@ function freePassPorTelefono_(token, desde) {
     start = pag.next_start;
   }
 
-  // Teléfonos de las personas, en paralelo de a 25
+  // Teléfonos de las personas: primero la caché; las que faltan, a Pipedrive en paralelo de a 20
   var ids = {};
   acts.forEach(function (a) { ids[a.person_id && a.person_id.value || a.person_id] = true; });
-  var lista = Object.keys(ids), tels = {};
-  for (var i = 0; i < lista.length; i += 25) {
-    var lote = lista.slice(i, i + 25);
+  var tels = leerCache_();
+  var faltan = Object.keys(ids).filter(function (id) { return !(id in tels); });
+  var nuevos = [];
+  for (var i = 0; i < faltan.length; i += 20) {
+    if (Date.now() - t0 > LIMITE_MS) {
+      guardarCache_(nuevos);
+      return { incompleto: true, nuevos: nuevos.length, faltan: faltan.length - i };
+    }
+    var lote = faltan.slice(i, i + 20);
     var res = UrlFetchApp.fetchAll(lote.map(function (id) {
       return { url: 'https://api.pipedrive.com/v1/persons/' + id, headers: { 'x-api-token': token }, muteHttpExceptions: true };
     }));
+    var limitado = false;
     res.forEach(function (rr, k) {
-      if (rr.getResponseCode() !== 200) return;
-      var p = JSON.parse(rr.getContentText()).data || {};
-      tels[lote[k]] = (p.phone || []).map(function (x) { return normPhone_(x.value); }).filter(Boolean);
+      var code = rr.getResponseCode();
+      if (code === 429) { limitado = true; return; }       // límite de Pipedrive: se reintenta en otra vuelta
+      var lista = [];
+      if (code === 200) {
+        var p = JSON.parse(rr.getContentText()).data || {};
+        lista = (p.phone || []).map(function (x) { return normPhone_(x.value); }).filter(Boolean);
+      } else if (code !== 404 && code !== 410) {
+        return;                                             // error pasajero: no se guarda
+      }
+      tels[lote[k]] = lista;
+      nuevos.push([lote[k], lista.join(',')]);
     });
+    if (limitado) Utilities.sleep(2000);
   }
+  guardarCache_(nuevos);
 
   var out = {};
   acts.forEach(function (a) {
@@ -177,6 +206,35 @@ function textoCita_(cita) {
   if (!cita) return '';
   var dia = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'][new Date(cita.slice(0, 10) + 'T12:00:00Z').getUTCDay()];
   return dia + ' ' + ddmm_(cita) + ' ' + cita.slice(11, 16);
+}
+
+// ───────────────────────── caché de teléfonos ─────────────────────────
+
+function hojaCache_() {
+  var ss = SpreadsheetApp.getActive();
+  var sh = ss.getSheetByName(CACHE_HOJA);
+  if (!sh) {
+    sh = ss.insertSheet(CACHE_HOJA);
+    sh.getRange(1, 1, 1, 2).setValues([['PERSONA PIPEDRIVE', 'TELÉFONOS']]);
+    sh.hideSheet();
+  }
+  return sh;
+}
+
+function leerCache_() {
+  var sh = hojaCache_(), out = {};
+  var n = sh.getLastRow() - 1;
+  if (n < 1) return out;
+  sh.getRange(2, 1, n, 2).getValues().forEach(function (r) {
+    out[String(r[0])] = String(r[1] || '').split(',').filter(Boolean);
+  });
+  return out;
+}
+
+function guardarCache_(filas) {
+  if (!filas.length) return;
+  var sh = hojaCache_();
+  sh.getRange(sh.getLastRow() + 1, 1, filas.length, 2).setNumberFormat('@').setValues(filas);
 }
 
 // ───────────────────────── socios ─────────────────────────
