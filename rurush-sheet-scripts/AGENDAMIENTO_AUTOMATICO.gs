@@ -8,7 +8,7 @@
  *   - Trigger onEdit INSTALABLE (instantáneo).
  *   - En todas las pestañas de llamadas: al marcar un ESTADO a mano se llenan solas la
  *     FECHA (hoy) y la HORA exacta de esa llamada, si estaban vacías.
- *   - En la pestaña 2026:
+ *   - En todas las bases de BASES_FP (2026, 2025, FP 2026 NI, …):
  *   - Si alguna llamada tiene ESTADO=AGENDADO + ASESOR + FECHA FP + HORA FP (y la fila
  *     tiene TELÉFONO) -> crea la actividad "meeting" con asunto "FP <ASESOR> APL".
  *     Si hay varias llamadas en AGENDADO, manda la última.
@@ -27,6 +27,8 @@ const PD_TOKEN = 'PEGA-AQUI-TU-TOKEN-DE-PIPEDRIVE';
 const PD_BASE  = 'https://api.pipedrive.com/v1';
 
 const SHEET_NAME = '2026';
+// Pestañas donde AGENDADO + FECHA FP + HORA FP crea el FP en Pipedrive (todas las de llamadas).
+const BASES_FP = ['2026', 'FP 2026 NI', '2025', 'FPS 2025', 'FPS NA 2026', 'DIARIO 🔥', 'EXAL2025', 'INACTIVOS', 'INASISTENCIAS', 'ACTIVOS', '2024'];
 const TIPO_FP = 'meeting';
 const TZ_OFFSET_HORAS = 5;        // Perú = UTC-5
 const CANCELAR = 'borrar';        // 'borrar' | 'hecho'
@@ -73,7 +75,7 @@ function instalarTriggerFP() {
 /** Handler del onEdit instalable.
  *  1) En CUALQUIER pestaña de llamadas: al marcar un ESTADO a mano, llena la FECHA (hoy)
  *     y la HORA exacta de esa llamada si están vacías.
- *  2) En la pestaña 2026: crea / actualiza / cancela el FP en Pipedrive. */
+ *  2) En las bases de BASES_FP: crea / actualiza / cancela el FP en Pipedrive. */
 function onEditFP(e) {
   try {
     const sh = e.range.getSheet();
@@ -81,7 +83,7 @@ function onEditFP(e) {
     const est = estructuraFP(sh);
     if (!est.rondas.length) return;              // pestaña sin columnas de llamadas
     sellarFechaHora(sh, e.range, est);
-    if (sh.getName() !== SHEET_NAME) return;
+    if (BASES_FP.indexOf(sh.getName()) < 0) return;
 
     const relevantes = [est.nombre, est.tel];
     est.rondas.forEach(r => relevantes.push(r.asesor, r.estado, r.fpFecha, r.fpHora));
@@ -134,7 +136,9 @@ function procesarFilaFP(sh, row, est) {
   });
 
   const props = PropertiesService.getDocumentProperties();
-  const keyAct = 'ACT_' + tel, keyPer = 'PER_' + tel;
+  // El FP se recuerda por pestaña + teléfono: la misma persona puede estar en dos bases y
+  // editar una no debe cancelar el FP agendado desde la otra. (2026 conserva su clave de antes.)
+  const keyAct = (sh.getName() === SHEET_NAME ? 'ACT_' : 'ACT_' + sh.getName() + '|') + tel, keyPer = 'PER_' + tel;
   const existingId = props.getProperty(keyAct);
 
   if (!due) {                                  // ya no hay agendamiento válido -> cancelar

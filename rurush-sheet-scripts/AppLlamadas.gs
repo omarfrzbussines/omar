@@ -10,7 +10,8 @@
  */
 
 const APP_ASESORAS = ["MONICA", "DANNA", "LAURA"];
-const APP_BASES = ["2026"];
+// Bases que se pueden llamar desde el celular (en este orden aparecen en el selector).
+const APP_BASES = ["2026", "FP 2026 NI", "2025", "FPS 2025", "FPS NA 2026", "DIARIO 🔥", "EXAL2025", "INACTIVOS", "INASISTENCIAS", "ACTIVOS", "2024"];
 const APP_ESTADOS = ["CONTESTO", "NO CONTESTO", "CORTO", "APAGADO", "AGENDADO", "CLIENTE", "DESCARTADO", "Otra Ciudad"];
 const APP_TAM_COLA = 30;
 const APP_RESERVA_SEG = 30 * 60;   // lo que se le muestra a una asesora no le sale a otra por 30 min
@@ -44,6 +45,7 @@ function app_doGet(e) {
   const t = HtmlService.createTemplateFromFile("Llamadas");
   t.asesora = asesora;
   t.llave = e.parameter.k;
+  t.bases = APP_BASES;
   return t.evaluate()
     .setTitle("RURUSH Llamadas · " + asesora)
     .addMetaTag("viewport", "width=device-width, initial-scale=1, maximum-scale=1")

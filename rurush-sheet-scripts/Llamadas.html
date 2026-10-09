@@ -14,6 +14,7 @@
   .sub { color:var(--mut); font-size:12px; margin-top:3px; }
   .btn-s { background:var(--card); color:var(--tx); border:1px solid var(--line); border-radius:10px; padding:8px 12px; font-size:15px; }
   .marcador { display:flex; gap:6px; overflow-x:auto; margin-top:10px; }
+  .bases { width:100%; margin-top:10px; background:var(--card); color:var(--tx); border:1px solid var(--line); border-radius:10px; padding:9px 10px; font-size:15px; }
   .m { flex:none; background:var(--card); border-radius:10px; padding:6px 10px; font-size:12px; color:var(--mut); }
   .m b { color:var(--tx); font-size:15px; margin-right:3px; }
   main { padding:14px 16px 40px; }
@@ -50,9 +51,10 @@
 <body>
 <header>
   <div class="top">
-    <div><h1><b>RURUSH</b> Llamadas</h1><div class="sub" id="sub">Hola <?= asesora ?> · base 2026</div></div>
+    <div><h1><b>RURUSH</b> Llamadas</h1><div class="sub" id="sub">Hola <?= asesora ?></div></div>
     <button class="btn-s" id="recargar">🔄</button>
   </div>
+  <select class="bases" id="base"></select>
   <div class="marcador" id="marcador"></div>
 </header>
 <main id="main"><div class="vacio">Cargando tu cola…</div></main>
@@ -61,7 +63,9 @@
 <script>
 const LLAVE = <?!= JSON.stringify(llave) ?>;
 const ASESORA = <?!= JSON.stringify(asesora) ?>;
-const BASE = '2026';
+const BASES = <?!= JSON.stringify(bases) ?>;
+// base elegida (se recuerda en el celular)
+let BASE = (() => { try { const b = localStorage.getItem('rr_base_' + ASESORA); return BASES.indexOf(b) >= 0 ? b : BASES[0]; } catch (e) { return BASES[0]; } })();
 let mostrando = false, cola = [], idx = 0, estado = null, ESTADOS = [], HORAS = [], hoy = {}, pend = null, trayendo = false;
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -71,13 +75,13 @@ function toast(t, err) {
   clearTimeout(el._t); el._t = setTimeout(() => el.style.display = 'none', err ? 6000 : 2200);
 }
 
-const CLAVE_LOCAL = 'rr_cola_' + ASESORA + '_' + BASE;
+const claveLocal = () => 'rr_cola_' + ASESORA + '_' + BASE;
 function guardarLocal() {
-  try { localStorage.setItem(CLAVE_LOCAL, JSON.stringify({ dia: new Date().toDateString(), cola: cola.slice(idx), ESTADOS, HORAS })); } catch (e) {}
+  try { localStorage.setItem(claveLocal(), JSON.stringify({ dia: new Date().toDateString(), cola: cola.slice(idx), ESTADOS, HORAS })); } catch (e) {}
 }
 function leerLocal() {
   try {
-    const c = JSON.parse(localStorage.getItem(CLAVE_LOCAL) || 'null');
+    const c = JSON.parse(localStorage.getItem(claveLocal()) || 'null');
     if (c && c.dia === new Date().toDateString() && c.cola && c.cola.length) return c;
   } catch (e) {}
   return null;
@@ -86,10 +90,11 @@ function leerLocal() {
 function traer(reset) {
   if (trayendo) return; trayendo = true;
   const excluir = reset ? [] : cola.slice(idx).map((x) => x.fila);
-  const t0 = Date.now();
+  const t0 = Date.now(), base = BASE;
   google.script.run
     .withSuccessHandler((r) => {
       trayendo = false;
+      if (base !== BASE) return;   // cambió de base mientras cargaba
       ESTADOS = r.estados; HORAS = r.horas; hoy = r.hoy; pend = r.pendientes;
       if (reset) {
         // si ya se estaba mostrando la cola guardada, no cambiarle la persona en pantalla
@@ -98,7 +103,7 @@ function traer(reset) {
         if (enPantalla) { const j = cola.findIndex((x) => x.fila === enPantalla.fila); if (j > 0) { cola.splice(j, 1); cola.unshift(enPantalla); } else if (j < 0) cola.unshift(enPantalla); }
       } else { cola = cola.concat(r.cola); }
       guardarLocal();
-      $('#sub').textContent = `Hola ${ASESORA} · base 2026 · cargó en ${((Date.now() - t0) / 1000).toFixed(1)} s`;
+      $('#sub').textContent = `Hola ${ASESORA} · cargó en ${((Date.now() - t0) / 1000).toFixed(1)} s`;
       pintarMarcador();
       if (!mostrando || !actual()) { mostrando = true; pintar(); }
     })
@@ -194,7 +199,7 @@ function pintar() {
     const box = $('#fpbox'); if (box) box.style.display = estado === 'AGENDADO' ? 'block' : 'none';
   });
   $('#guardar').onclick = guardar;
-  nuevaLlamada(p.fila);
+  nuevaLlamada(BASE + ':' + p.fila);
   $('#llamar').onclick = () => { llamada.intentos++; llamada.toco = Date.now(); guardarLlamada(); actualizarBotones(); };
   // Llamada por WhatsApp: abre el chat (la asesora toca el 📞 de WhatsApp) y cuenta igual que una timbrada.
   $('#wacall').onclick = () => { llamada.intentos++; llamada.wa = (llamada.wa || 0) + 1; llamada.toco = Date.now(); guardarLlamada(); actualizarBotones(); };
@@ -222,6 +227,16 @@ function guardar() {
 function revisarCola() { if (cola.length - idx <= 5) traer(false); }
 
 $('#recargar').onclick = () => { mostrando = false; cola = []; idx = 0; $('#main').innerHTML = '<div class="vacio">Cargando…</div>'; traer(true); };
+// Selector de base: cada base tiene su propia cola
+$('#base').innerHTML = BASES.map((b) => `<option ${b === BASE ? 'selected' : ''}>${esc(b)}</option>`).join('');
+$('#base').onchange = () => {
+  BASE = $('#base').value;
+  try { localStorage.setItem('rr_base_' + ASESORA, BASE); } catch (e) {}
+  trayendo = false; mostrando = false; cola = []; idx = 0;
+  const l = leerLocal();
+  if (l) { cola = l.cola; mostrando = true; pintar(); } else $('#main').innerHTML = '<div class="vacio">Cargando la base ' + esc(BASE) + '…</div>';
+  traer(true);
+};
 // Al abrir: si hay una cola guardada de hoy, se muestra al instante y se actualiza por detrás.
 const local = leerLocal();
 if (local) { cola = local.cola; ESTADOS = local.ESTADOS; HORAS = local.HORAS; mostrando = true; pintar(); pintarMarcador(); }

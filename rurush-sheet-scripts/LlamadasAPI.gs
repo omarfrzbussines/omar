@@ -113,10 +113,13 @@ function ll_estructura(hoja) {
     rondas.push(ro);
   }
 
+  // DIA = fecha del lead, solo si está ANTES de la 1ª llamada (si no, "FECHA" sería la de la llamada)
+  const primera = rondas.length ? Math.min(rondas[0].asesor >= 0 ? rondas[0].asesor : 999, rondas[0].estado) : 999;
+  const antes = function (c) { return c >= 0 && c < primera ? c : -1; };
   return {
     head: head, ancho: ancho, numero: numero, nombre: col("NOMBRE"), rondas: rondas,
     origen: col("ORIGEN") >= 0 ? col("ORIGEN") : col("MEDIO"),
-    dia: col("DIA") >= 0 ? col("DIA") : col("FECHA"),
+    dia: antes(col("DIA")) >= 0 ? col("DIA") : antes(col("FECHA")),
     membresia: col("MENBRESIA") >= 0 ? col("MENBRESIA") : col("MEMBRESIA")
   };
 }
@@ -244,7 +247,7 @@ function ll_registrar(d) {
       if (d.horaFp) set(ro.fpHora, d.horaFp);
     }
     SpreadsheetApp.flush();
-    if (estado === "AGENDADO" && typeof procesarFilaFP === "function" && hoja.getName() === SHEET_NAME) {
+    if (estado === "AGENDADO" && typeof procesarFilaFP === "function" && BASES_FP.indexOf(hoja.getName()) >= 0) {
       try { procesarFilaFP(hoja, d.fila); } catch (err) { console.error("procesarFilaFP: " + err); }
     }
     return { fila: d.fila, ronda: libre + 1, fecha: hoy };

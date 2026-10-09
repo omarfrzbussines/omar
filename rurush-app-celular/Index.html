@@ -122,7 +122,7 @@ function pintarEquipo() {
   }
   const L = E.llamadas;
   if (L) {
-    h += `<h2>📞 Llamadas <small>base 2026</small></h2>
+    h += `<h2>📞 Llamadas <small>todas las bases</small></h2>
       <div class="seg">${[['hoy', 'Hoy'], ['semana', 'Semana'], ['mes', 'Mes']].map(([k, t]) => `<button data-p="${k}" class="${k === periodo ? 'on' : ''}">${t}</button>`).join('')}</div>`;
     const P = L[periodo] || {};
     const tot = Object.values(P).reduce((t, s) => t + s.n, 0);
@@ -144,6 +144,7 @@ function pintarEquipo() {
           <div><b>${pct(s.agend, s.n)}%</b><span>llamada → FP</span></div>
         </div>
         ${periodo === 'hoy' && s.primera != null ? `<div class="d">🕘 Primera ${hora12(s.primera)} · última ${hora12(s.ultima)}</div>` : ''}
+        ${s.bases ? `<div class="d">📂 ${Object.entries(s.bases).sort((a, b) => b[1] - a[1]).map(([b, n]) => `${esc(b)} <b>${n}</b>`).join(' · ')}</div>` : ''}
         ${al.map((x) => `<div class="alerta">${x}</div>`).join('')}</div>`;
     }).join('') || `<div class="list"><div class="vacio">Sin llamadas ${periodo === 'hoy' ? 'hoy' : periodo === 'semana' ? 'esta semana' : 'este mes'}.</div></div>`;
   }
