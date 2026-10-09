@@ -43,3 +43,15 @@ de MÓNICA, DANNA y LAURA (`…/exec?k=…`). Mándale a cada una el suyo.
 
 ## Después de pegar todo → avísale a Claude
 Claude agrega las columnas a la pestaña 2026 y verifica que el RESUMEN dé los mismos números.
+
+## 7. (Opcional) Lectura rápida de la cola con la API de Sheets
+Mismo arreglo que bajó RURUSH Hoy de 59 s a 2 s. El código ya viene en `AppLlamadas.gs`
+y se activa solo cuando el proyecto tiene el servicio:
+1. Pega la versión nueva de **AppLlamadas.gs** → Ctrl+S.
+2. A la izquierda, **Servicios → +** → **Google Sheets API** → **Agregar** (identificador: `Sheets`).
+3. Selector de funciones → **app_probarApi** → ▶ Ejecutar. El registro debe decir
+   `misma cola: SÍ ✅` y los milisegundos con y sin API.
+4. Publica la **nueva versión** (paso 5).
+
+Para volver atrás: quita el servicio Sheets (o pon `APP_USAR_API = false`). La app sigue
+funcionando con la lectura de siempre.

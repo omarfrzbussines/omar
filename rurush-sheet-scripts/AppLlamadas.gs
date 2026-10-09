@@ -73,13 +73,14 @@ function app_contadorHoy(asesora) {
  *  Fuera: cerrados, 6 llamadas, llamados hoy, los que lleva otra asesora, reservados. */
 const APP_BLOQUE = 1200;
 
-function app_getCola(llave, base, excluir) {
+function app_getCola(llave, base, excluir, sinApi) {
   const t0 = Date.now();
   const asesora = app_asesora(llave);
   if (APP_BASES.indexOf(base) < 0) throw new Error("Base no habilitada: " + base);
-  const hoja = SpreadsheetApp.getActive().getSheetByName(base);
+  const api = !sinApi && app_conApi();
+  const hoja = api ? app_hojaApi(base) : SpreadsheetApp.getActive().getSheetByName(base);
   const est = ll_estructura(hoja);
-  const ultima = app_ultimaFila(hoja, est);
+  const ultima = api ? hoja.ultimaFila(est) : app_ultimaFila(hoja, est);
   const hoy = Utilities.formatDate(new Date(), "America/Lima", "yyyy-MM-dd");
   const yaTengo = {};
   (excluir || []).forEach(function (f) { yaTengo[f] = true; });
@@ -89,7 +90,7 @@ function app_getCola(llave, base, excluir) {
 
   for (let fin = ultima; fin > LL_FILA_HEADER; fin -= APP_BLOQUE) {
     const ini = Math.max(LL_FILA_HEADER + 1, fin - APP_BLOQUE + 1);
-    const datos = hoja.getRange(ini, 1, fin - ini + 1, est.ancho).getValues();
+    const datos = api ? hoja.filas(est, ini, fin) : hoja.getRange(ini, 1, fin - ini + 1, est.ancho).getValues();
     leidas += datos.length;
     const bloque = [];
     for (let i = datos.length - 1; i >= 0; i--) {
@@ -139,8 +140,81 @@ function app_getCola(llave, base, excluir) {
 
   return {
     asesora: asesora, cola: cola, hoy: app_contadorHoy(asesora), estados: APP_ESTADOS, horas: LL_HORAS,
-    pendientes: null, leidas: leidas, ms: Date.now() - t0
+    pendientes: null, leidas: leidas, ms: Date.now() - t0, api: api
   };
+}
+
+/* ---------- lectura rápida con la API de Sheets ----------
+   SpreadsheetApp espera a que el Sheet recalcule (RESUMEN, etc.) antes de cada lectura:
+   en RURUSH Hoy eso eran 6-15 s por consulta. La API de Sheets devuelve los valores ya
+   calculados. Se activa sola cuando el proyecto tiene el servicio avanzado "Sheets"
+   (Servicios → + → Google Sheets API); sin él, la app sigue leyendo como antes. */
+const APP_USAR_API = true;
+
+function app_conApi() {
+  return APP_USAR_API && typeof Sheets !== "undefined";
+}
+
+function app_col(n) { let s = ""; for (n++; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + (n - 1) % 26) + s; return s; }
+
+function app_leerApi(rangos) {
+  const r = Sheets.Spreadsheets.Values.batchGet(SpreadsheetApp.getActive().getId(),
+    { ranges: rangos, valueRenderOption: "FORMATTED_VALUE" });
+  return (r.valueRanges || []).map(function (v) { return v.values || []; });
+}
+
+// "08/10/2026" → Date a la medianoche de Lima (lo mismo que devuelve getValues).
+function app_aFecha(v) {
+  const m = String(v || "").trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})(?!\d)/);
+  if (!m) return v;
+  const a = Number(m[3].length === 2 ? "20" + m[3] : m[3]);
+  return new Date(Date.UTC(a, Number(m[2]) - 1, Number(m[1]), 5));
+}
+
+/* Imita lo que app_getCola usa de la hoja (getLastColumn / getRange del encabezado para
+   ll_estructura), más ultimaFila y filas, leyendo con la API. */
+function app_hojaApi(base) {
+  const q = "'" + base + "'!";
+  const head = app_leerApi([q + LL_FILA_HEADER + ":" + LL_FILA_HEADER])[0][0] || [];
+  return {
+    getLastColumn: function () { return head.length; },
+    getRange: function () { return { getValues: function () { return [head]; } }; },
+    ultimaFila: function (est) {
+      const c = app_col(est.numero);
+      const col = app_leerApi([q + c + "1:" + c])[0];
+      for (let i = col.length - 1; i >= LL_FILA_HEADER; i--) if (String((col[i] || [])[0] || "").trim()) return i + 1;
+      return LL_FILA_HEADER;
+    },
+    filas: function (est, ini, fin) {
+      const datos = app_leerApi([q + "A" + ini + ":" + app_col(est.ancho - 1) + fin])[0];
+      const fechas = [est.dia].concat(est.rondas.map(function (ro) { return ro.fecha; })).filter(function (c) { return c >= 0; });
+      const out = [];
+      for (let i = 0; i <= fin - ini; i++) {
+        const f = (datos[i] || []).slice();
+        while (f.length < est.ancho) f.push("");
+        fechas.forEach(function (c) { if (f[c]) f[c] = app_aFecha(f[c]); });
+        out.push(f);
+      }
+      return out;
+    }
+  };
+}
+
+/* Prueba desde el editor: compara la cola leída con la API y sin ella (debe salir igual). */
+function app_probarApi() {
+  const llave = Object.keys(JSON.parse(PropertiesService.getScriptProperties().getProperty("APP_LLAVES") || "{}"))[0];
+  if (typeof Sheets === "undefined") { Logger.log("Falta el servicio Sheets: Servicios → + → Google Sheets API → Agregar."); return; }
+  const cache = CacheService.getScriptCache();
+  const a = app_getCola(llave, "2026", []);
+  a.cola.forEach(function (x) { cache.remove("r2026" + x.fila); });
+  const b = app_getCola(llave, "2026", [], true);
+  b.cola.forEach(function (x) { cache.remove("r2026" + x.fila); });
+  const igual = JSON.stringify(a.cola) === JSON.stringify(b.cola);
+  Logger.log("Con API: " + a.ms + " ms · sin API: " + b.ms + " ms · misma cola: " + (igual ? "SÍ ✅" : "NO ❌"));
+  if (!igual) {
+    const i = a.cola.findIndex(function (x, k) { return JSON.stringify(x) !== JSON.stringify(b.cola[k]); });
+    Logger.log("Primera diferencia (puesto " + (i + 1) + "):\nAPI:   " + JSON.stringify(a.cola[i]) + "\nantes: " + JSON.stringify(b.cola[i]));
+  }
 }
 
 function app_guardar(llave, base, fila, numero, estado, obs, fpFecha, fpHora, intentos, segundos) {

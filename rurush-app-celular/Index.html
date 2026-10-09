@@ -116,7 +116,7 @@ function pintarEquipo() {
     h += lst.map((a) => `<div class="ase"><div class="top"><span class="nom">${esc(a.nombre)}</span><span class="pc">${pct(a.avance, a.meta)}%</span></div>
       <div class="d"><b>${soles(a.avance)}</b> de ${soles(a.meta)} · faltan ${soles(a.falta)}</div>
       <div class="bar"><i style="width:${Math.min(pct(a.avance, a.meta), 100)}%"></i></div>
-      <div class="d">Hoy <b>${soles(a.hoy)}</b> · ${a.ventas} ventas · ticket ${soles(a.ticket)}<br>
+      <div class="d">Hoy <b>${soles(a.hoy)}</b> · ${a.ventas} venta${a.ventas === 1 ? "" : "s"} · ticket ${soles(a.ticket)}<br>
       Nuevos ${pct(a.nuevos, a.nuevos + a.fidel)}% · Fidelización ${pct(a.fidel, a.nuevos + a.fidel)}%</div></div>`).join('')
       || '<div class="list"><div class="vacio">Sin datos de esta asesora.</div></div>';
   }
