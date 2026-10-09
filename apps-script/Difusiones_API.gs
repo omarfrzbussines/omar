@@ -110,7 +110,7 @@ function cabecera_(sh) {
     if (cel >= 0 && env >= 0 && msj >= 0) {
       return {
         row: r + 1,
-        cod: col(/^COD/), nombre: col(/^NOMBRE/), celular: cel, asesora: col(/^ASESORA/),
+        cod: col(/^COD/), nombre: col(/^NOMBRE/), celular: cel, asesora: col(/^ASES/),
         mensaje: msj, env: env, fecha: col(/^FECHA$/), resultado: col(/^RESULTADO/), nota: col(/^MOTIVO|^NOTA/),
         width: vals[r].length,
       };
@@ -228,6 +228,7 @@ function pendientes_(tab, asesora, diasAntiDup) {
 
     if (res && !/^PENDIENTE/i.test(res)) return excluir(res);
     if (!tel) return excluir('Celular inválido');
+    if (/(\d)\1{5,}/.test(tel.slice(2))) return excluir('Número falso (dígitos repetidos)');
     if (vistos[tel]) return excluir('Celular repetido en esta pestaña (fila ' + vistos[tel] + ')');
     vistos[tel] = f.fila;
 
