@@ -516,8 +516,10 @@ async function procesarCola() {
 /* ---------- carpeta de fotos (contabilidad) ----------
    CFG.fotos es un link de carpeta o una ruta como "CONTABILIDAD - RURUSH/COMPRAS".
    La ruta se busca en Mis archivos (sirve un acceso directo a la carpeta compartida)
-   y si no, en "Compartidos conmigo". Adentro: año / mes, usando las carpetas que ya
-   existen ("10 OCTUBRE", "09 SETIEMBRE"…) y creando solo las que falten. */
+   y si no, en "Compartidos conmigo". Adentro: año / mes ("2026 / 10 OCTUBRE",
+   "09 SETIEMBRE"…). Esas carpetas son de la contadora: la app NO crea, renombra,
+   borra ni sobrescribe nada ahí, solo agrega fotos (con nombre nuevo si ya existe uno igual).
+   Si la carpeta del mes todavía no existe, la foto espera en la cola hasta que la creen. */
 
 const sinTildes = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
 // Un acceso directo (o un elemento compartido) apunta a la carpeta real en el OneDrive de otra persona.
@@ -554,11 +556,11 @@ async function baseFotos() {
   BASE_FOTOS = Object.assign({ conf }, d);
   return BASE_FOTOS;
 }
-// Hija que cumple `ok`; si no hay, la crea con `nombre`.
-async function buscarOCrear(d, ok, nombre) {
+// Carpeta hija que cumple `ok` (solo busca, nunca crea).
+async function buscar(d, ok, falta) {
   const it = (await hijos(d)).find((x) => x.folder && ok(sinTildes(x.name)));
-  if (it) return destinoDe(it, d.driveId);
-  return { driveId: d.driveId, id: await carpeta(d.driveId, d.id, nombre), nombre };
+  if (!it) { const e = new Error(falta); e.esperar = true; throw e; }
+  return destinoDe(it, d.driveId);
 }
 // Nuestra copia: <carpeta de la app>/AAAA-MM MES.
 async function carpetaPropia(fechaIso) {
@@ -573,8 +575,9 @@ async function carpetaFotos(fechaIso) {
   const base = await baseFotos();
   const anio = fechaIso.slice(0, 4), m = Number(fechaIso.slice(5, 7));
   const mes = MESES[m - 1], alias = m === 9 ? ['SETIEMBRE', 'SEPTIEMBRE'] : [mes];
-  const dA = await buscarOCrear(base, (n) => n === anio, anio);
-  const dM = await buscarOCrear(dA, (n) => new RegExp('^0?' + m + '(\\D|$)').test(n) || alias.some((a) => n.includes(a)), pad(m) + ' ' + mes);
+  const espera = (c) => `La contadora todavía no creó la carpeta ${c}. La foto se sube sola cuando exista.`;
+  const dA = await buscar(base, (n) => n === anio, espera(anio));
+  const dM = await buscar(dA, (n) => new RegExp('^0?' + m + '(\\D|$)').test(n) || alias.some((a) => n.includes(a)), espera(anio + ' / ' + pad(m) + ' ' + mes));
   MES_CACHE[clave] = Object.assign(dM, { ruta: CFG.fotos.split('/').pop() + ' / ' + anio + ' / ' + dM.nombre });
   return MES_CACHE[clave];
 }
@@ -614,7 +617,7 @@ async function subir(it) {
   }
   if (CFG.fotos) {
     try { await subirFotos(it, 'subidasConta', carpetaFotos); }
-    catch (e) { throw new Error('Tu copia y el Excel ya están. Falta la copia para la contadora: ' + e.message); }
+    catch (e) { throw new Error('Tu foto y el Excel ya están. ' + (e.esperar ? e.message : 'Falta la copia para la contadora: ' + e.message)); }
   }
 }
 
@@ -832,8 +835,9 @@ function pintarConf() {
     <label>📷 Copia de las fotos para la contadora</label>
     <input id="cFotos" value="${esc(CFG.fotos)}" placeholder="Vacío = sin copia para la contadora">
     <div class="ayuda">Las fotos siempre quedan en tu carpeta (abajo) y además se copian aquí.
+      En la carpeta de la contadora la app <b>solo agrega fotos</b>: no crea carpetas ni toca lo que hay.
       Ruta (ej. <code>CONTABILIDAD - RURUSH/COMPRAS</code>) o link de la carpeta. Adentro la app usa
-      <code>2026 / 10 OCTUBRE</code>: las carpetas que ya existen, y crea la del mes nuevo si falta.</div>
+      la carpeta del mes que ya creó la contadora (<code>2026 / 10 OCTUBRE</code>). Si aún no existe, espera.</div>
     <button class="btn" id="cProbarFotos" style="margin-top:8px">🔍 Probar carpeta de fotos</button>
     <label>Carpeta de la app (Excel y ajustes)</label>
     <input id="cCarpeta" value="${esc(carpetaConf())}">

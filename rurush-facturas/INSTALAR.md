@@ -22,12 +22,12 @@ RURUSH Facturas/                                CONTABILIDAD - RURUSH/COMPRAS/
 ├── config.json             ← ajustes                ├── 09 SETIEMBRE/
 ├── solicitudes/            ← celulares nuevos       ├── 10 OCTUBRE/
 └── 2026-10 OCTUBRE/                                 │   └── 2026-10-09 - AGUA - … - OMAR.jpg
-    └── 2026-10-09 - AGUA - … - OMAR.jpg             └── 11 NOVIEMBRE/  ← la crea la app si falta
+    └── 2026-10-09 - AGUA - … - OMAR.jpg             └── 11 NOVIEMBRE/  ← la crea la contadora
 ```
 
 - La carpeta del mes se elige por la **fecha del comprobante** (una boleta de setiembre va a `09 SETIEMBRE`).
-- En la carpeta de la contadora la app **usa las carpetas que ya existen** (`10 OCTUBRE`, `09 SETIEMBRE`…) y solo crea la del mes nuevo si todavía no está.
-- Orden al subir: 1) tu copia, 2) la fila en tu Excel, 3) la copia para la contadora. Si la 3 falla (por ejemplo, si la contadora quitó el permiso), lo tuyo ya quedó y la app reintenta solo la copia de la contadora.
+- En la carpeta de la contadora la app **solo agrega fotos**: no crea carpetas, no renombra, no borra y no sobrescribe nada (si ya hay un archivo con el mismo nombre, la foto entra con otro nombre). Usa la carpeta del mes que ella ya creó (`10 OCTUBRE`, `09 SETIEMBRE`…). Si todavía no existe (ej. el 1 de noviembre), tu foto y tu Excel quedan igual y la copia para ella **espera** y se sube sola cuando la cree.
+- Orden al subir: 1) tu copia, 2) la fila en tu Excel, 3) la copia para la contadora. Si la 3 falla o espera, lo tuyo ya quedó y la app reintenta solo la copia de la contadora.
 - Se configura en **⚙️ Ajustes → 📷 Copia de las fotos para la contadora** (por defecto `CONTABILIDAD - RURUSH/COMPRAS`). El botón **🔍 Probar carpeta de fotos** dice a qué carpeta irán las fotos de hoy. Vacío = sin copia para la contadora.
 - La app encuentra `CONTABILIDAD - RURUSH` en "Compartidos conmigo". Si no la encuentra: en OneDrive web → Compartidos → `CONTABILIDAD - RURUSH` → **Añadir acceso directo a Mis archivos**.
 
