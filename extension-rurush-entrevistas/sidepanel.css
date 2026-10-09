@@ -82,3 +82,28 @@ dt { color: var(--gris); } dd { margin: 0; }
 /* Mensajes */
 .dosc { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px; }
 .plantilla textarea { min-height: 110px; margin: 6px 0; }
+
+/* Botones-enlace y confirmación */
+a.btn { flex: 1; display: block; text-align: center; text-decoration: none; border-radius: 8px; padding: 7px 12px; background: var(--naranja); color: #fff; }
+a.btn.sec { background: #fff; color: var(--texto); border: 1px solid var(--borde); }
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; z-index: 20; padding: 16px; }
+.modal-caja { background: #fff; border-radius: 12px; padding: 16px; max-width: 340px; width: 100%; }
+.modal-caja p { margin: 0 0 6px; font-size: 14px; }
+
+/* Celular: todo más grande para el dedo */
+body.movil { font-size: 15px; }
+.movil header { padding: 10px 12px; }
+.movil header h1 { font-size: 17px; }
+.movil button, .movil a.btn { padding: 11px 14px; }
+.movil button.icono { padding: 6px 10px; font-size: 18px; }
+.movil input, .movil select, .movil textarea { font-size: 16px; padding: 10px; } /* 16px evita el zoom de iPhone */
+.movil .chip { padding: 7px 12px; font-size: 13px; }
+.movil .tarjeta { padding: 12px; }
+.movil .sub, .movil dl, .movil .flag, .movil .crit .mirar, .movil .qa .p { font-size: 13px; }
+.movil .enlaces a { padding: 9px 12px; font-size: 14px; }
+.movil .tabs { top: 49px; }
+.movil .tabs button { padding: 10px 2px; font-size: 13px; }
+.movil .botones { grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.movil .botones button { padding: 12px 0; font-size: 16px; }
+.movil .medio { font-size: 14px; } .movil .medio input { width: 20px; height: 20px; }
+.movil .crit summary { font-size: 14px; padding: 4px 0; }

@@ -1,12 +1,14 @@
 /**
- * RURUSH Entrevistas — puente entre la extensión de Chrome y el Sheet
+ * RURUSH Entrevistas — app del celular + puente de la extensión de Chrome con el Sheet
  * "ENTREVISTA ASESOR V3" (pestaña "Respuestas de formulario 2").
  *
- * Se pega en un proyecto de Apps Script y se implementa como Aplicación web
- * (Ejecutar como: Yo · Acceso: Cualquier usuario). Sin la llave no responde nada.
+ * Se implementa como Aplicación web (Ejecutar como: Yo · Acceso: Cualquier usuario).
+ * Sin la llave no muestra ni responde nada.
  *
- * GET  ?k=LLAVE&a=lista              → todos los postulantes
- * POST {k, a:'guardar', fila, huella, ...} → guarda estado / notas / entrevista
+ * GET  ?k=LLAVE                      → la app del celular (App.html)
+ * GET  ?k=LLAVE&a=lista              → todos los postulantes (extensión)
+ * POST {k, a:'guardar', fila, huella, ...} → guarda estado / notas / entrevista (extensión)
+ * La app llama a appLista / appGuardar con google.script.run.
  */
 
 var SHEET_ID = '1XNgxVXAu2nwAwFkxtvQQuksQzHqHyIz72V8r73nLDPY';
@@ -60,13 +62,33 @@ var CAMPOS = [
 ];
 
 function doGet(e) {
+  var p = (e && e.parameter) || {};
+  if (!p.a) return app_(p.k);
   return responder_(function () {
-    var p = (e && e.parameter) || {};
     validarLlave_(p.k);
     if (p.a === 'lista') return lista_();
     throw new Error('Acción desconocida');
   });
 }
+
+function app_(k) {
+  var llave = PropertiesService.getScriptProperties().getProperty('LLAVE');
+  var salida;
+  if (!llave || k !== llave) {
+    salida = HtmlService.createHtmlOutput('<p style="font:17px system-ui;padding:24px">🔒 Este link no tiene la llave correcta. Pide el link completo.</p>');
+  } else {
+    var t = HtmlService.createTemplateFromFile('App');
+    t.llave = k;
+    t.config = { firma: PropertiesService.getScriptProperties().getProperty('FIRMA') || 'Rurush Fitness Club' };
+    salida = t.evaluate();
+  }
+  return salida.setTitle('Rurush Entrevistas')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1');
+}
+
+// Llamadas de la app (google.script.run)
+function appLista(k) { return envolver_(function () { validarLlave_(k); return lista_(); }); }
+function appGuardar(p) { return envolver_(function () { validarLlave_(p && p.k); return guardar_(p); }); }
 
 function doPost(e) {
   return responder_(function () {
@@ -77,10 +99,12 @@ function doPost(e) {
   });
 }
 
+function envolver_(fn) {
+  try { var out = fn(); out.ok = true; return out; } catch (err) { return { ok: false, error: String(err.message || err) }; }
+}
+
 function responder_(fn) {
-  var out;
-  try { out = fn(); out.ok = true; } catch (err) { out = { ok: false, error: String(err.message || err) }; }
-  return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
+  return ContentService.createTextOutput(JSON.stringify(envolver_(fn))).setMimeType(ContentService.MimeType.JSON);
 }
 
 function validarLlave_(k) {
@@ -97,8 +121,10 @@ function crearLlave() {
     llave = Utilities.getUuid().replace(/-/g, '');
     props.setProperty('LLAVE', llave);
   }
+  var url = ScriptApp.getService().getUrl();
   Logger.log('LLAVE → ' + llave);
-  Logger.log('URL   → ' + (ScriptApp.getService().getUrl() || '(implementa primero como Aplicación web)'));
+  Logger.log('URL   → ' + (url || '(implementa primero como Aplicación web)'));
+  if (url) Logger.log('📱 LINK DEL CELULAR → ' + url + '?k=' + llave);
 }
 
 function norm_(s) {

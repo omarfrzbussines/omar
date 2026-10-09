@@ -27,15 +27,8 @@ Mientras entrevistas, los puntajes se guardan solos en la PC: si cierras el pane
 
 ### 1. Apps Script (el puente con el Sheet)
 
-1. **script.google.com → Nuevo proyecto** → nombre **RURUSH Entrevistas**.
-2. `Código.gs`: borra todo y pega **apps-script/Code.gs**. 💾 Guardar.
-3. **Implementar → Nueva implementación → ⚙️ Aplicación web**
-   - Ejecutar como: **Yo**
-   - Quién tiene acceso: **Cualquier usuario**
-   - **Implementar** → **Autorizar** (Avanzado → Ir a RURUSH Entrevistas → Permitir).
-   - Copia la **URL** (termina en `/exec`).
-   > Sin la llave el link no muestra nada.
-4. Selector de funciones → **crearLlave** → **▶ Ejecutar**. En el registro sale la **LLAVE**.
+Es el mismo de la app del celular: sigue **`rurush-app-entrevistas/INSTALAR.md`** (pasos 1 a 6).
+Anota la **URL** (termina en `/exec`) y la **LLAVE** que salen al ejecutar `crearLlave`.
 
 ### 2. Extensión
 
@@ -46,11 +39,14 @@ Mientras entrevistas, los puntajes se guardan solos en la PC: si cierras el pane
 
 Si cambias `Code.gs`: **Implementar → Gestionar implementaciones → ✏️ → Versión: nueva** (así la URL no cambia).
 
+📱 También está como **app del celular** (mismas pantallas): ver `rurush-app-entrevistas/INSTALAR.md`.
+
 ## Cambiar reglas, preguntas o mensajes
 
 Todo está en **reglas.js**: el pre-filtro (`evaluar`), las preguntas de cada criterio
 (`CRITERIOS`) y las plantillas de WhatsApp (`PLANTILLAS`). Después de editar:
-`chrome://extensions` → 🔄 en la extensión. Los umbrales de la recomendación y la firma
+`chrome://extensions` → 🔄 en la extensión, y para el celular corre
+`sh rurush-app-entrevistas/construir.sh` y pega el nuevo App.html en el Apps Script. Los umbrales de la recomendación y la firma
 de los mensajes están en Opciones.
 
 ## Límites
