@@ -1,0 +1,760 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#111111">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Facturas">
+<link rel="icon" href="https://em-content.zobj.net/source/apple/391/receipt_1f9fe.png">
+<link rel="apple-touch-icon" href="https://em-content.zobj.net/source/apple/391/receipt_1f9fe.png">
+<title>RURUSH Facturas</title>
+<!-- Microsoft (login + OneDrive) y SheetJS (solo para crear el Excel la primera vez) -->
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root { --bg:#111; --card:#1c1c1e; --line:#2c2c2e; --tx:#f2f2f2; --mut:#9a9a9f; --red:#e53935; --or:#ff7a1a; --grn:#34c759; --ice:#64b5f6; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--tx); font:15px -apple-system, system-ui, Roboto, sans-serif; padding-bottom:72px; }
+  header { position:sticky; top:0; z-index:5; background:var(--bg); padding:14px 16px 8px; border-bottom:1px solid var(--line); }
+  .top { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  h1 { font-size:20px; margin:0; } h1 b { color:var(--red); }
+  .sub { color:var(--mut); font-size:12px; margin-top:2px; }
+  .btn { background:var(--card); color:var(--tx); border:1px solid var(--line); border-radius:10px; padding:8px 12px; font-size:14px; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .chips.scroll { flex-wrap:nowrap; overflow-x:auto; padding-bottom:2px; }
+  .chip { flex:none; padding:8px 13px; border-radius:16px; background:var(--card); border:1px solid var(--line); color:var(--mut); font-size:14px; }
+  .chip.on { background:var(--red); border-color:var(--red); color:#fff; }
+  .chip small { display:block; font-size:11px; opacity:.8; }
+  main { padding:12px 16px; }
+  label { display:block; color:var(--mut); font-size:12px; margin:14px 0 6px; }
+  label i { color:var(--red); font-style:normal; }
+  input, select, textarea { width:100%; background:var(--card); color:var(--tx); border:1px solid var(--line); border-radius:10px; padding:11px 12px; font-size:16px; font-family:inherit; }
+  textarea { min-height:110px; font-size:14px; }
+  input:focus, textarea:focus { outline:none; border-color:var(--or); }
+  .dos { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .dos label { margin-top:14px; }
+  .foto { display:flex; align-items:center; justify-content:center; flex-direction:column; gap:4px; width:100%; min-height:120px; background:var(--card); border:2px dashed var(--line); border-radius:14px; color:var(--tx); font-size:16px; }
+  .foto span { font-size:34px; }
+  .fotos { display:flex; gap:8px; overflow-x:auto; }
+  .fotos div { position:relative; flex:none; }
+  .fotos img { width:96px; height:128px; object-fit:cover; border-radius:10px; display:block; }
+  .fotos div button { position:absolute; top:4px; right:4px; width:26px; height:26px; border-radius:50%; border:0; background:rgba(0,0,0,.7); color:#fff; font-size:14px; }
+  .fotos .mas { width:96px; height:128px; border-radius:10px; border:2px dashed var(--line); background:var(--card); color:var(--mut); font-size:13px; }
+  .calc { background:var(--card); border-radius:14px; padding:12px; margin-top:18px; }
+  .calc h3 { margin:0 0 8px; font-size:13px; color:var(--mut); font-weight:600; }
+  .calc .r { display:flex; justify-content:space-between; padding:4px 0; font-size:14px; }
+  .calc .r b { font-variant-numeric:tabular-nums; }
+  .calc .r.tot { border-top:1px solid var(--line); margin-top:4px; padding-top:8px; font-size:16px; }
+  .calc .arch { color:var(--mut); font-size:11px; margin-top:8px; word-break:break-all; }
+  .desc { color:#ffb74d; }
+  .guardar { width:100%; margin-top:18px; padding:15px; border:0; border-radius:14px; background:var(--grn); color:#06210f; font-size:17px; font-weight:700; }
+  .guardar:disabled { background:var(--line); color:var(--mut); }
+  .falta { color:var(--mut); font-size:12px; text-align:center; margin-top:8px; }
+  .estado { border-radius:12px; padding:10px 12px; margin-bottom:12px; font-size:13px; display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .estado.sub { background:#13293d; color:var(--ice); } .estado.err { background:#3d1b1b; color:#ff8a80; } .estado.ok { background:#1f3d2b; color:var(--grn); }
+  .estado button { flex:none; background:none; border:1px solid currentColor; color:inherit; border-radius:8px; padding:5px 9px; font-size:12px; }
+  .list { background:var(--card); border-radius:14px; overflow:hidden; }
+  .row { display:flex; align-items:center; gap:10px; padding:11px 12px; border-top:1px solid var(--line); }
+  .row:first-child { border-top:0; }
+  .row .main { flex:1; min-width:0; }
+  .row .t { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .row .d { color:var(--mut); font-size:12px; margin-top:2px; }
+  .row .m { font-weight:700; font-variant-numeric:tabular-nums; }
+  .tag { display:inline-block; padding:1px 7px; border-radius:8px; font-size:11px; margin-left:4px; background:var(--line); color:var(--mut); }
+  .tag.ok { background:#1f3d2b; color:var(--grn); } .tag.pend { background:#13293d; color:var(--ice); } .tag.err { background:#3d1b1b; color:#ff8a80; }
+  h2 { font-size:15px; margin:18px 0 8px; display:flex; justify-content:space-between; align-items:baseline; }
+  h2 small { color:var(--mut); font-weight:400; font-size:12px; }
+  .vacio { color:var(--mut); padding:14px 12px; font-size:13px; }
+  .ayuda { color:var(--mut); font-size:12px; margin-top:6px; line-height:1.45; }
+  .ayuda code { background:var(--card); padding:1px 5px; border-radius:5px; color:var(--tx); }
+  .login { text-align:center; padding:60px 20px; }
+  .login p { color:var(--mut); line-height:1.5; }
+  .login .guardar { max-width:320px; }
+  nav { position:fixed; bottom:0; left:0; right:0; display:flex; background:#161618; border-top:1px solid var(--line); padding-bottom:env(safe-area-inset-bottom); }
+  nav button { flex:1; background:none; border:0; color:var(--mut); padding:10px 0 12px; font-size:12px; }
+  nav button span { display:block; font-size:20px; }
+  nav button.on { color:var(--tx); }
+  .toast { position:fixed; left:16px; right:16px; bottom:84px; background:#2c2c2e; color:var(--tx); padding:12px 14px; border-radius:12px; font-size:14px; text-align:center; opacity:0; transition:opacity .25s; pointer-events:none; z-index:20; }
+  .toast.on { opacity:1; }
+  .hide { display:none !important; }
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <div><h1><b>RURUSH</b> Facturas</h1><div class="sub" id="sub">Cargando…</div></div>
+  </div>
+</header>
+<main id="main"><div class="login"><p>Cargando…</p></div></main>
+<nav id="nav" class="hide">
+  <button data-tab="nueva" class="on"><span>📷</span>Nueva</button>
+  <button data-tab="hist"><span>🧾</span>Historial</button>
+  <button data-tab="conf"><span>⚙️</span>Ajustes</button>
+</nav>
+<input type="file" id="cam" accept="image/*" capture="environment" class="hide">
+<div class="toast" id="toast"></div>
+
+<script>
+/* RURUSH Facturas — la asesora toma la foto de la factura, llena lo importante
+   y la app calcula el resto y lo sube sola a OneDrive:
+     • la foto (comprimida) en  <carpeta>/AAAA-MM MES/
+     • una fila en              <carpeta>/Control de facturas.xlsx  (tabla "Ventas")
+   Si no hay internet, queda en cola en el celular y se sube apenas vuelva.
+   Ajustes compartidos (planes, precios, asesoras) viven en <carpeta>/config.json. */
+
+// ⬇️ PEGA AQUÍ el "Id. de aplicación (cliente)" de Azure (ver INSTALAR.md, paso 1).
+const CLIENT_ID = 'PEGA-AQUI-EL-ID-DE-APLICACION';
+
+const SCOPES = ['User.Read', 'Files.ReadWrite.All'];
+const GRAPH = 'https://graph.microsoft.com/v1.0';
+const EXCEL = 'Control de facturas.xlsx';
+const TABLA = 'Ventas';
+const HOJA = 'Registro';
+const MESES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SETIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+const COLUMNAS = ['ID', 'Fecha', 'Hora', 'Mes', 'Asesora', 'Tipo', 'Cliente', 'DNI', 'Celular', 'Plan',
+  'Precio lista', 'Descuento', 'Monto cobrado', 'Base imponible', 'IGV', 'Método de pago', 'Nº comprobante',
+  'Inicio', 'Vence', 'Fotos', 'Ver foto', 'Observación', 'Subido por'];
+const CONFIG_BASE = {
+  igv: 18, precioIncluyeIgv: true,
+  asesoras: ['DANNA', 'LAURA', 'MÓNICA', 'VALERIA', 'DILAN', 'OMAR'],
+  tipos: ['Nuevo', 'Renovación'],
+  metodos: ['Efectivo', 'Yape', 'Plin', 'Tarjeta', 'Transferencia'],
+  // duracion: "1m" = 1 mes, "15d" = 15 días
+  planes: [
+    { nombre: 'Mensual', precio: 150, duracion: '1m' },
+    { nombre: 'Trimestral', precio: 390, duracion: '3m' },
+    { nombre: 'Semestral', precio: 690, duracion: '6m' },
+    { nombre: 'Anual', precio: 1200, duracion: '12m' },
+    { nombre: 'Pase diario', precio: 15, duracion: '1d' }
+  ]
+};
+
+/* ---------- utilidades ---------- */
+
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pad = (n) => String(n).padStart(2, '0');
+const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+const soles = (n) => 'S/ ' + r2(n).toFixed(2);
+const num = (v) => { const n = parseFloat(String(v || '').replace(',', '.').replace(/[^\d.]/g, '')); return isNaN(n) ? 0 : n; };
+const isoLocal = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+const fm = (iso) => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : '';
+const limpio = (s) => String(s || '').replace(/[\\/:*?"<>|#%]/g, '').replace(/\s+/g, ' ').trim();
+const ls = {
+  get(k, d) { try { const v = localStorage.getItem('fac_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('fac_' + k, JSON.stringify(v)); } catch (e) { /* lleno o bloqueado */ } }
+};
+function toast(t, ms) {
+  const el = $('#toast'); el.textContent = t; el.classList.add('on');
+  clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), ms || 2600);
+}
+
+// Fin del plan: "3m" suma meses (mismo día), "15d" suma días.
+function vence(inicioIso, duracion) {
+  const m = String(duracion || '').trim().toLowerCase().match(/^(\d+)\s*([md])$/);
+  if (!inicioIso || !m) return '';
+  const d = new Date(inicioIso + 'T12:00:00');
+  if (m[2] === 'd') { d.setDate(d.getDate() + Number(m[1])); return isoLocal(d); }
+  const dia = d.getDate();
+  d.setDate(1); d.setMonth(d.getMonth() + Number(m[1]));
+  d.setDate(Math.min(dia, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()));   // 31 ene + 1m = 28/29 feb
+  return isoLocal(d);
+}
+
+// El link "?carpeta=..." que manda el admin queda guardado en este celular.
+(() => {
+  const p = new URLSearchParams(location.search);
+  if (p.get('carpeta')) {
+    ls.set('carpeta', p.get('carpeta'));
+    history.replaceState(null, '', location.pathname + location.hash);
+  }
+})();
+
+/* ---------- login Microsoft ---------- */
+
+let MS = null;
+async function iniciarMsal() {
+  MS = new msal.PublicClientApplication({
+    auth: { clientId: CLIENT_ID, authority: 'https://login.microsoftonline.com/common', redirectUri: location.origin + location.pathname },
+    cache: { cacheLocation: 'localStorage' }
+  });
+  if (MS.initialize) await MS.initialize();
+  const r = await MS.handleRedirectPromise();
+  if (r && r.account) MS.setActiveAccount(r.account);
+  if (!MS.getActiveAccount() && MS.getAllAccounts()[0]) MS.setActiveAccount(MS.getAllAccounts()[0]);
+  return MS.getActiveAccount();
+}
+const cuenta = () => MS && MS.getActiveAccount();
+async function token() {
+  const account = cuenta();
+  if (!account) throw new Error('Inicia sesión con Microsoft.');
+  try {
+    return (await MS.acquireTokenSilent({ scopes: SCOPES, account })).accessToken;
+  } catch (e) {
+    if (e instanceof msal.InteractionRequiredAuthError) {
+      await MS.acquireTokenRedirect({ scopes: SCOPES, account });
+      return new Promise(() => {});   // la página se va al login de Microsoft
+    }
+    throw e;
+  }
+}
+
+/* ---------- Microsoft Graph (OneDrive) ---------- */
+
+async function g(method, ruta, body, extra) {
+  const h = Object.assign({ Authorization: 'Bearer ' + await token() }, extra || {});
+  let cuerpo = body;
+  if (body != null && !(body instanceof Blob) && typeof body !== 'string' && !(body instanceof ArrayBuffer)) {
+    h['Content-Type'] = 'application/json'; cuerpo = JSON.stringify(body);
+  }
+  return fetch(ruta.startsWith('http') ? ruta : GRAPH + ruta, { method, headers: h, body: cuerpo == null ? undefined : cuerpo });
+}
+async function gj(method, ruta, body, extra) {
+  const r = await g(method, ruta, body, extra);
+  if (r.ok) return r.status === 204 ? null : r.json();
+  let msj = 'OneDrive respondió ' + r.status;
+  try { const j = await r.json(); if (j.error && j.error.message) msj += ': ' + j.error.message; } catch (e) { /* sin cuerpo */ }
+  const err = new Error(msj); err.status = r.status; throw err;
+}
+const ruta = (...partes) => partes.join('/').split('/').filter(Boolean).map(encodeURIComponent).join('/');
+const shareId = (url) => 'u!' + btoa(unescape(encodeURIComponent(url))).replace(/=+$/, '').replace(/\//g, '_').replace(/\+/g, '-');
+const espera = (ms) => new Promise((res) => setTimeout(res, ms));
+
+// Carpeta hija por nombre; la crea si no existe.
+async function carpeta(driveId, padreId, nombre) {
+  const r = await g('GET', `/drives/${driveId}/items/${padreId}:/${ruta(nombre)}`);
+  if (r.ok) return (await r.json()).id;
+  if (r.status !== 404) throw new Error('OneDrive respondió ' + r.status + ' al buscar la carpeta ' + nombre);
+  try {
+    return (await gj('POST', `/drives/${driveId}/items/${padreId}/children`, { name: nombre, folder: {}, '@microsoft.graph.conflictBehavior': 'fail' })).id;
+  } catch (e) {
+    if (e.status === 409) return (await gj('GET', `/drives/${driveId}/items/${padreId}:/${ruta(nombre)}`)).id;   // la creó otra asesora a la vez
+    throw e;
+  }
+}
+
+// Carpeta raíz: un link compartido (https://1drv.ms/... o https://...sharepoint.com/...) o un nombre en mi OneDrive.
+const carpetaConf = () => ls.get('carpeta', 'RURUSH Facturas');
+async function raiz() {
+  const conf = carpetaConf();
+  const c = ls.get('raiz');
+  if (c && c.conf === conf) return c;
+  let item;
+  if (/^https?:\/\//i.test(conf)) {
+    item = await gj('GET', `/shares/${shareId(conf)}/driveItem`);
+    if (!item.folder) throw new Error('El link de la carpeta no es de una carpeta.');
+  } else {
+    const drive = await gj('GET', '/me/drive');
+    const root = await gj('GET', '/me/drive/root');
+    let id = root.id;
+    for (const parte of conf.split('/').map((s) => s.trim()).filter(Boolean)) id = await carpeta(drive.id, id, parte);
+    item = await gj('GET', `/drives/${drive.id}/items/${id}`);
+    item.parentReference = Object.assign({}, item.parentReference, { driveId: drive.id });
+  }
+  const res = { conf, driveId: item.parentReference.driveId, id: item.id, nombre: item.name, web: item.webUrl };
+  ls.set('raiz', res);
+  return res;
+}
+
+/* ---------- config compartida (config.json en la carpeta) ---------- */
+
+let CFG = ls.get('config', CONFIG_BASE);
+async function cargarConfig() {
+  const R = await raiz();
+  const r = await g('GET', `/drives/${R.driveId}/items/${R.id}:/config.json:/content`);
+  if (r.ok) {
+    CFG = Object.assign({}, CONFIG_BASE, await r.json());
+  } else if (r.status === 404) {
+    CFG = Object.assign({}, CONFIG_BASE);
+    await guardarConfig(CFG);
+  } else throw new Error('OneDrive respondió ' + r.status + ' al leer config.json');
+  ls.set('config', CFG);
+}
+async function guardarConfig(c) {
+  const R = await raiz();
+  await gj('PUT', `/drives/${R.driveId}/items/${R.id}:/config.json:/content`, JSON.stringify(c, null, 2), { 'Content-Type': 'application/json' });
+  CFG = c; ls.set('config', c);
+}
+
+/* ---------- Excel ---------- */
+
+function colLetra(n) { let s = ''; for (n++; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + (n - 1) % 26) + s; return s; }
+
+async function excel() {
+  const R = await raiz();
+  const c = ls.get('excel');
+  if (c && c.raiz === R.id) return c.id;
+  const r = await g('GET', `/drives/${R.driveId}/items/${R.id}:/${ruta(EXCEL)}`);
+  let id;
+  if (r.ok) id = (await r.json()).id;
+  else if (r.status === 404) id = await crearExcel(R);
+  else throw new Error('OneDrive respondió ' + r.status + ' al buscar el Excel');
+  ls.set('excel', { raiz: R.id, id });
+  return id;
+}
+async function crearExcel(R) {
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([COLUMNAS]);
+  ws['!cols'] = COLUMNAS.map((h) => ({ wch: Math.max(12, h.length + 2) }));
+  XLSX.utils.book_append_sheet(wb, ws, HOJA);
+  const datos = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+  let item;
+  try {
+    item = await gj('PUT', `/drives/${R.driveId}/items/${R.id}:/${ruta(EXCEL)}:/content?@microsoft.graph.conflictBehavior=fail`,
+      new Blob([datos], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  } catch (e) {
+    if (e.status === 409) return (await gj('GET', `/drives/${R.driveId}/items/${R.id}:/${ruta(EXCEL)}`)).id;
+    throw e;
+  }
+  // Convierte el encabezado en la tabla "Ventas" (Excel online tarda unos segundos en abrir un archivo recién subido).
+  const base = `/drives/${R.driveId}/items/${item.id}/workbook`;
+  for (let i = 0; ; i++) {
+    try {
+      const t = await gj('POST', base + '/tables/add', { address: `${HOJA}!A1:${colLetra(COLUMNAS.length - 1)}1`, hasHeaders: true });
+      await gj('PATCH', base + '/tables/' + encodeURIComponent(t.id), { name: TABLA });
+      break;
+    } catch (e) {
+      if (i >= 4) throw e;
+      await espera(2000 * (i + 1));
+    }
+  }
+  return item.id;
+}
+async function agregarFila(valores) {
+  const R = await raiz();
+  const id = await excel();
+  try {
+    await gj('POST', `/drives/${R.driveId}/items/${id}/workbook/tables/${TABLA}/rows`, { values: [valores] });
+  } catch (e) {
+    if (e.status === 404) { ls.set('excel', null); throw new Error('No encuentro la tabla "' + TABLA + '" en ' + EXCEL + ' (¿la borraron o renombraron?).'); }
+    if (e.status === 409 || e.status === 423) throw new Error('El Excel está bloqueado (alguien lo tiene abierto en la app de escritorio). Se reintenta solo.');
+    throw e;
+  }
+}
+
+/* ---------- cola en el celular (IndexedDB): nada se pierde sin internet ---------- */
+
+const DB = new Promise((res, rej) => {
+  const q = indexedDB.open('rurush-facturas', 1);
+  q.onupgradeneeded = () => q.result.createObjectStore('cola', { keyPath: 'id' });
+  q.onsuccess = () => res(q.result);
+  q.onerror = () => rej(q.error);
+});
+async function idb(modo, fn) {
+  const db = await DB;
+  return new Promise((res, rej) => {
+    const tx = db.transaction('cola', modo), st = tx.objectStore('cola');
+    const q = fn(st);
+    tx.oncomplete = () => res(q && q.result);
+    tx.onerror = () => rej(tx.error);
+  });
+}
+const colaTodo = () => idb('readonly', (s) => s.getAll());
+const colaPut = (x) => idb('readwrite', (s) => s.put(x));
+const colaDel = (id) => idb('readwrite', (s) => s.delete(id));
+
+let subiendo = false, ultimoError = '';
+async function procesarCola() {
+  if (subiendo || !cuenta()) return;
+  subiendo = true; pintarEstado();
+  try {
+    const items = (await colaTodo()).sort((a, b) => a.creado - b.creado);
+    ultimoError = '';
+    for (const it of items) {
+      try {
+        await subir(it);
+        await colaDel(it.id);
+        historial(it.id, { estado: 'ok', foto: it.subidas[0] && it.subidas[0].web });
+      } catch (e) {
+        ultimoError = e.message || String(e);
+        it.error = ultimoError; await colaPut(it);
+        historial(it.id, { estado: 'err', error: ultimoError });
+        if (!navigator.onLine || /Failed to fetch|NetworkError|Load failed/i.test(ultimoError)) break;
+      }
+    }
+  } finally {
+    subiendo = false; pintarEstado();
+    if (tab === 'hist') pintar();
+  }
+}
+
+// Paso a paso y guardando el avance: si se corta a la mitad, no duplica fotos ni filas.
+async function subir(it) {
+  const R = await raiz();
+  const v = it.venta;
+  const mesId = await carpeta(R.driveId, R.id, v.fecha.slice(0, 7) + ' ' + MESES[Number(v.fecha.slice(5, 7)) - 1]);
+  it.subidas = it.subidas || [];
+  for (let i = it.subidas.length; i < it.fotos.length; i++) {
+    const nombre = it.archivo + (it.fotos.length > 1 ? ' (' + (i + 1) + ')' : '') + '.jpg';
+    const f = await gj('PUT', `/drives/${R.driveId}/items/${mesId}:/${ruta(nombre)}:/content?@microsoft.graph.conflictBehavior=rename`,
+      it.fotos[i], { 'Content-Type': 'image/jpeg' });
+    it.subidas.push({ nombre: f.name, web: f.webUrl });
+    await colaPut(it);
+  }
+  if (!it.filaOk) {
+    const foto = it.subidas[0] ? `=HYPERLINK("${it.subidas[0].web.replace(/"/g, '')}","Ver")` : '';
+    const texto = (x) => /^\d+$/.test(x) ? "'" + x : x;   // DNI/celular: que Excel no se coma los ceros
+    await agregarFila([v.id, v.fecha, v.hora, v.mes, v.asesora, v.tipo, v.cliente, texto(v.dni), texto(v.celular), v.plan,
+      v.precio, v.descuento, v.monto, v.base, v.igv, v.metodo, texto(v.comprobante),
+      v.inicio, v.vence, it.fotos.length, foto, v.obs, (cuenta() && cuenta().username) || '']);
+    it.filaOk = true;
+    await colaPut(it);
+  }
+}
+
+/* ---------- historial de este celular ---------- */
+
+function historial(id, cambios) {
+  const h = ls.get('hist', []);
+  const i = h.findIndex((x) => x.id === id);
+  if (i >= 0) Object.assign(h[i], cambios); else h.unshift(Object.assign({ id }, cambios));
+  ls.set('hist', h.slice(0, 60));
+}
+
+/* ---------- fotos: comprimir antes de subir (≈300 KB en vez de 4 MB) ---------- */
+
+function comprimir(file) {
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const max = 1800, k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      c.toBlob((b) => b ? res(b) : rej(new Error('No pude procesar la foto.')), 'image/jpeg', 0.82);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('No pude abrir la foto.')); };
+    img.src = url;
+  });
+}
+
+/* ---------- formulario ---------- */
+
+let tab = 'nueva';
+let F = nuevoForm();
+function nuevoForm() {
+  return { fotos: [], tipo: CFG.tipos[0], cliente: '', dni: '', celular: '', plan: '', precio: 0, monto: '',
+    metodo: '', comprobante: '', inicio: isoLocal(new Date()), obs: '' };
+}
+const asesora = () => ls.get('asesora', '');
+
+function calcular() {
+  const plan = CFG.planes.find((p) => p.nombre === F.plan);
+  const precio = plan ? Number(plan.precio) || 0 : 0;
+  const monto = num(F.monto);
+  const tasa = Number(CFG.igv) || 0;
+  let base, igv;
+  if (!tasa) { base = monto; igv = 0; }
+  else if (CFG.precioIncluyeIgv !== false) { base = monto / (1 + tasa / 100); igv = monto - base; }
+  else { base = monto; igv = monto * tasa / 100; }
+  const ahora = new Date();
+  const fecha = isoLocal(ahora);
+  return {
+    precio, monto: r2(monto), descuento: r2(Math.max(precio - monto, 0)),
+    pctDesc: precio ? Math.round(Math.max(precio - monto, 0) / precio * 100) : 0,
+    base: r2(base), igv: r2(igv), total: r2(base + igv),
+    fecha, hora: pad(ahora.getHours()) + ':' + pad(ahora.getMinutes()),
+    mes: MESES[ahora.getMonth()], vence: plan ? vence(F.inicio, plan.duracion) : ''
+  };
+}
+function faltan() {
+  const f = [];
+  if (!asesora()) f.push('asesora');
+  if (!F.fotos.length) f.push('foto');
+  if (!F.cliente.trim()) f.push('cliente');
+  if (!F.plan) f.push('plan');
+  if (!num(F.monto)) f.push('monto');
+  if (!F.metodo) f.push('método de pago');
+  return f;
+}
+function nombreArchivo(c) {
+  return limpio([c.fecha, c.hora.replace(':', ''), F.cliente.toUpperCase(), F.plan, 'S' + c.monto, asesora()].join(' - '));
+}
+
+const chips = (lista, actual, attr) => lista.map((x) => {
+  const v = typeof x === 'string' ? x : x.v, extra = typeof x === 'string' ? '' : x.extra;
+  return `<button class="chip ${v === actual ? 'on' : ''}" data-${attr}="${esc(v)}">${esc(v)}${extra ? '<small>' + esc(extra) + '</small>' : ''}</button>`;
+}).join('');
+
+function pintarNueva() {
+  const c = calcular(), f = faltan();
+  const fotos = F.fotos.map((b, i) => `<div><img src="${b.url}"><button data-quitar="${i}">✕</button></div>`).join('');
+  return `
+    <div id="estado"></div>
+    <label>Asesora <i>*</i></label>
+    <div class="chips scroll">${chips(CFG.asesoras, asesora(), 'ase')}</div>
+
+    <label>Foto de la factura / boleta <i>*</i></label>
+    ${F.fotos.length
+      ? `<div class="fotos">${fotos}<button class="mas" id="otraFoto">＋ Otra foto<br>(voucher)</button></div>`
+      : `<button class="foto" id="tomarFoto"><span>📷</span>Tomar foto</button>`}
+
+    <label>Tipo de venta</label>
+    <div class="chips">${chips(CFG.tipos, F.tipo, 'tipo')}</div>
+
+    <label>Cliente <i>*</i></label>
+    <input id="cliente" placeholder="Nombre y apellido" autocomplete="off" value="${esc(F.cliente)}">
+    <div class="dos">
+      <div><label>DNI</label><input id="dni" inputmode="numeric" maxlength="12" value="${esc(F.dni)}"></div>
+      <div><label>Celular</label><input id="celular" inputmode="tel" maxlength="15" value="${esc(F.celular)}"></div>
+    </div>
+
+    <label>Plan <i>*</i></label>
+    <div class="chips">${chips(CFG.planes.map((p) => ({ v: p.nombre, extra: soles(p.precio) })), F.plan, 'plan')}</div>
+
+    <div class="dos">
+      <div><label>Monto cobrado <i>*</i></label><input id="monto" inputmode="decimal" placeholder="0.00" value="${esc(F.monto)}"></div>
+      <div><label>Inicio del plan</label><input id="inicio" type="date" value="${esc(F.inicio)}"></div>
+    </div>
+
+    <label>Método de pago <i>*</i></label>
+    <div class="chips">${chips(CFG.metodos, F.metodo, 'metodo')}</div>
+
+    <label>Nº de comprobante</label>
+    <input id="comprobante" placeholder="Ej. B001-000123" autocomplete="off" value="${esc(F.comprobante)}">
+    <label>Observación</label>
+    <input id="obs" placeholder="Opcional" autocomplete="off" value="${esc(F.obs)}">
+
+    <div class="calc" id="calc">${pintarCalc(c)}</div>
+    <button class="guardar" id="guardar" ${f.length ? 'disabled' : ''}>✅ Guardar y subir</button>
+    <div class="falta" id="falta">${f.length ? 'Falta: ' + f.join(', ') : 'Se sube sola a OneDrive'}</div>`;
+}
+function pintarCalc(c) {
+  return `<h3>🧮 SE CALCULA SOLO</h3>
+    <div class="r"><span>Fecha y hora</span><b>${fm(c.fecha)} ${c.hora}</b></div>
+    <div class="r"><span>Precio de lista</span><b>${c.precio ? soles(c.precio) : '—'}</b></div>
+    <div class="r ${c.descuento ? 'desc' : ''}"><span>Descuento</span><b>${c.descuento ? soles(c.descuento) + ' (' + c.pctDesc + '%)' : '—'}</b></div>
+    ${Number(CFG.igv) ? `<div class="r"><span>Base imponible</span><b>${soles(c.base)}</b></div>
+    <div class="r"><span>IGV ${Number(CFG.igv)}%</span><b>${soles(c.igv)}</b></div>` : ''}
+    <div class="r tot"><span>Total</span><b>${soles(c.total)}</b></div>
+    <div class="r"><span>Vence</span><b>${c.vence ? fm(c.vence) : '—'}</b></div>
+    <div class="arch">📁 ${esc((ls.get('raiz') || {}).nombre || carpetaConf())} / ${c.fecha.slice(0, 7)} ${c.mes} / ${esc(nombreArchivo(c))}.jpg</div>`;
+}
+function refrescarCalc() {
+  const el = $('#calc'); if (!el) return;
+  el.innerHTML = pintarCalc(calcular());
+  const f = faltan();
+  $('#guardar').disabled = !!f.length;
+  $('#falta').textContent = f.length ? 'Falta: ' + f.join(', ') : 'Se sube sola a OneDrive';
+}
+
+async function guardar() {
+  const f = faltan();
+  if (f.length) return toast('Falta: ' + f.join(', '));
+  const c = calcular();
+  const id = 'F' + c.fecha.replace(/-/g, '') + '-' + c.hora.replace(':', '') + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+  const venta = {
+    id, fecha: c.fecha, hora: c.hora, mes: c.mes, asesora: asesora(), tipo: F.tipo,
+    cliente: F.cliente.trim().toUpperCase(), dni: F.dni.trim(), celular: F.celular.trim(), plan: F.plan,
+    precio: c.precio, descuento: c.descuento, monto: c.monto, base: c.base, igv: c.igv,
+    metodo: F.metodo, comprobante: F.comprobante.trim().toUpperCase(), inicio: F.inicio, vence: c.vence, obs: F.obs.trim()
+  };
+  await colaPut({ id, creado: Date.now(), venta, archivo: nombreArchivo(c), fotos: F.fotos.map((x) => x.blob), subidas: [], filaOk: false });
+  historial(id, { estado: 'pend', fecha: c.fecha, hora: c.hora, cliente: venta.cliente, plan: venta.plan, monto: venta.monto, asesora: venta.asesora });
+  F.fotos.forEach((x) => URL.revokeObjectURL(x.url));
+  F = nuevoForm();
+  window.scrollTo(0, 0);
+  pintar();
+  toast('✅ Guardada. Subiendo a OneDrive…');
+  procesarCola();
+}
+
+/* ---------- historial y ajustes ---------- */
+
+function pintarHist() {
+  const h = ls.get('hist', []);
+  const hoy = isoLocal(new Date());
+  const deHoy = h.filter((x) => x.fecha === hoy);
+  const total = deHoy.reduce((t, x) => t + (Number(x.monto) || 0), 0);
+  const fila = (x) => {
+    const tag = x.estado === 'ok' ? '<span class="tag ok">subida</span>' : x.estado === 'err' ? '<span class="tag err">reintentando</span>' : '<span class="tag pend">en cola</span>';
+    const t = `<div class="main"><div class="t">${esc(x.cliente)}${tag}</div><div class="d">${fm(x.fecha).slice(0, 5)} ${esc(x.hora)} · ${esc(x.plan)} · ${esc(x.asesora)}${x.estado === 'err' && x.error ? '<br>' + esc(x.error) : ''}</div></div><div class="m">${soles(x.monto)}</div>`;
+    return x.foto ? `<a class="row" style="color:inherit;text-decoration:none" href="${esc(x.foto)}" target="_blank" rel="noopener">${t}</a>` : `<div class="row">${t}</div>`;
+  };
+  const R = ls.get('raiz');
+  return `<div id="estado"></div>
+    <h2>Hoy en este celular <small>${deHoy.length} · ${soles(total)}</small></h2>
+    <div class="list">${deHoy.length ? deHoy.map(fila).join('') : '<div class="vacio">Todavía nada hoy.</div>'}</div>
+    <h2>Anteriores</h2>
+    <div class="list">${h.filter((x) => x.fecha !== hoy).slice(0, 40).map(fila).join('') || '<div class="vacio">—</div>'}</div>
+    ${R && R.web ? `<a class="btn" style="display:block;text-align:center;margin-top:16px;text-decoration:none" href="${esc(R.web)}" target="_blank" rel="noopener">📁 Abrir carpeta en OneDrive</a>` : ''}`;
+}
+
+function pintarConf() {
+  const lineasPlanes = CFG.planes.map((p) => `${p.nombre} | ${p.precio} | ${p.duracion}`).join('\n');
+  const R = ls.get('raiz');
+  return `
+    <h2>Este celular</h2>
+    <div class="ayuda">Sesión: <b>${esc((cuenta() && cuenta().username) || '—')}</b></div>
+    <label>Carpeta de OneDrive</label>
+    <input id="cCarpeta" value="${esc(carpetaConf())}">
+    <div class="ayuda">Un nombre (se crea en <i>tu</i> OneDrive) o el <b>link de una carpeta compartida</b> (con permiso de edición) para que todas las asesoras suban a la misma.
+      ${R ? `<br>Ahora: <b>${esc(R.nombre)}</b>` : ''}</div>
+    <button class="btn" id="cCopiar" style="margin-top:8px">🔗 Copiar link para las asesoras</button>
+    <div class="ayuda">Mándales ese link: al abrirlo, su celular queda apuntando a la misma carpeta.</div>
+
+    <h2>Para todas <small>se guarda en config.json</small></h2>
+    <label>Planes — una línea: <code>Nombre | precio | duración</code></label>
+    <textarea id="cPlanes">${esc(lineasPlanes)}</textarea>
+    <div class="ayuda">Duración: <code>1m</code> = 1 mes, <code>3m</code> = 3 meses, <code>15d</code> = 15 días.</div>
+    <label>Asesoras (una por línea)</label>
+    <textarea id="cAsesoras" style="min-height:90px">${esc(CFG.asesoras.join('\n'))}</textarea>
+    <label>Métodos de pago (uno por línea)</label>
+    <textarea id="cMetodos" style="min-height:90px">${esc(CFG.metodos.join('\n'))}</textarea>
+    <label>Tipos de venta (uno por línea)</label>
+    <textarea id="cTipos" style="min-height:60px">${esc(CFG.tipos.join('\n'))}</textarea>
+    <div class="dos">
+      <div><label>IGV %</label><input id="cIgv" inputmode="decimal" value="${esc(CFG.igv)}"></div>
+      <div><label>El precio…</label><select id="cIncl">
+        <option value="1" ${CFG.precioIncluyeIgv !== false ? 'selected' : ''}>ya incluye IGV</option>
+        <option value="0" ${CFG.precioIncluyeIgv === false ? 'selected' : ''}>es sin IGV</option></select></div>
+    </div>
+    <div class="ayuda">IGV 0 = no se calcula (p. ej. Nuevo RUS).</div>
+    <button class="guardar" id="cGuardar">💾 Guardar ajustes</button>
+    <button class="btn" id="cSalir" style="width:100%;margin-top:18px">Cerrar sesión de Microsoft</button>`;
+}
+
+async function guardarAjustes() {
+  const lineas = (id) => $(id).value.split('\n').map((s) => s.trim()).filter(Boolean);
+  const planes = [];
+  for (const l of lineas('#cPlanes')) {
+    const [nombre, precio, duracion] = l.split('|').map((s) => (s || '').trim());
+    if (!nombre || !num(precio) || !/^\d+\s*[mdMD]$/.test(duracion || '')) return toast('Revisa el plan: "' + l + '"', 4000);
+    planes.push({ nombre, precio: num(precio), duracion: duracion.toLowerCase().replace(/\s/g, '') });
+  }
+  const nueva = Object.assign({}, CFG, {
+    planes, asesoras: lineas('#cAsesoras').map((s) => s.toUpperCase()), metodos: lineas('#cMetodos'),
+    tipos: lineas('#cTipos'), igv: num($('#cIgv').value), precioIncluyeIgv: $('#cIncl').value === '1'
+  });
+  if (!nueva.asesoras.length || !nueva.metodos.length || !nueva.tipos.length || !planes.length) return toast('No dejes listas vacías.');
+  const carpetaNueva = $('#cCarpeta').value.trim() || 'RURUSH Facturas';
+  const btn = $('#cGuardar'); btn.disabled = true; btn.textContent = 'Guardando…';
+  try {
+    if (carpetaNueva !== carpetaConf()) {
+      ls.set('carpeta', carpetaNueva); ls.set('raiz', null); ls.set('excel', null);
+      await raiz();
+      await cargarConfig();   // la carpeta nueva puede tener su propio config.json
+      toast('📁 Carpeta cambiada. Revisa los ajustes y vuelve a guardar si quieres cambiarlos.', 4000);
+    } else {
+      await guardarConfig(nueva);
+      toast('💾 Ajustes guardados para todas');
+    }
+    pintarSub(); pintar();
+  } catch (e) {
+    btn.disabled = false; btn.textContent = '💾 Guardar ajustes';
+    toast('❌ ' + e.message, 5000);
+  }
+}
+
+/* ---------- pantalla ---------- */
+
+async function pintarEstado() {
+  const el = $('#estado'); if (!el) return;
+  const n = (await colaTodo()).length;
+  if (!n) { el.innerHTML = ''; return; }
+  if (subiendo) el.innerHTML = `<div class="estado sub"><span>⏫ Subiendo ${n} a OneDrive…</span></div>`;
+  else if (!navigator.onLine) el.innerHTML = `<div class="estado sub"><span>📴 Sin internet: ${n} en cola. Se suben solas al volver.</span></div>`;
+  else el.innerHTML = `<div class="estado err"><span>⚠️ ${n} sin subir${ultimoError ? ': ' + esc(ultimoError) : ''}</span><button id="reintentar">Reintentar</button></div>`;
+}
+function pintarSub() {
+  const R = ls.get('raiz');
+  $('#sub').textContent = (asesora() ? asesora() + ' · ' : '') + '📁 ' + ((R && R.nombre) || carpetaConf());
+}
+function pintar() {
+  $('#main').innerHTML = tab === 'nueva' ? pintarNueva() : tab === 'hist' ? pintarHist() : pintarConf();
+  document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
+  pintarEstado();
+}
+
+function pantallaLogin(msj) {
+  $('#nav').classList.add('hide');
+  $('#sub').textContent = 'Control de facturas';
+  $('#main').innerHTML = `<div class="login">
+    <div style="font-size:54px">🧾</div>
+    <p>Toma la foto, llena los datos de la venta y se sube sola a OneDrive.</p>
+    ${msj ? `<div class="estado err"><span>${esc(msj)}</span></div>` : ''}
+    <button class="guardar" id="login">Entrar con Microsoft</button></div>`;
+}
+
+/* ---------- eventos ---------- */
+
+document.addEventListener('click', async (ev) => {
+  const t = ev.target.closest('button, [data-tab]');
+  if (!t) return;
+  if (t.dataset.tab) { tab = t.dataset.tab; pintar(); window.scrollTo(0, 0); return; }
+  if (t.id === 'login') return MS.loginRedirect({ scopes: SCOPES, prompt: 'select_account' });
+  if (t.id === 'tomarFoto' || t.id === 'otraFoto') { $('#cam').value = ''; return $('#cam').click(); }
+  if (t.dataset.quitar != null) { const [x] = F.fotos.splice(Number(t.dataset.quitar), 1); URL.revokeObjectURL(x.url); return pintar(); }
+  if (t.dataset.ase != null) { ls.set('asesora', t.dataset.ase); pintarSub(); return pintar(); }
+  if (t.dataset.tipo != null) { F.tipo = t.dataset.tipo; return pintar(); }
+  if (t.dataset.metodo != null) { F.metodo = t.dataset.metodo; return pintar(); }
+  if (t.dataset.plan != null) {
+    const p = CFG.planes.find((x) => x.nombre === t.dataset.plan);
+    // Precio del plan como monto sugerido (si ya escribió otro monto, se respeta).
+    if (!F.monto || F.monto === String(F.precio)) F.monto = String(p.precio);
+    F.plan = p.nombre; F.precio = p.precio;
+    return pintar();
+  }
+  if (t.id === 'guardar') { t.disabled = true; try { await guardar(); } catch (e) { t.disabled = false; toast('❌ ' + e.message, 5000); } return; }
+  if (t.id === 'reintentar') return procesarCola();
+  if (t.id === 'cGuardar') return guardarAjustes();
+  if (t.id === 'cCopiar') {
+    const link = location.origin + location.pathname + '?carpeta=' + encodeURIComponent($('#cCarpeta').value.trim() || carpetaConf());
+    try { await navigator.clipboard.writeText(link); toast('🔗 Link copiado'); } catch (e) { prompt('Copia este link:', link); }
+    return;
+  }
+  if (t.id === 'cSalir') { if (confirm('¿Cerrar sesión de Microsoft en este celular?')) MS.logoutRedirect({ account: cuenta() }); }
+});
+
+document.addEventListener('input', (ev) => {
+  const id = ev.target.id;
+  if (['cliente', 'dni', 'celular', 'monto', 'inicio', 'comprobante', 'obs'].includes(id)) {
+    F[id] = ev.target.value;
+    if (['cliente', 'monto', 'inicio'].includes(id)) refrescarCalc();
+  }
+});
+
+$('#cam').addEventListener('change', async (ev) => {
+  const file = ev.target.files && ev.target.files[0];
+  if (!file) return;
+  try {
+    const blob = await comprimir(file);
+    F.fotos.push({ blob, url: URL.createObjectURL(blob) });
+    pintar();
+  } catch (e) { toast('❌ ' + e.message, 4000); }
+});
+
+window.addEventListener('online', procesarCola);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') procesarCola(); });
+
+/* ---------- arranque ---------- */
+
+(async () => {
+  if (/PEGA-AQUI/.test(CLIENT_ID)) {
+    $('#sub').textContent = 'Falta configurar';
+    $('#main').innerHTML = `<div class="login"><div style="font-size:54px">🛠️</div><p>Falta pegar el <b>CLIENT_ID</b> de Azure en <code>index.html</code>.<br>Mira <b>INSTALAR.md</b>, paso 1.</p></div>`;
+    return;
+  }
+  if (typeof msal === 'undefined') return pantallaLogin('No cargó el login de Microsoft. Revisa el internet y recarga.');
+  let acc;
+  try { acc = await iniciarMsal(); } catch (e) { return pantallaLogin(e.message); }
+  if (!acc) return pantallaLogin();
+  $('#nav').classList.remove('hide');
+  pintarSub(); pintar();
+  try {
+    await raiz();
+    await cargarConfig();
+    if (!F.cliente && !F.fotos.length) F = Object.assign(nuevoForm(), { fotos: F.fotos });
+    pintarSub(); pintar();
+  } catch (e) {
+    // Sin internet o sin permiso: se trabaja con la config guardada y todo queda en cola.
+    toast('⚠️ ' + e.message, 5000);
+  }
+  procesarCola();
+})();
+</script>
+</body>
+</html>
