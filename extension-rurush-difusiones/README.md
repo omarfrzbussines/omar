@@ -46,6 +46,17 @@ y la pestaña (por ejemplo `📨 TANDA 8 EX ALUMNOS`). Tope por línea: **30**.
 - Una PC / un perfil de Chrome por línea, cada uno con su WhatsApp Web abierto.
 - Respeta la simulación: con «Simulación» marcada no envía nada de verdad.
 
+## 💬 Revisión de respuestas (v1.2.0)
+
+Viene activada (Opciones → «Revisar respuestas solo»). Funciona aunque el envío automático esté apagado.
+
+- **2 horas después del último envío** y **cada mañana** (antes de enviar), la extensión abre los chats
+  que siguen «ENVIADO SIN RESPUESTA» de los **últimos 3 días** de la línea abierta.
+- Si el contacto escribió después de nuestro mensaje: RESULTADO = **RESPONDIO - POR CONTESTAR**, en NOTA
+  queda lo que dijo, y se agrega una fila en **💬 RESPUESTAS**. El cuadro de KPIs lo cuenta solo.
+- No toca filas que las asesoras ya marcaron a mano. No responde a nadie: solo avisa.
+- Botón **💬 Revisar respuestas** en el popup para hacerlo cuando quieras.
+
 ## Cómo evita repetir un número (basta uno para no enviar)
 
 1. **Lista de bloqueo** de Opciones.

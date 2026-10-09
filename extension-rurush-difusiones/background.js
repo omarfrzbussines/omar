@@ -28,6 +28,11 @@ const DEFAULTS = {
   autoHora: 8,
   autoDias: [1, 2, 3, 4, 5],  // 0 = domingo … 6 = sábado
   autoPestanas: ['📨 TANDA 8 EX ALUMNOS'],
+  // Revisión de respuestas: 2 h después del último envío del día y cada mañana,
+  // sobre lo enviado en los últimos 3 días que sigue «ENVIADO SIN RESPUESTA».
+  revisarActivo: true,
+  revisarHorasDespues: 2,
+  revisarDias: 3,
 };
 
 // ───────────────────────── utilidades ─────────────────────────
@@ -268,6 +273,7 @@ async function unPaso() {
   const cfg = await getConfig();
   const run = await getRun();
   if (!run || run.estado !== 'corriendo') return false;
+  if (revisando) { await programar(60); return false; } // termina de revisar respuestas y sigue
 
   if (run.idx >= run.items.length) {
     run.estado = 'terminado';
@@ -412,6 +418,7 @@ async function unPaso() {
   // Cuenta como enviado aunque quede con reloj: WhatsApp lo manda al reconectar.
   await registrarEnvio(tel, run.linea, run.tab);
   await contador(run.linea, 1);
+  await chrome.storage.local.set({ ultimoEnvio: Date.now() });
   run.res.enviados += 1;
   await marcar({ tab: run.tab, fila: it.fila, celular: tel, estado: 'ENVIADO' });
   await siguiente(run, { level: 'ok', msg: `✅ ${etiqueta}` });
@@ -434,6 +441,84 @@ async function unPaso() {
   return false;
 }
 
+// ───────────────────────── revisión de respuestas ─────────────────────────
+// Abre cada chat enviado (que sigue «ENVIADO SIN RESPUESTA») y, si el contacto escribió
+// después de nuestro mensaje, lo marca «RESPONDIO - POR CONTESTAR» y lo anota en 💬 RESPUESTAS.
+let revisando = false;
+
+async function lineaAbierta() {
+  const tab = await waTab();
+  const status = await waitFor(tab.id, { type: 'ping' }, (r) => r.loggedIn && r.wid, 90000);
+  if (!status) throw new Error('WhatsApp Web no tiene sesión abierta.');
+  const info = await api({ a: 'info' });
+  const asesora = (Object.entries(info.lineas).find(([, tel]) => normPhone(tel) === status.wid) || [])[0];
+  if (!asesora) throw new Error(`la línea ${status.wid} no está en ⚙️ CONFIG (LINEAS).`);
+  return { tab, wid: status.wid, asesora };
+}
+
+async function revisarRespuestas(motivo) {
+  if (revisando || procesando) throw new Error('Ya hay una revisión o un envío en curso.');
+  const run = await getRun();
+  if (run && run.estado === 'corriendo') throw new Error('Se está enviando: revisa al terminar o pausa primero.');
+  revisando = true;
+  const res = { revisados: 0, respondieron: [], sinHallar: 0, at: Date.now() };
+  try {
+    const cfg = await getConfig();
+    const { tab, asesora } = await lineaAbierta();
+    const { items } = await api({ a: 'porRevisar', asesora, dias: cfg.revisarDias });
+    await log('info', `💬 Revisando respuestas (${motivo}): ${items.length} chats de ${asesora}.`);
+    for (const it of items) {
+      const tel = normPhone(it.celular);
+      const inicio = normTexto(it.inicio).slice(0, 30);
+      if (!tel || inicio.length < 10) continue;
+      const chat = await openChat(tab.id, tel);
+      if (!chat || chat.invalid) continue;
+      await sleep(1500);
+      const r = await ask(tab.id, { type: 'respuestas', inicio });
+      res.revisados += 1;
+      if (!r || !r.nuestro) { res.sinHallar += 1; continue; }
+      if (r.respuestas.length) {
+        const texto = r.respuestas.join(' / ');
+        const m = await api({ a: 'respuesta', tab: it.tab, fila: it.fila, celular: tel, texto }).catch((e) => ({ error: e.message }));
+        if (m && m.ok) {
+          res.respondieron.push(it.nombre || tel);
+          await log('ok', `💬 ${it.nombre || tel} respondió: «${texto.slice(0, 80)}»`);
+        }
+      }
+      await sleep(1500 + Math.random() * 1500);
+    }
+    const resumen = `💬 ${res.respondieron.length} respondieron de ${res.revisados} revisados`
+      + (res.respondieron.length ? `: ${res.respondieron.slice(0, 8).join(', ')}` : '')
+      + (res.sinHallar ? ` · ${res.sinHallar} sin encontrar nuestro mensaje` : '');
+    await log('ok', resumen);
+    if (res.respondieron.length) notify('Rurush Difusiones', resumen);
+    await chrome.storage.local.set({ ultimaRevision: res });
+    await chrome.tabs.update(tab.id, { url: 'https://web.whatsapp.com/' });
+    return res;
+  } finally {
+    revisando = false;
+  }
+}
+
+// Cuándo revisar: 2 h después del último envío (una vez), y cada mañana antes de enviar.
+async function revisionPendiente(cfg, now) {
+  if (!cfg.revisarActivo) return null;
+  const { ultimoEnvio = 0, revisadoHasta = 0, revisionDia } = await chrome.storage.local.get(['ultimoEnvio', 'revisadoHasta', 'revisionDia']);
+  if (!ultimoEnvio || Date.now() - ultimoEnvio > (cfg.revisarDias + 1) * 86400e3) return null; // nada reciente
+  if (ultimoEnvio > revisadoHasta && Date.now() - ultimoEnvio >= cfg.revisarHorasDespues * 3600e3) return 'después de los envíos';
+  if (revisionDia !== now.date && now.hour >= cfg.autoHora) return 'de la mañana';
+  return null;
+}
+
+async function hacerRevision(motivo, now) {
+  try {
+    await revisarRespuestas(motivo);
+  } catch (e) {
+    await log('warn', `💬 No pude revisar respuestas: ${e.message || e}`);
+  }
+  await chrome.storage.local.set({ revisadoHasta: Date.now(), revisionDia: now.date });
+}
+
 // ───────────────────────── modo automático ─────────────────────────
 // Se revisa cada 10 minutos. Arranca una vez por día (o al prender la PC, si fue más tarde),
 // solo en los días y horas configurados, y nunca encima de una corrida en curso.
@@ -444,12 +529,18 @@ async function autoCheck() {
   revisandoAuto = true;
   try {
     const cfg = await getConfig();
-    if (!cfg.autoActivo) return;
     const now = limaNow();
-    if (!cfg.autoDias.includes(now.dow) || now.hour < cfg.autoHora || now.hour >= cfg.horaFin) return;
-
     const run = await getRun();
     if (run && run.estado === 'corriendo') return;
+
+    // Revisión de respuestas (funciona aunque el envío automático esté apagado)
+    if (now.hour >= 7 && now.hour < 22) {
+      const motivo = await revisionPendiente(cfg, now);
+      if (motivo) await hacerRevision(motivo, now);
+    }
+
+    if (!cfg.autoActivo) return;
+    if (!cfg.autoDias.includes(now.dow) || now.hour < cfg.autoHora || now.hour >= cfg.horaFin) return;
     const { autoDia } = await chrome.storage.local.get('autoDia');
     if (autoDia === now.date) {
       // Mismo día: solo se retoma la corrida automática que cortó un reinicio de Chrome.
@@ -524,6 +615,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     case 'iniciar': responder(iniciar()); return true;
     case 'pausar': responder(pausar()); return true;
     case 'detener': responder(detener()); return true;
+    case 'revisar': responder(revisarRespuestas('manual')); return true;
     case 'waActivity': chrome.storage.local.set({ waActivity: Date.now() }); return false;
     default: return false;
   }

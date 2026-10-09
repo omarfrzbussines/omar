@@ -1,7 +1,7 @@
 const DEFAULTS = {
   apiUrl: '', apiKey: '', dryRun: true, pausaMinS: 45, pausaMaxS: 90, topeDiario: 30,
   diasAntiDup: 30, horaInicio: 8, horaFin: 20, blocklist: ['51942853538', '51953876647'],
-  autoActivo: false, autoHora: 8, autoDias: [1, 2, 3, 4, 5], autoPestanas: ['📨 TANDA 8 EX ALUMNOS'],
+  revisarActivo: true, autoActivo: false, autoHora: 8, autoDias: [1, 2, 3, 4, 5], autoPestanas: ['📨 TANDA 8 EX ALUMNOS'],
 };
 const NUM = ['pausaMinS', 'pausaMaxS', 'topeDiario', 'diasAntiDup', 'horaInicio', 'horaFin', 'autoHora'];
 const dias = () => [...document.querySelectorAll('#autoDias input')];
@@ -16,6 +16,7 @@ async function cargar() {
   for (const k of NUM) $(k).value = c[k];
   $('blocklist').value = c.blocklist.join('\n');
   $('autoActivo').checked = c.autoActivo;
+  $('revisarActivo').checked = c.revisarActivo;
   for (const d of dias()) d.checked = c.autoDias.includes(Number(d.value));
   $('autoPestanas').value = c.autoPestanas.join('\n');
 }
@@ -27,6 +28,7 @@ $('guardar').addEventListener('click', async () => {
     dryRun: $('dryRun').checked,
     blocklist: $('blocklist').value.split(/[\s,;]+/).map((s) => s.replace(/\D/g, '')).filter(Boolean),
     autoActivo: $('autoActivo').checked,
+    revisarActivo: $('revisarActivo').checked,
     autoDias: dias().filter((d) => d.checked).map((d) => Number(d.value)),
     autoPestanas: $('autoPestanas').value.split('\n').map((s) => s.trim()).filter(Boolean),
   };

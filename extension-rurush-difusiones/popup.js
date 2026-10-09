@@ -10,7 +10,14 @@ const ESTADOS = {
 };
 
 async function pintar() {
-  const { run, logs = [], config = {} } = await chrome.storage.local.get(['run', 'logs', 'config']);
+  const { run, logs = [], config = {}, ultimaRevision } = await chrome.storage.local.get(['run', 'logs', 'config', 'ultimaRevision']);
+  if (ultimaRevision) {
+    const r = ultimaRevision;
+    const h = new Date(r.at).toLocaleString('es-PE', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+    $('revInfo').hidden = false;
+    $('revInfo').textContent = `💬 Última revisión (${h}): ${r.respondieron.length} respondieron de ${r.revisados}`
+      + (r.respondieron.length ? ` — ${r.respondieron.slice(0, 6).join(', ')}` : '');
+  }
   $('sim').hidden = config.dryRun === false;
   const c = { autoHora: 8, autoDias: [1, 2, 3, 4, 5], topeDiario: 30, ...config };
   const NOM = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -96,6 +103,17 @@ $('cargar').addEventListener('click', async () => {
   const r = await send({ type: 'cargar', tab: $('tab').value, asesora: $('asesora').value });
   $('cargar').textContent = 'Cargar pendientes';
   $('cargar').disabled = false;
+  if (!r.ok) error(r.error);
+  pintar();
+});
+
+$('revisar').addEventListener('click', async () => {
+  error('');
+  $('revisar').disabled = true;
+  $('revisar').textContent = 'Revisando…';
+  const r = await send({ type: 'revisar' });
+  $('revisar').textContent = '💬 Revisar respuestas';
+  $('revisar').disabled = false;
   if (!r.ok) error(r.error);
   pintar();
 });

@@ -103,6 +103,46 @@ function diag() {
   };
 }
 
+// ¿El contacto respondió después de nuestro mensaje (el que empieza con `inicio`)?
+// Devuelve { nuestro: hallado, respuestas: [textos], metodo }.
+function respuestas(inicio) {
+  // 1) Lectura con fecha/autor (data-pre-plain-text + data-id o clases).
+  const msgs = readMessages();
+  if (msgs.some((m) => m.out)) {
+    let idx = -1;
+    msgs.forEach((m, i) => { if (m.out && normTexto(m.text).startsWith(inicio)) idx = i; });
+    if (idx >= 0) {
+      return { nuestro: true, metodo: 'fecha', respuestas: msgs.slice(idx + 1).filter((m) => !m.out && m.text).map((m) => m.text) };
+    }
+  }
+  // 2) Sin marcas: se ubica nuestra burbuja por su texto y se toman los textos que vienen
+  //    después cuya fila NO tiene ícono de estado (✓, ✓✓, reloj): esos son del contacto.
+  const main = document.querySelector('#main');
+  if (!main) return { nuestro: false, respuestas: [], metodo: 'sin chat' };
+  const hits = [...main.querySelectorAll('span, div')].filter((n) =>
+    !n.closest('footer') && normTexto(n.innerText).startsWith(inicio)
+    && ![...n.children].some((c) => normTexto(c.innerText).startsWith(inicio)));
+  const nuestro = hits[hits.length - 1];
+  if (!nuestro) return { nuestro: false, respuestas: [], metodo: 'texto' };
+  const ESTADO = /msg-|check|time|clock|pending/i;
+  const textos = [...main.querySelectorAll('span.selectable-text, span[dir], div[dir]')].filter((n) =>
+    !n.closest('footer') && (nuestro.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING)
+    && !nuestro.contains(n) && !n.querySelector('span.selectable-text, span[dir], div[dir]'));
+  const out = [];
+  for (const n of textos) {
+    const t = (n.innerText || '').trim();
+    if (!t || /^\d{1,2}:\d{2}/.test(t)) continue;
+    let fila = n, propio = false;
+    for (let i = 0; i < 6 && fila.parentElement && !fila.parentElement.contains(nuestro); i++) {
+      fila = fila.parentElement;
+      const iconos = [...fila.querySelectorAll('[data-icon]')].map((x) => x.getAttribute('data-icon') || '');
+      if (iconos.length) { propio = iconos.some((x) => ESTADO.test(x)); break; }
+    }
+    if (!propio) out.push(t);
+  }
+  return { nuestro: true, metodo: 'texto', respuestas: [...new Set(out)] };
+}
+
 function clearDraft() {
   const c = compose();
   if (!c) return { ok: false };
@@ -145,6 +185,8 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     });
   } else if (msg.type === 'lastOutgoing') {
     reply(lastOutgoing(msg.inicio));
+  } else if (msg.type === 'respuestas') {
+    reply(respuestas(msg.inicio));
   } else if (msg.type === 'diag') {
     reply(diag());
   } else if (msg.type === 'clearDraft') {

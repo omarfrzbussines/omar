@@ -23,6 +23,7 @@
 var HEADER_SCAN_ROWS = 15;          // la cabecera se busca en las primeras 15 filas
 var STOP_MARKER = /NO ENVIAR/i;     // bloque «NO ENVIAR TODAVÍA»: ahí terminan los datos
 var LOG_SHEET = '📜 LOG EXTENSIÓN';
+var RESPUESTAS_SHEET = '💬 RESPUESTAS';
 var CERRADOS = /(NO CONTACTAR|BLOQUEAD)/i;
 var DIAS_SEMANA = /\b(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\b/i;
 
@@ -52,6 +53,8 @@ function doGet(e) {
       case 'pendientes': return json_(pendientes_(p.tab, p.asesora, Number(p.dias) || 30));
       case 'yaEnviado': return json_(yaEnviado_(p.celular, Number(p.dias) || 30));
       case 'marcar': return json_(marcar_(p));
+      case 'porRevisar': return json_(porRevisar_(p.asesora, Number(p.dias) || 3));
+      case 'respuesta': return json_(respuesta_(p));
       default: return json_({ ok: false, error: 'Acción desconocida: ' + p.a });
     }
   } catch (err) {
@@ -342,6 +345,75 @@ function marcar_(p) {
     }
     if (h.nota >= 0) sh.getRange(fila, h.nota + 1).setValue(nota);
     log_([fecha, hora, p.tab, fila, tel, asesora, p.estado, nota]);
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ───────────────────────── revisión de respuestas ─────────────────────────
+
+/**
+ * Filas enviadas por la extensión que siguen «ENVIADO SIN RESPUESTA», de esa asesora,
+ * con FECHA dentro de los últimos `dias` días, en todas las pestañas de tanda.
+ * `inicio` = el comienzo del mensaje (hasta la primera variable {…}) para ubicarlo en el chat.
+ */
+function porRevisar_(asesora, dias) {
+  var quien = sinTildes_(asesora);
+  if (!quien) return { ok: false, error: 'Falta la asesora' };
+  var items = [];
+  pestanasTanda_().forEach(function (t) {
+    var h = t.h;
+    if (h.asesora < 0 || h.resultado < 0) return;
+    filas_(t.sh, h).forEach(function (f) {
+      var v = f.v;
+      if (sinTildes_(v[h.asesora]) !== quien || !esTrue_(v[h.env])) return;
+      if (sinTildes_(v[h.resultado]) !== 'ENVIADO SIN RESPUESTA') return;
+      var d = h.fecha >= 0 ? diasDesde_(v[h.fecha]) : null;
+      if (d === null || d > dias) return;
+      var tel = normPhone_(v[h.celular]);
+      if (!tel) return;
+      items.push({
+        tab: t.sh.getName(), fila: f.fila, celular: tel,
+        nombre: h.nombre >= 0 ? String(v[h.nombre]) : '',
+        inicio: String(v[h.mensaje] || '').split('{')[0].slice(0, 80),
+      });
+    });
+  });
+  return { ok: true, items: items };
+}
+
+/** Marca que el contacto respondió y lo anota en 💬 RESPUESTAS. Solo si sigue «ENVIADO SIN RESPUESTA». */
+function respuesta_(p) {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) return { ok: false, error: 'Hoja ocupada, reintentar' };
+  try {
+    var ss = SpreadsheetApp.getActive();
+    var sh = ss.getSheetByName(p.tab);
+    if (!sh) return { ok: false, error: 'No existe la pestaña «' + p.tab + '».' };
+    var h = cabecera_(sh);
+    var fila = Number(p.fila);
+    if (!h || !(fila > h.row) || h.resultado < 0) return { ok: false, error: 'Fila inválida' };
+    var v = sh.getRange(fila, 1, 1, h.width).getValues()[0];
+    var tel = normPhone_(v[h.celular]);
+    if (!tel || tel !== normPhone_(p.celular)) return { ok: false, error: 'La fila ' + fila + ' ya no tiene ese celular. No marqué nada.' };
+    if (sinTildes_(v[h.resultado]) !== 'ENVIADO SIN RESPUESTA') return { ok: false, dup: true, error: 'La fila ya tenía otro resultado' };
+
+    var ahora = new Date();
+    var fecha = Utilities.formatDate(ahora, 'America/Lima', 'dd/MM/yyyy');
+    var hora = Utilities.formatDate(ahora, 'America/Lima', 'HH:mm');
+    var texto = String(p.texto || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+    var nombre = h.nombre >= 0 ? String(v[h.nombre]) : '';
+    var asesora = h.asesora >= 0 ? String(v[h.asesora]) : '';
+
+    sh.getRange(fila, h.resultado + 1).setValue('RESPONDIO - POR CONTESTAR');
+    if (h.nota >= 0) {
+      var previa = String(v[h.nota] || '');
+      sh.getRange(fila, h.nota + 1).setValue('Respondió (visto ' + fecha.slice(0, 5) + ' ' + hora + '): «' + texto.slice(0, 150) + '»' + (previa ? ' | ' + previa : ''));
+    }
+    var r = ss.getSheetByName(RESPUESTAS_SHEET);
+    if (r) r.appendRow([fecha, hora, nombre, asesora, texto, '', 'RESPONDIÓ', 'Contestar hoy', 'Detectado por la extensión · ' + p.tab + ' fila ' + fila]);
+    log_([fecha, hora, p.tab, fila, tel, asesora, 'RESPONDIO', texto.slice(0, 150)]);
     return { ok: true };
   } finally {
     lock.releaseLock();
