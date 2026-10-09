@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --ink:#1d2321; --muted:#5d6763; --line:#d9ddda; --accent:#1f6f5c; --soft:#e2efea; --warn:#9a5b00; --warn-soft:#fbefd9; --bad:#a3312b; }
+  * { box-sizing: border-box; }
+  body { width: 380px; margin: 0; font: 13px/1.45 "Segoe UI", system-ui, sans-serif; color: var(--ink); }
+  header { padding: 12px 14px; background: var(--accent); color: #fff; display: flex; justify-content: space-between; align-items: center; }
+  header b { font-size: 15px; }
+  header a { color: #fff; font-size: 12px; }
+  main { padding: 12px 14px; display: grid; gap: 10px; }
+  label { display: grid; gap: 3px; font-weight: 600; font-size: 12px; color: var(--muted); }
+  select { font: inherit; padding: 6px; border: 1px solid var(--line); border-radius: 6px; }
+  .info { background: #f4f6f5; border-radius: 6px; padding: 8px 10px; display: grid; gap: 2px; }
+  .info span { color: var(--muted); }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  button { font: inherit; font-weight: 600; padding: 7px 12px; border-radius: 6px; border: 1px solid var(--line); background: #fff; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .sim { background: var(--warn-soft); color: var(--warn); border-radius: 6px; padding: 6px 10px; font-weight: 600; }
+  .estado { font-weight: 700; }
+  .bar { height: 8px; background: #eef1ef; border-radius: 99px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent); width: 0; }
+  .counts { display: flex; gap: 10px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+  .err { color: var(--bad); }
+  details { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+  details ul { margin: 6px 0 0; padding-left: 16px; max-height: 140px; overflow: auto; }
+  #logs { max-height: 170px; overflow: auto; border-top: 1px solid var(--line); padding-top: 6px; display: grid; gap: 3px; font-size: 12px; }
+  #logs div { color: var(--muted); }
+  #logs div.warn { color: var(--warn); }
+  #logs div.ok { color: var(--accent); }
+</style>
+</head>
+<body>
+<header><b>📨 Rurush Difusiones</b><a href="options.html" target="_blank">Opciones</a></header>
+<main>
+  <div id="sim" class="sim" hidden>🧪 Modo SIMULACIÓN: no aprieta Enviar ni marca el Sheet.</div>
+  <div id="msg" class="err" hidden></div>
+  <label>Pestaña de la tanda <select id="tab"></select></label>
+  <label>Asesora <select id="asesora"></select></label>
+  <div class="info"><div><span>Línea:</span> <b id="linea">—</b></div><div><span>Frase de días de hoy:</span> <b id="dias">—</b></div></div>
+  <div class="row"><button id="cargar">Cargar pendientes</button></div>
+
+  <div id="panel" hidden>
+    <div class="info">
+      <div><span>Estado:</span> <span class="estado" id="estado">—</span></div>
+      <div id="motivo" class="err"></div>
+      <div class="bar"><i id="barra"></i></div>
+      <div class="counts"><span id="prog">0/0</span><span id="cEnv">✅ 0</span><span id="cSim">🧪 0</span><span id="cSal">⏭️ 0</span><span id="cAle">⚠️ 0</span></div>
+    </div>
+    <details id="exc"><summary id="excTit">Apartados</summary><ul id="excList"></ul></details>
+    <div class="row" style="margin-top:8px">
+      <button id="iniciar" class="primary">▶️ Iniciar</button>
+      <button id="pausar">⏸️ Pausar</button>
+      <button id="detener">⏹️ Detener</button>
+    </div>
+  </div>
+  <div id="logs"></div>
+</main>
+<script src="popup.js"></script>
+</body>
+</html>

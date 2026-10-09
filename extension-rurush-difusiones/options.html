@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Rurush Difusiones — Opciones</title>
+<style>
+  body { font: 14px/1.5 "Segoe UI", system-ui, sans-serif; color: #1d2321; max-width: 620px; margin: 24px auto; padding: 0 16px; }
+  h1 { font-size: 20px; }
+  fieldset { border: 1px solid #d9ddda; border-radius: 8px; margin: 0 0 14px; padding: 12px 14px; display: grid; gap: 10px; }
+  legend { font-weight: 700; padding: 0 4px; }
+  label { display: grid; gap: 3px; font-weight: 600; }
+  small { color: #5d6763; font-weight: 400; }
+  input[type=text], input[type=number], input[type=password], textarea { font: inherit; padding: 7px 9px; border: 1px solid #d9ddda; border-radius: 6px; }
+  input[type=number] { width: 110px; }
+  .check { display: flex; gap: 8px; align-items: flex-start; font-weight: 600; }
+  .two { display: flex; gap: 16px; flex-wrap: wrap; }
+  button { font: inherit; font-weight: 700; padding: 9px 18px; border-radius: 6px; border: 0; background: #1f6f5c; color: #fff; cursor: pointer; }
+  #ok { margin-left: 10px; color: #1f6f5c; font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>📨 Rurush Difusiones — Opciones</h1>
+
+<fieldset>
+  <legend>Conexión con el Sheet</legend>
+  <label>URL de la app web (Apps Script)
+    <input type="text" id="apiUrl" placeholder="https://script.google.com/macros/s/…/exec">
+    <small>La que da «Implementar → Nueva implementación → App web». Termina en /exec.</small></label>
+  <label>Clave de la API
+    <input type="password" id="apiKey">
+    <small>La que muestra la función configurar() en el registro de Apps Script.</small></label>
+</fieldset>
+
+<fieldset>
+  <legend>Envío</legend>
+  <label class="check"><input type="checkbox" id="dryRun">
+    <span>Simulación<br><small>Hace todo (abre cada chat, revisa duplicados) pero NO aprieta Enviar ni marca el Sheet. Úsalo la primera vez.</small></span></label>
+  <div class="two">
+    <label>Pausa mínima (seg)<input type="number" id="pausaMinS" min="30" max="600"></label>
+    <label>Pausa máxima (seg)<input type="number" id="pausaMaxS" min="30" max="900"></label>
+    <label>Tope por línea por día<input type="number" id="topeDiario" min="1" max="300"></label>
+  </div>
+  <div class="two">
+    <label>Envía desde (hora)<input type="number" id="horaInicio" min="0" max="23"></label>
+    <label>Hasta (hora)<input type="number" id="horaFin" min="1" max="24"></label>
+  </div>
+</fieldset>
+
+<fieldset>
+  <legend>No repetir</legend>
+  <label>Días sin repetir a un mismo número
+    <input type="number" id="diasAntiDup" min="1" max="365">
+    <small>Si un número recibió una difusión en este plazo (en cualquier tanda, en esta PC o en su chat), no se le vuelve a enviar.</small></label>
+  <label>Números bloqueados (uno por línea)
+    <textarea id="blocklist" rows="4"></textarea>
+    <small>Nunca se les envía, aunque estén en el Sheet.</small></label>
+</fieldset>
+
+<button id="guardar">Guardar</button><span id="ok"></span>
+<script src="options.js"></script>
+</body>
+</html>
