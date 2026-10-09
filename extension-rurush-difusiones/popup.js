@@ -51,21 +51,36 @@ function lineaElegida() {
   $('linea').textContent = (info && info.lineas[a]) || '—';
 }
 
-async function cargarInfo() {
-  const r = await send({ type: 'info' });
-  if (!r || !r.ok) { error((r && r.error) || 'No responde la API del Sheet. Revisa Opciones.'); return; }
-  info = r.data;
+// Pinta pestañas y asesoras. Conserva lo que la asesora ya eligió.
+async function pintarInfo(data) {
+  info = data;
   $('dias').textContent = info.dias || '(falta DIAS_HOY)';
   const { run } = await chrome.storage.local.get('run');
+  const tabAntes = $('tab').value || (run && run.tab);
+  const asesoraAntes = $('asesora').value || (run && run.asesora);
   const tandas = info.pestanas;
   $('tab').replaceChildren(...tandas.map((t) => new Option(t, t)));
-  const preferida = (run && run.tab) || [...tandas].reverse().find((t) => /TANDA/i.test(t)) || tandas[0];
-  if (preferida) $('tab').value = preferida;
+  $('tab').value = tandas.includes(tabAntes) ? tabAntes
+    : ([...tandas].reverse().find((t) => /TANDA/i.test(t)) || tandas[0] || '');
   // solo asesoras con línea: sin línea (ej. DANNA) no se puede enviar
   const conLinea = Object.entries(info.lineas).filter(([, tel]) => tel).map(([n]) => n);
   $('asesora').replaceChildren(...conLinea.map((n) => new Option(n, n)));
-  if (run && conLinea.includes(run.asesora)) $('asesora').value = run.asesora;
+  if (conLinea.includes(asesoraAntes)) $('asesora').value = asesoraAntes;
   lineaElegida();
+}
+
+// Muestra al instante lo último guardado y lo refresca desde el Sheet por detrás.
+async function cargarInfo() {
+  const { infoCache } = await chrome.storage.local.get('infoCache');
+  if (infoCache) await pintarInfo(infoCache);
+  else $('dias').textContent = 'Conectando con el Sheet…';
+  const r = await send({ type: 'info' });
+  if (!r || !r.ok) {
+    if (!infoCache) error((r && r.error) || 'No responde la API del Sheet. Revisa Opciones.');
+    return;
+  }
+  await chrome.storage.local.set({ infoCache: r.data });
+  await pintarInfo(r.data);
 }
 
 $('asesora').addEventListener('change', lineaElegida);
