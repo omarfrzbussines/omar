@@ -65,3 +65,12 @@ OCTUBRE, NOVIEMBRE y DICIEMBRE: columna **COD** en ventas y renovación (autocom
   token en Script Properties (PIPEDRIVE_TOKEN), corre a diario 9 pm. Nunca baja un estado.
 - KPIs de las 8 tandas unificados (Agendados / % agendado); links 📲 de TANDA 2 corregidos.
 - Rutinas FP de Claude (6) pausadas: los recordatorios FP salen solo de la extensión FP.
+
+## Actualización 09-oct (noche) — Inasistencias
+- 🏃 INASISTENCIAS instalado por Omar (API v2 implementada, Embudo e Inasistencias pegados, clave Apps Fit
+  guardada, disparadores 7 am lun–sáb y 9 pm diario). Primera lista: 35 (Mónica 19 · Laura 11 · Danna 5).
+- Asesora = Vendedor de Apps Fit (corregido tras revisar con Omar: Judith→Mónica, Nicolás y Candy→Danna).
+- Grupos A 4–6 · B 7–10 · C 11–15 · D 16–30 · E 31+; un mensaje cada 5 días; seguimiento a quien respondió.
+- DANNA = 51926918075 en ⚙️ CONFIG con nota «SOLO INASISTENCIAS» (no envía difusiones).
+- Rutina «WTS SEGUIMIENTO INASISTENCIAS» pausada (opción A): la extensión 1.3.0 la reemplaza, con Sábado
+  marcado en el modo automático.
