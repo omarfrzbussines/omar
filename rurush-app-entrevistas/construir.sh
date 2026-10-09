@@ -31,6 +31,20 @@ HTML
   <main id="app"><p class="vacio">Cargando…</p></main>
   <div id="toast" hidden></div>
 <script>
+// Red de seguridad en JavaScript antiguo (ES5) a propósito: funciona aunque el resto
+// falle en un celular viejo. Si en 20 s sigue "Cargando…", explica qué pasa.
+var __errores = [];
+window.onerror = function (m, src, linea) { __errores.push(String(m) + ' (línea ' + linea + ')'); };
+setTimeout(function () {
+  var app = document.getElementById('app');
+  if (!app || !/Cargando/.test(app.textContent)) return;
+  var err = __errores.length ? '<p style="font-size:12px;color:#a1281c">Detalle: ' +
+    __errores.join(' · ').replace(/[<>&]/g, '') + '</p>' : '';
+  app.innerHTML = '<div class="bloqueo"><div class="grande">🐢</div><h2>Está tardando demasiado</h2>' +
+    '<p>Ábrelo en Chrome o Safari (no dentro de WhatsApp), revisa tu internet y vuelve a abrir el link.</p>' + err + '</div>';
+}, 20000);
+</script>
+<script>
 const INVITA = <?!= jsonSeguro_(invita) ?>;
 const CONFIG_SERVIDOR = <?!= jsonSeguro_(config) ?>;
 HTML

@@ -28,7 +28,8 @@ const st = {
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = v => { const n = parseFloat(String(v || '').replace(',', '.')); return isNaN(n) ? null : n; };
 const fmt = n => n == null ? '—' : String(Math.round(n * 10) / 10).replace('.', ',');
-const primerNombre = d => (String(d.nombre || '').trim().split(/\s+/)[0] || '').replace(/^./, c => c.toUpperCase()).replace(/(?<=.)./g, c => c.toLowerCase());
+// Sin "lookbehind" en regex: los iPhone con iOS < 16.4 no lo entienden y se cae toda la app.
+const primerNombre = d => { const w = String(d.nombre || '').trim().split(/\s+/)[0] || ''; return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(); };
 const cand = () => st.cands.find(c => c.fila === st.sel);
 const nombreDe = c => String(c.d.nombre || '').trim() || (c.d.email ? c.d.email : `(sin nombre · fila ${c.fila})`);
 
