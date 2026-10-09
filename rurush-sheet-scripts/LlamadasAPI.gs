@@ -163,7 +163,7 @@ function ll_historial(est, fila) {
       n: k + 1,
       asesor: ro.asesor >= 0 ? String(fila[ro.asesor] || "").trim() : "",
       fecha: ro.fecha >= 0 ? ll_comoTexto(fila[ro.fecha]) : "",
-      fechaIso: ro.fecha >= 0 && fila[ro.fecha] instanceof Date ? Utilities.formatDate(fila[ro.fecha], "America/Lima", "yyyy-MM-dd") : "",
+      fechaIso: ro.fecha >= 0 && fila[ro.fecha] instanceof Date ? ll_iso(fila[ro.fecha]) : "",
       estado: e.toUpperCase(),
       obs: ro.obs >= 0 ? String(fila[ro.obs] || "").trim() : ""
     });
@@ -257,8 +257,17 @@ function ll_limpiarTel(v) {
   return s.length >= 9 ? s.slice(-9) : "";
 }
 
+// Fechas a texto SIN Utilities.formatDate: esa función es lentísima repetida miles de
+// veces (la cola tardaba ~40 s). Perú es UTC-5 todo el año, así que basta restar 5 h.
+function ll_partes(d) {
+  const l = new Date(d.getTime() - 5 * 3600 * 1000);
+  return [l.getUTCFullYear(), l.getUTCMonth() + 1, l.getUTCDate()];
+}
+const ll_2 = function (n) { return (n < 10 ? "0" : "") + n; };
+function ll_iso(d) { const p = ll_partes(d); return p[0] + "-" + ll_2(p[1]) + "-" + ll_2(p[2]); }
+
 function ll_comoTexto(v) {
-  if (v instanceof Date) return Utilities.formatDate(v, "America/Lima", "dd/MM/yyyy");
+  if (v instanceof Date) { const p = ll_partes(v); return ll_2(p[2]) + "/" + ll_2(p[1]) + "/" + p[0]; }
   return String(v == null ? "" : v).trim();
 }
 

@@ -58,13 +58,25 @@
 const LLAVE = <?!= JSON.stringify(llave) ?>;
 const ASESORA = <?!= JSON.stringify(asesora) ?>;
 const BASE = '2026';
-let cola = [], idx = 0, estado = null, ESTADOS = [], HORAS = [], hoy = {}, pend = null, trayendo = false;
+let mostrando = false, cola = [], idx = 0, estado = null, ESTADOS = [], HORAS = [], hoy = {}, pend = null, trayendo = false;
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
 function toast(t, err) {
   const el = $('#toast'); el.textContent = t; el.className = 'toast' + (err ? ' err' : ''); el.style.display = 'block';
   clearTimeout(el._t); el._t = setTimeout(() => el.style.display = 'none', err ? 6000 : 2200);
+}
+
+const CLAVE_LOCAL = 'rr_cola_' + ASESORA + '_' + BASE;
+function guardarLocal() {
+  try { localStorage.setItem(CLAVE_LOCAL, JSON.stringify({ dia: new Date().toDateString(), cola: cola.slice(idx), ESTADOS, HORAS })); } catch (e) {}
+}
+function leerLocal() {
+  try {
+    const c = JSON.parse(localStorage.getItem(CLAVE_LOCAL) || 'null');
+    if (c && c.dia === new Date().toDateString() && c.cola && c.cola.length) return c;
+  } catch (e) {}
+  return null;
 }
 
 function traer(reset) {
@@ -75,10 +87,16 @@ function traer(reset) {
     .withSuccessHandler((r) => {
       trayendo = false;
       ESTADOS = r.estados; HORAS = r.horas; hoy = r.hoy; pend = r.pendientes;
-      if (reset) { cola = r.cola; idx = 0; } else { cola = cola.concat(r.cola); }
+      if (reset) {
+        // si ya se estaba mostrando la cola guardada, no cambiarle la persona en pantalla
+        const enPantalla = actual();
+        cola = r.cola; idx = 0;
+        if (enPantalla) { const j = cola.findIndex((x) => x.fila === enPantalla.fila); if (j > 0) { cola.splice(j, 1); cola.unshift(enPantalla); } else if (j < 0) cola.unshift(enPantalla); }
+      } else { cola = cola.concat(r.cola); }
+      guardarLocal();
       $('#sub').textContent = `Hola ${ASESORA} · base 2026 · cargó en ${((Date.now() - t0) / 1000).toFixed(1)} s`;
       pintarMarcador();
-      if (reset || !actual()) pintar();
+      if (!mostrando || !actual()) { mostrando = true; pintar(); }
     })
     .withFailureHandler((e) => { trayendo = false; toast(e.message || String(e), true); if (!cola.length) $('#main').innerHTML = `<div class="vacio">${esc(e.message || e)}</div>`; })
     .app_getCola(LLAVE, BASE, excluir);
@@ -92,7 +110,7 @@ function pintarMarcador() {
   $('#marcador').innerHTML =
     `<div class="m"><b>${total}</b>llamadas hoy</div><div class="m"><b>${cont}</b>contestaron</div>` +
     `<div class="m"><b>${hoy.AGENDADO || 0}</b>agendados</div>` +
-    (pend ? `<div class="m"><b>${pend.nuevos}</b>nuevos</div><div class="m"><b>${pend.seguimiento}</b>en seguimiento</div>` : '');
+    `<div class="m"><b>${Math.max(cola.length - idx, 0)}</b>en tu cola</div>`;
 }
 
 function pintar() {
@@ -131,7 +149,7 @@ function pintar() {
     const box = $('#fpbox'); if (box) box.style.display = estado === 'AGENDADO' ? 'block' : 'none';
   });
   $('#guardar').onclick = guardar;
-  $('#saltar').onclick = () => { idx++; pintar(); revisarCola(); };
+  $('#saltar').onclick = () => { idx++; pintar(); revisarCola(); guardarLocal(); };
   window.scrollTo(0, 0);
 }
 
@@ -142,7 +160,7 @@ function guardar() {
   const fpf = $('#fpf') ? $('#fpf').value : '', fph = $('#fph') ? $('#fph').value : '';
   const e = estado;
   hoy[e] = (hoy[e] || 0) + 1; pintarMarcador();
-  idx++; pintar(); revisarCola();
+  idx++; pintar(); revisarCola(); guardarLocal();
   google.script.run
     .withSuccessHandler(() => toast(`✓ Guardado: ${e}`))
     .withFailureHandler((err) => { hoy[e]--; pintarMarcador(); toast(`No se guardó (${p.numero}): ${err.message || err}`, true); })
@@ -151,7 +169,10 @@ function guardar() {
 
 function revisarCola() { if (cola.length - idx <= 5) traer(false); }
 
-$('#recargar').onclick = () => { $('#main').innerHTML = '<div class="vacio">Cargando…</div>'; traer(true); };
+$('#recargar').onclick = () => { mostrando = false; cola = []; idx = 0; $('#main').innerHTML = '<div class="vacio">Cargando…</div>'; traer(true); };
+// Al abrir: si hay una cola guardada de hoy, se muestra al instante y se actualiza por detrás.
+const local = leerLocal();
+if (local) { cola = local.cola; ESTADOS = local.ESTADOS; HORAS = local.HORAS; mostrando = true; pintar(); pintarMarcador(); }
 traer(true);
 </script>
 </body>
