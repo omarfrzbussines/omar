@@ -7,6 +7,7 @@ const LEADS_ID = '1DzlEgYAdV02TAtR78zweTI0G-n-RwJwWgfwTqIILoJg';
 const LEADS_PESTANA = '2026';
 const MESES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
 const NO_CONTESTA = { 'NO CONTESTO': 1, 'APAGADO': 1 };
+let EQ_T = {};   // cronómetro por partes (se ve en el registro de instalarEquipo)
 
 function getEquipo(forzar) {
   const cache = CacheService.getScriptCache();
@@ -15,12 +16,14 @@ function getEquipo(forzar) {
     if (c) return JSON.parse(c);
   }
   const t0 = Date.now();
+  EQ_T = {};
   const res = { generado: Utilities.formatDate(new Date(), 'America/Lima', 'HH:mm'), errores: [] };
   try { res.ventas = eq_ventas(); } catch (e) { res.errores.push('Ventas: ' + e.message); }
   const t1 = Date.now();
   try { res.llamadas = eq_llamadas(); } catch (e) { res.errores.push('Llamadas: ' + e.message); }
   res.seg = Math.round((Date.now() - t0) / 100) / 10;
   res.segVentas = Math.round((t1 - t0) / 100) / 10;
+  res.t = EQ_T;
   // 25 min: el activador lo recalcula cada 10 min, así el celular nunca espera.
   try { cache.put('equipo', JSON.stringify(res), 1500); } catch (e) { /* >100 KB: sin caché */ }
   return res;
@@ -39,7 +42,7 @@ function instalarEquipo() {
     .forEach((t) => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('eq_precalentar').timeBased().everyMinutes(10).create();
   const r = getEquipo(true);
-  Logger.log('Activador listo. Tardó ' + r.seg + ' s (ventas ' + r.segVentas + ' s). Errores: ' + JSON.stringify(r.errores));
+  Logger.log('Activador listo. Tardó ' + r.seg + ' s (ventas ' + r.segVentas + ' s). Llamadas: ' + JSON.stringify(r.t) + '. Errores: ' + JSON.stringify(r.errores));
 }
 
 /* ---------- utilidades ---------- */
@@ -168,11 +171,14 @@ function eq_llamadas() {
   const lunes = new Date(d.getTime() - ((d.getUTCDay() + 6) % 7) * 86400e3).toISOString().slice(0, 10);
   const mes = hoy.slice(0, 8) + '01';
 
+  const T = EQ_T; let t = Date.now();
+  const lap = (k) => { const n = Date.now(); T[k] = Math.round((n - t) / 100) / 10; t = n; };
   const sh = SpreadsheetApp.openById(LEADS_ID).getSheetByName(LEADS_PESTANA);
   if (!sh) throw new Error('No encuentro la pestaña ' + LEADS_PESTANA + '.');
   const enc = sh.getRange(2, 1, 1, sh.getLastColumn()).getDisplayValues()[0];
   const bloques = eq_estructura(enc);
   if (!bloques.length) throw new Error('No encuentro las columnas de las llamadas en la fila 2.');
+  lap('abrir');
 
   // Última fila con NÚMERO (otras columnas vienen prellenadas hasta muy abajo).
   const colNum = enc.findIndex((h) => eq_txt(h).toUpperCase() === 'NUMERO') + 1 || 4;
@@ -180,16 +186,33 @@ function eq_llamadas() {
   let ultima = nums.length;
   while (ultima > 0 && eq_txt(nums[ultima - 1][0]) === '') ultima--;
   if (!ultima) return { hoy: {}, semana: {}, mes: {} };
+  lap('numeros');
 
+  // 1) Solo las columnas FECHA: qué filas tienen alguna llamada de este mes.
+  const conLlamada = new Array(ultima).fill(false);
+  bloques.forEach((b) => {
+    sh.getRange(3, b.fecha + 1, ultima, 1).getValues().forEach((r, i) => {
+      if (conLlamada[i]) return;
+      const f = eq_iso(r[0]);
+      if (f && f >= mes && f <= hoy) conLlamada[i] = true;
+    });
+  });
+  lap('fechas');
+
+  // 2) Tramos de filas seguidas (se unen si hay menos de 40 filas entre ellas).
+  const tramos = [];
+  conLlamada.forEach((ok, i) => {
+    if (!ok) return;
+    const u = tramos[tramos.length - 1];
+    if (u && i - u[1] <= 40) u[1] = i; else tramos.push([i, i]);
+  });
   const maxCol = Math.max.apply(null, bloques.map((b) => Math.max(b.asesor, b.timbrada, b.duracion, b.fecha, b.hora, b.estado, b.obs))) + 1;
-  // getValues (crudo) es varias veces más rápido que getDisplayValues en 6000 filas.
-  const filas = sh.getRange(3, 1, ultima, maxCol).getValues();
 
   const P = { hoy: {}, semana: {}, mes: {} };
   const minutosHoy = {};
   const nueva = () => ({ n: 0, wa: 0, cont: 0, agend: 0, durSum: 0, durN: 0, timbSum: 0, timbN: 0, manual: 0 });
 
-  filas.forEach((f) => {
+  const procesar = (f) => {
     bloques.forEach((b) => {
       const estado = eq_txt(f[b.estado]).toUpperCase();
       if (!estado) return;
@@ -214,7 +237,16 @@ function eq_llamadas() {
         if (m != null) (minutosHoy[ase] = minutosHoy[ase] || []).push(m);
       }
     });
+  };
+  // 3) Solo esas filas completas.
+  let leidas = 0;
+  tramos.forEach((tr) => {
+    const n = tr[1] - tr[0] + 1;
+    leidas += n;
+    sh.getRange(3 + tr[0], 1, n, maxCol).getValues().forEach(procesar);
   });
+  T.filas = leidas; T.tramos = tramos.length;
+  lap('leer');
 
   // Hoy: primera/última llamada, hueco más largo sin llamar y ráfagas (≥3 en el mismo minuto).
   Object.keys(minutosHoy).forEach((ase) => {
