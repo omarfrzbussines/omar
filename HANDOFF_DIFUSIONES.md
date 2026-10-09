@@ -53,3 +53,15 @@ cuenta de servicio de Google, OAuth. **Rotarlas.** La herramienta Carpeta a Mark
 ## Otros cambios del día (archivo VENTAS 2026)
 OCTUBRE, NOVIEMBRE y DICIEMBRE: columna **COD** en ventas y renovación (autocompleta nombre, celular, DNI desde
 "3. BASE DE SOCIOS"), en Arial y dentro del recuadro. Pendiente confirmar si Gali Savedra = código 1009.
+
+## Actualización 09-oct (tarde)
+- Extensión **v1.2.0**: envío arreglado (detecta la burbuja por texto, una sola apertura por chat),
+  modo automático L–V 8:00 (30 por línea, la línea abierta decide la asesora), frase {DIAS} recargada
+  si la tanda sigue otro día, y **revisión de respuestas** (2 h después del último envío + cada mañana,
+  últimos 3 días → «RESPONDIO - POR CONTESTAR» + fila en 💬 RESPUESTAS).
+- API: {DIAS} calculado en Apps Script (fecha Lima, lun–sáb, sin feriados); acciones porRevisar/respuesta.
+- **Embudo_Difusiones.gs** (mismo proyecto): cruza cada envío con Pipedrive (FP creado después del envío →
+  AGENDADO; FP realizado → VINO) y con 3. BASE DE SOCIOS (plan desde el envío → SE INSCRIBIO). Menú 🔁 Rurush,
+  token en Script Properties (PIPEDRIVE_TOKEN), corre a diario 9 pm. Nunca baja un estado.
+- KPIs de las 8 tandas unificados (Agendados / % agendado); links 📲 de TANDA 2 corregidos.
+- Rutinas FP de Claude (6) pausadas: los recordatorios FP salen solo de la extensión FP.
