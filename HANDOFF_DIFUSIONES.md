@@ -10,6 +10,12 @@
   `LINEAS` (LAURA 51936555464, MÓNICA 51934352367, DANNA sin línea → no se envía), `FERIADOS`.
 - **Pestaña 🧪 PRUEBA** con 2 filas de prueba (926 918 075 gym y 972 156 556).
 - Mensajes con **`{DIAS}`** en vez de día fijo; los mensajes con día escrito a mano quedan apartados.
+- `{DIAS}` ofrece **lunes a sábado** (nunca domingo) desde el 09-oct: viernes → «mañana sábado o el lunes».
+- **📨 TANDA 8 EX ALUMNOS** creada el 09-oct: 195 filas (98 Laura / 97 Mónica), más recientes primero,
+  versiones V1/V2/V3 rotando (columna VERSIÓN), RESULTADO con lista (incluye AGENDADO / VINO / SE INSCRIBIO).
+  Filas 149 y 174 con nota de posible duplicado.
+- **📝 PLANTILLAS**: 1er mensaje por tanda, 2do mensaje por objeción, seguimiento único, cómo medir.
+  Regla: nombre → dato positivo → invitación → UNA pregunta con doble opción. Sin «no te vendo nada» ni «qué no te gustó».
 
 ## Estado de las tandas
 TANDA 2, 3 y 4 + 🔥 100 DE HOY: **Laura y Mónica no tienen nada por enviar** (lo pendiente son números
