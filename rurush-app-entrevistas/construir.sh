@@ -132,5 +132,16 @@ JS
 </html>
 HTML
 } > App.html
+# Google borra lo que sigue a "//" en cada línea de los <script>: el código tiene que seguir
+# funcionando así. Se simula y se revisa la sintaxis (necesita node).
+if command -v node >/dev/null 2>&1; then
+  node -e '
+    const s = require("fs").readFileSync("App.html", "utf8");
+    const scripts = [...s.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]
+      .replace(/<\?!=[^?]*\?>/g, "null").replace(/\/\/.*$/gm, ""));
+    scripts.forEach((js, i) => { try { new Function(js); } catch (e) {
+      console.error("⚠️ App.html se rompe si se quitan los //: script " + (i + 1) + ": " + e.message); process.exit(1); } });
+  ' || exit 1
+fi
 if grep -n '<?' App.html | grep -v 'jsonSeguro_' ; then echo "⚠️ hay '<?' sueltos en App.html"; exit 1; fi
 echo "✔ App.html generado"

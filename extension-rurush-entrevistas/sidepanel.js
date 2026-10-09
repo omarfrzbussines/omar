@@ -25,6 +25,8 @@ const st = {
 };
 
 // ---------- utilidades ----------
+// ⚠️ En el código NO escribir "//" dentro de textos (ej. https://…): al servir la app,
+// Google borra todo lo que sigue a "//" en la línea. Usar "https:\/\/…" (construir.sh lo revisa).
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = v => { const n = parseFloat(String(v || '').replace(',', '.')); return isNaN(n) ? null : n; };
 const fmt = n => n == null ? '—' : String(Math.round(n * 10) / 10).replace('.', ',');
@@ -47,7 +49,7 @@ function telefono(d) {
 }
 function linkWa(d, texto) {
   const n = telefono(d);
-  return n ? `https://wa.me/${n}${texto ? '?text=' + encodeURIComponent(texto) : ''}` : '';
+  return n ? `https:\/\/wa.me/${n}${texto ? '?text=' + encodeURIComponent(texto) : ''}` : '';
 }
 function claseEstado(e) {
   if (/contratado/i.test(e)) return 'est-contratado';
@@ -239,7 +241,7 @@ function pintarFicha() {
     href = /^(https:\/\/|http:\/\/|tel:)/i.test(String(href || '').trim()) ? String(href).trim() : '';
     return `<a href="${esc(href || '#')}" target="_blank" class="${href ? '' : 'falta'}">${txt}</a>`;
   };
-  const ig = d.ig && !/^no$/i.test(d.ig.trim()) ? `https://instagram.com/${d.ig.trim().replace(/^@/, '').replace(/^https?:\/\/(www\.)?instagram\.com\//, '')}` : '';
+  const ig = d.ig && !/^no$/i.test(d.ig.trim()) ? `https:\/\/instagram.com/${d.ig.trim().replace(/^@/, '').replace(/^https?:\/\/(www\.)?instagram\.com[/]/, '')}` : '';
   $app.innerHTML = `
     <div class="cabecera">
       <div class="nombre">${esc(nombreDe(c))}</div>
@@ -439,7 +441,7 @@ function pintarEquipo() {
       <div class="acciones"><button data-accion="invitar" ${st.guardando ? 'disabled' : ''}>Crear invitación</button></div>
       ${inv ? `<div class="flag ok" style="margin-top:8px">✔ Invitación para <b>${esc(inv.nombre)}</b> lista</div>
         <div class="acciones">
-          <a class="btn" target="_blank" href="https://wa.me/?text=${encodeURIComponent(textoInv)}">💬 Enviar por WhatsApp</a>
+          <a class="btn" target="_blank" href="https:\/\/wa.me/?text=${encodeURIComponent(textoInv)}">💬 Enviar por WhatsApp</a>
           <button class="sec" data-accion="copiarInv" data-link="${esc(linkInv)}">📋 Copiar link</button>
         </div>` : ''}
     </div>
