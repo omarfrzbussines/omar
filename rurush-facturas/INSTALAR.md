@@ -7,7 +7,7 @@ se llena lo importante y la app calcula el resto y lo sube sola a OneDrive.**
 | Se llena | La app calcula sola |
 |---|---|
 | Quién registra (se recuerda en su celular) | Mes y semana del año |
-| 📷 Foto del comprobante (y si quiere, otra del voucher) | Precio unitario (total ÷ cantidad) |
+| 📷 Foto del comprobante, o de la galería si llegó por WhatsApp (y si quiere, otra del voucher) | Precio unitario (total ÷ cantidad) |
 | Categoría (toque): Agua, Limpieza, Útiles, Mantenimiento… | Base imponible e IGV (solo si es **Factura**) |
 | Qué se compró, total pagado, cantidad | RUC del proveedor (si ya se usó antes en ese celular) |
 | Pagado con (toque): Caja chica, Yape, Plin… | Nombre del archivo y carpeta del mes |
@@ -30,7 +30,11 @@ En el Excel puedes filtrar o hacer una tabla dinámica por **Categoría**, **Mes
 **Semana**, **Pagado con** o **Registrado por** (en una hoja aparte).
 
 **Sin internet no se pierde nada:** el gasto queda guardado en el celular y se sube
-solo cuando vuelve la señal (o al abrir la app). Las fotos se comprimen (~300 KB).
+solo cuando vuelve la señal (o al abrir la app). La app abre aunque no haya señal
+(después de haberla abierto una vez con internet). Las fotos se comprimen (~300 KB).
+
+Cada gasto tiene un **ID** (columna A). Si alguna vez se corta la señal justo al subir,
+puede quedar una fila repetida con el mismo ID: borra una.
 
 ---
 
@@ -54,7 +58,8 @@ solo cuando vuelve la señal (o al abrir la app). Las fotos se comprimen (~300 K
 ## 2. Publicarla (GitHub Pages, gratis)
 
 1. En GitHub: repo **omar** → **Settings → Pages**.
-2. **Source:** *Deploy from a branch* → rama donde está esta carpeta → carpeta **/ (root)** → **Save**.
+2. **Source:** *Deploy from a branch* → la rama que tenga la carpeta `rurush-facturas`
+   (hoy: `claude/vigilant-babbage-ee8ikf`, o la principal cuando la unas) → carpeta **/ (root)** → **Save**.
 3. En 1–2 min queda en: **https://omarfrzbussines.github.io/omar/rurush-facturas/**
 
 Si la publicas en otra dirección, esa misma dirección exacta debe estar en el paso 1.4
@@ -69,8 +74,10 @@ Todas entran a la app con esa misma cuenta. No hay que configurar nada más.
 
 **B) Cada una con su cuenta + carpeta compartida.**
 1. Tú abres la app con tu cuenta → se crea `RURUSH Facturas` en tu OneDrive.
-2. En OneDrive web: clic derecho en la carpeta → **Compartir** → **"Cualquiera con el vínculo puede editar"**
-   (o invita a cada persona con permiso de edición) → **Copiar vínculo**.
+2. En OneDrive web: clic derecho en la carpeta → **Compartir** → **invita a cada persona por su correo
+   con permiso de edición** → **Copiar vínculo**.
+   ⚠️ Evita "Cualquiera con el vínculo puede editar": quien reciba ese link (si se reenvía por WhatsApp)
+   podría ver o borrar los comprobantes.
 3. En la app: **⚙️ Ajustes → Carpeta de OneDrive** → pega ese vínculo → **Guardar**.
 4. **🔗 Copiar link para el equipo** → mándales ese link por WhatsApp.
    Al abrirlo, su celular queda apuntando a tu carpeta.
