@@ -293,9 +293,9 @@ async function unPaso() {
     return false;
   }
   const { waActivity = 0 } = await chrome.storage.local.get('waActivity');
-  if (Date.now() - waActivity < 3 * 60e3) {
-    await log('info', 'Alguien está usando WhatsApp Web: espero 5 min.');
-    await programar(300);
+  if (Date.now() - waActivity < 60e3) {
+    await log('info', 'Alguien está usando WhatsApp Web: espero 1 min.');
+    await programar(60);
     return false;
   }
 
@@ -333,8 +333,9 @@ async function unPaso() {
     throw new Error(`WhatsApp Web está en ${status.wid || 'un número desconocido'} y esta tanda es de ${run.asesora} (${run.linea}). Cambia de sesión y reanuda.`);
   }
 
-  // 4. el chat: ¿ya le escribimos?
-  const chat = await openChat(tab.id, tel);
+  // 4. el chat: ¿ya le escribimos? Se abre UNA sola vez, ya con el mensaje cargado
+  //    (en simulación, sin mensaje), para no recargar WhatsApp Web dos veces por contacto.
+  const chat = await openChat(tab.id, tel, run.simulacion ? null : it.mensaje);
   if (!chat) {
     run.res.alertas += 1;
     await siguiente(run, { level: 'warn', msg: `⚠️ ${etiqueta}: el chat no abrió, lo salto (sin marcar).` });
@@ -346,8 +347,19 @@ async function unPaso() {
     await siguiente(run, { level: 'info', msg: `⏭️ ${etiqueta}: no tiene WhatsApp` });
     return true;
   }
-  const escrito = yaEscritoEnChat(chat.messages, now.date, cfg.diasAntiDup);
-  if (escrito.si) return saltar(`el chat ya tiene un mensaje de Rurush (${escrito.fecha})`, run.simulacion ? null : 'YA_CONTACTADO');
+  // los mensajes viejos a veces cargan un instante después que el cuadro de texto
+  await sleep(1500);
+  const estadoChat = (await ask(tab.id, { type: 'chatState' })) || chat;
+  if (!run.diagHecho) {
+    run.diagHecho = true;
+    const d = await ask(tab.id, { type: 'diag' });
+    if (d) await log('info', `🔎 Chat leído: ${d.pre} mensajes con fecha, ${d.idTrue} propios por id, ${d.out} por clase, ${d.iconos} íconos.`);
+  }
+  const escrito = yaEscritoEnChat(estadoChat.messages, now.date, cfg.diasAntiDup);
+  if (escrito.si) {
+    if (!run.simulacion) await ask(tab.id, { type: 'clearDraft' });
+    return saltar(`el chat ya tiene un mensaje de Rurush (${escrito.fecha})`, run.simulacion ? null : 'YA_CONTACTADO');
+  }
 
   if (run.simulacion) {
     run.res.simulados += 1;
@@ -355,30 +367,38 @@ async function unPaso() {
     return true;
   }
 
-  // Envío real: cargar el borrador y comprobar que es exactamente el mensaje
-  const draft = await openChat(tab.id, tel, it.mensaje);
-  if (!draft || draft.invalid || !draft.draft.trim()) {
+  // Envío real: comprobar que el borrador es exactamente el mensaje
+  const draft = estadoChat;
+  if (!draft || !String(draft.draft || '').trim()) {
     run.res.alertas += 1;
     await siguiente(run, { level: 'warn', msg: `⚠️ ${etiqueta}: no se pudo cargar el mensaje (sin marcar).` });
     return true;
   }
   if (normTexto(draft.draft) !== normTexto(it.mensaje)) {
+    await ask(tab.id, { type: 'clearDraft' });
     run.res.alertas += 1;
     await siguiente(run, { level: 'warn', msg: `⚠️ ${etiqueta}: el borrador no coincide con el mensaje del Sheet, no envié.` });
     return true;
   }
 
+  const inicio = normTexto(it.mensaje).slice(0, 30);
   const antes = await ask(tab.id, { type: 'lastOutgoing' });
   const r = await ask(tab.id, { type: 'send' });
   if (!r || !r.ok) throw new Error(`falló el clic en Enviar con ${etiqueta} (${(r && r.error) || 'sin respuesta'})`);
 
-  // Confirmar la burbuja enviada: el texto coincide, o apareció un mensaje nuestro nuevo.
-  const inicio = normTexto(it.mensaje).slice(0, 30);
+  // Confirmar la burbuja: se busca por su texto. Si tiene reloj se espera hasta 1 minuto;
+  // si no se puede leer, no se espera de más (el cuadro ya quedó vacío: salió).
   const totalAntes = (antes && antes.total) || 0;
   const confirmada = (b) => b && b.estado === 'ok'
-    && (normTexto(b.text).startsWith(inicio) || (b.total || 0) > totalAntes);
-  const burbuja = await waitFor(tab.id, { type: 'lastOutgoing' }, confirmada, 60000);
-  const ultima = burbuja || (await ask(tab.id, { type: 'lastOutgoing' }));
+    && (b.porTexto || normTexto(b.text).startsWith(inicio) || (b.total || 0) > totalAntes);
+  let burbuja = null, ultima = null, sinLeer = 0;
+  const fin = Date.now() + 60000;
+  while (Date.now() < fin) {
+    ultima = await ask(tab.id, { type: 'lastOutgoing', inicio });
+    if (confirmada(ultima)) { burbuja = ultima; break; }
+    if (!ultima || !ultima.porTexto) { sinLeer += 1; if (sinLeer >= 4) break; }
+    await sleep(1500);
+  }
 
   // Cuenta como enviado aunque quede con reloj: WhatsApp lo manda al reconectar.
   await registrarEnvio(tel, run.linea, run.tab);
@@ -388,7 +408,7 @@ async function unPaso() {
   await siguiente(run, { level: 'ok', msg: `✅ ${etiqueta}` });
 
   if (!burbuja) {
-    const estado = ultima && ultima.estado;
+    const estado = ultima && ultima.porTexto && ultima.estado;
     if (estado === 'error' || estado === 'pendiente') {
       await pausar(estado === 'error'
         ? `WhatsApp marcó error al enviar a ${etiqueta}. Revisa el chat y reanuda.`

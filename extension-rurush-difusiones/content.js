@@ -52,10 +52,37 @@ function readMessages() {
   return out;
 }
 
+function normTexto(t) {
+  return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9ñ]/g, '');
+}
+
+function estadoDe(fila) {
+  const iconos = [...fila.querySelectorAll('[data-icon]')].map((i) => i.getAttribute('data-icon') || '');
+  if (iconos.some((n) => /error|alert/i.test(n))) return 'error';
+  if (iconos.some((n) => /time|clock|pending/i.test(n))) return 'pendiente';
+  return 'ok';
+}
+
 // Último mensaje saliente: { text, estado: 'pendiente' (reloj) | 'error' | 'ok', total } o null.
 // total = cuántos mensajes nuestros hay en pantalla (sirve para ver que apareció uno nuevo).
-function lastOutgoing() {
+// Con `inicio` (texto normalizado) busca la burbuja por su texto, sin depender de las clases
+// de WhatsApp, que cambian seguido.
+function lastOutgoing(inicio) {
   const nuestros = [...document.querySelectorAll('#main [data-pre-plain-text]')].filter(esSaliente);
+  if (inicio) {
+    const main = document.querySelector('#main');
+    const hits = main ? [...main.querySelectorAll('span, div')].filter((n) =>
+      normTexto(n.innerText).startsWith(inicio) && ![...n.children].some((c) => normTexto(c.innerText).startsWith(inicio))) : [];
+    const el = hits[hits.length - 1];
+    if (el && !el.closest('footer')) {
+      let fila = el;
+      for (let i = 0; i < 8 && fila.parentElement; i++) {
+        fila = fila.parentElement;
+        if (fila.querySelector('[data-icon]')) break;
+      }
+      return { text: el.innerText, estado: estadoDe(fila), total: nuestros.length, porTexto: true };
+    }
+  }
   let el = nuestros[nuestros.length - 1];
   let fila = el && (el.closest('[data-id]') || el.closest('.message-out'));
   if (!el) {
@@ -64,11 +91,25 @@ function lastOutgoing() {
     el = fila;
   }
   if (!el) return null;
-  const iconos = [...(fila || el).querySelectorAll('[data-icon]')].map((i) => i.getAttribute('data-icon') || '');
-  let estado = 'ok';
-  if (iconos.some((n) => /time|clock|pending/i.test(n))) estado = 'pendiente';
-  if (iconos.some((n) => /error|alert/i.test(n))) estado = 'error';
-  return { text: textoDe(el), estado, total: nuestros.length };
+  return { text: textoDe(el), estado: estadoDe(fila || el), total: nuestros.length };
+}
+
+// Para diagnosticar cambios de WhatsApp Web: qué marcas encuentra la extensión en el chat.
+function diag() {
+  const q = (sel) => document.querySelectorAll(sel).length;
+  return {
+    pre: q('#main [data-pre-plain-text]'), dataId: q('#main [data-id]'),
+    idTrue: q('#main [data-id^="true_"]'), out: q('#main .message-out'), iconos: q('#main [data-icon]'),
+  };
+}
+
+function clearDraft() {
+  const c = compose();
+  if (!c) return { ok: false };
+  c.focus();
+  document.execCommand('selectAll', false, null);
+  document.execCommand('delete', false, null);
+  return { ok: !c.innerText.trim() };
 }
 
 function sendButton() {
@@ -103,7 +144,11 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       messages: c ? readMessages() : [],
     });
   } else if (msg.type === 'lastOutgoing') {
-    reply(lastOutgoing());
+    reply(lastOutgoing(msg.inicio));
+  } else if (msg.type === 'diag') {
+    reply(diag());
+  } else if (msg.type === 'clearDraft') {
+    reply(clearDraft());
   } else if (msg.type === 'send') {
     clickSend().then(reply);
     return true;
