@@ -165,6 +165,19 @@ function eq_estructura(enc) {
   return bloques.filter((b) => b.fecha >= 0 && b.estado >= 0);
 }
 
+// Índice de columna (0 = A) → letra.
+function eq_col(n) { let s = ''; for (n++; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + (n - 1) % 26) + s; return s; }
+// Rango A1 de la pestaña de leads: filas desde/hasta (hasta null = hasta el final), columnas 0-based.
+function eq_rango(desde, hasta, c1, c2) {
+  const a = c1 == null ? '' : eq_col(c1), b = c2 == null ? '' : eq_col(c2);
+  return "'" + LEADS_PESTANA + "'!" + a + desde + ':' + b + (hasta == null ? '' : hasta);
+}
+// Varias lecturas en una sola llamada a la API de Sheets (valores como se ven en el Sheet).
+function eq_leer(rangos) {
+  const r = Sheets.Spreadsheets.Values.batchGet(LEADS_ID, { ranges: rangos, valueRenderOption: 'FORMATTED_VALUE' });
+  return (r.valueRanges || []).map((v) => v.values || []);
+}
+
 function eq_llamadas() {
   const hoy = fechaLima(0);
   const d = new Date(Date.parse(hoy + 'T12:00:00Z'));
@@ -173,29 +186,27 @@ function eq_llamadas() {
 
   const T = EQ_T; let t = Date.now();
   const lap = (k) => { const n = Date.now(); T[k] = Math.round((n - t) / 100) / 10; t = n; };
-  const sh = SpreadsheetApp.openById(LEADS_ID).getSheetByName(LEADS_PESTANA);
-  if (!sh) throw new Error('No encuentro la pestaña ' + LEADS_PESTANA + '.');
-  const enc = sh.getRange(2, 1, 1, sh.getLastColumn()).getDisplayValues()[0];
+  // Se lee con la API de Sheets (servicio avanzado "Sheets"): devuelve los valores ya
+  // calculados. SpreadsheetApp espera a que el Sheet recalcule y tardaba 6-15 s por columna.
+  const enc = eq_leer([eq_rango(2, 2)])[0][0] || [];
   const bloques = eq_estructura(enc);
   if (!bloques.length) throw new Error('No encuentro las columnas de las llamadas en la fila 2.');
   lap('abrir');
 
-  // Última fila con NÚMERO (otras columnas vienen prellenadas hasta muy abajo).
-  const colNum = enc.findIndex((h) => eq_txt(h).toUpperCase() === 'NUMERO') + 1 || 4;
-  const nums = sh.getRange(3, colNum, Math.max(sh.getLastRow() - 2, 1), 1).getValues();
-  let ultima = nums.length;
-  while (ultima > 0 && eq_txt(nums[ultima - 1][0]) === '') ultima--;
+  // 1) NÚMERO + las columnas FECHA (una sola consulta): qué filas tienen llamadas del mes.
+  const colNum = enc.findIndex((h) => eq_txt(h).toUpperCase() === 'NUMERO');
+  const cols = [colNum >= 0 ? colNum : 3].concat(bloques.map((b) => b.fecha));
+  const datos = eq_leer(cols.map((c) => eq_rango(3, null, c, c)));
+  let ultima = datos[0].length;
+  while (ultima > 0 && eq_txt((datos[0][ultima - 1] || [])[0]) === '') ultima--;
   if (!ultima) return { hoy: {}, semana: {}, mes: {} };
-  lap('numeros');
-
-  // 1) Solo las columnas FECHA: qué filas tienen alguna llamada de este mes.
   const conLlamada = new Array(ultima).fill(false);
-  bloques.forEach((b) => {
-    sh.getRange(3, b.fecha + 1, ultima, 1).getValues().forEach((r, i) => {
-      if (conLlamada[i]) return;
-      const f = eq_iso(r[0]);
+  datos.slice(1).forEach((col) => {
+    for (let i = 0; i < ultima; i++) {
+      if (conLlamada[i] || !col[i]) continue;
+      const f = eq_iso(col[i][0]);
       if (f && f >= mes && f <= hoy) conLlamada[i] = true;
-    });
+    }
   });
   lap('fechas');
 
@@ -206,7 +217,7 @@ function eq_llamadas() {
     const u = tramos[tramos.length - 1];
     if (u && i - u[1] <= 40) u[1] = i; else tramos.push([i, i]);
   });
-  const maxCol = Math.max.apply(null, bloques.map((b) => Math.max(b.asesor, b.timbrada, b.duracion, b.fecha, b.hora, b.estado, b.obs))) + 1;
+  const maxCol = Math.max.apply(null, bloques.map((b) => Math.max(b.asesor, b.timbrada, b.duracion, b.fecha, b.hora, b.estado, b.obs)));
 
   const P = { hoy: {}, semana: {}, mes: {} };
   const minutosHoy = {};
@@ -238,13 +249,15 @@ function eq_llamadas() {
       }
     });
   };
-  // 3) Solo esas filas completas.
+  // 3) Solo esas filas completas (una sola consulta).
   let leidas = 0;
-  tramos.forEach((tr) => {
-    const n = tr[1] - tr[0] + 1;
-    leidas += n;
-    sh.getRange(3 + tr[0], 1, n, maxCol).getValues().forEach(procesar);
-  });
+  if (tramos.length) {
+    eq_leer(tramos.map((tr) => eq_rango(3 + tr[0], 3 + tr[1], 0, maxCol))).forEach((filas, k) => {
+      const n = tramos[k][1] - tramos[k][0] + 1;
+      leidas += n;
+      for (let i = 0; i < n; i++) procesar(filas[i] || []);
+    });
+  }
   T.filas = leidas; T.tramos = tramos.length;
   lap('leer');
 
