@@ -368,7 +368,7 @@ async function unPaso() {
   // Confirmar la burbuja enviada
   const inicio = normTexto(it.mensaje).slice(0, 30);
   const burbuja = await waitFor(tab.id, { type: 'lastOutgoing' },
-    (b) => b && normTexto(b.text).startsWith(inicio) && b.estado !== 'pendiente', 20000);
+    (b) => b && normTexto(b.text).startsWith(inicio) && b.estado !== 'pendiente', 60000);
   const ultima = burbuja || (await ask(tab.id, { type: 'lastOutgoing' }));
 
   // Cuenta como enviado aunque quede con reloj: WhatsApp lo manda al reconectar.
@@ -382,7 +382,7 @@ async function unPaso() {
     const estado = ultima && ultima.estado;
     await pausar(estado === 'error'
       ? `WhatsApp marcó error al enviar a ${etiqueta}. Revisa el chat y reanuda.`
-      : `El mensaje a ${etiqueta} quedó con reloj (¿sin internet?). Revisa y reanuda.`);
+      : `El mensaje a ${etiqueta} sigue con reloj después de 1 minuto (¿sin internet?). Revisa el chat y reanuda.`);
     notify('Rurush Difusiones', 'Pausado: revisa el último envío.');
     return false;
   }

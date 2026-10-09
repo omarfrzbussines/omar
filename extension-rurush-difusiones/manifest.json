@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Rurush Difusiones",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Envía las tandas de difusión desde el Sheet DIFUSIONES por WhatsApp Web, sin repetir números, y marca el Sheet. Sin uso de Claude.",
   "permissions": ["alarms", "storage", "tabs", "notifications"],
   "host_permissions": [
