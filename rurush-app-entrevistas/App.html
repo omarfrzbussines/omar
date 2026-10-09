@@ -123,12 +123,26 @@ body.movil { font-size: 15px; }
 .caja.agenda .acciones { flex-wrap: wrap; }
 #toast { white-space: pre-line; text-align: center; }
 .movil .cita { font-size: 14px; }
+
+/* Equipo y acceso */
+.disp { display: flex; align-items: center; gap: 8px; justify-content: space-between; padding: 8px 0; border-top: 1px solid var(--borde); }
+.disp:first-of-type { border-top: 0; }
+button.peligro { color: var(--alerta); border-color: #f1b0a8; flex: none; }
+.bloqueo { text-align: center; padding: 40px 18px; }
+.bloqueo .grande { font-size: 48px; }
+.bloqueo h2 { margin: 10px 0; }
+.bloqueo p { color: var(--gris); }
+.bloqueo button { margin-top: 14px; width: 100%; max-width: 320px; }
+/* Textos de ayuda: que se lean completos (no cortados con …) */
+p.sub, .disp .sub { white-space: normal; overflow: visible; }
+.disp > div { min-width: 0; flex: 1; }
 </style>
 </head>
 <body>
   <header>
     <button id="atras" class="icono" title="Volver" hidden>←</button>
     <h1 id="titulo">🎯 Entrevistas</h1>
+    <button id="equipoBtn" class="icono" title="Equipo: quién tiene acceso" hidden>👥</button>
     <button id="refrescar" class="icono" title="Volver a leer el Sheet">🔄</button>
     <button id="opciones" class="icono" title="Opciones">⚙️</button>
   </header>
@@ -136,12 +150,11 @@ body.movil { font-size: 15px; }
   <main id="app"><p class="vacio">Cargando…</p></main>
   <div id="toast" hidden></div>
 <script>
-const LLAVE = <?!= JSON.stringify(llave) ?>;
-const CONFIG_SERVIDOR = <?!= JSON.stringify(config) ?>;
+const INVITA = <?!= jsonSeguro_(invita) ?>;
+const CONFIG_SERVIDOR = <?!= jsonSeguro_(config) ?>;
 // Configuración compartida por el panel y las opciones.
 const DEFAULTS = {
   url: '',
-  llave: '',
   firma: 'Rurush Fitness Club',
   umbralAvanzar: 7.5,
   umbralEvaluar: 6.5
@@ -152,19 +165,84 @@ async function leerConfig() {
   return { ...DEFAULTS, ...c };
 }
 
+// La clave de este equipo NO se sincroniza con otras PCs: vive solo en esta (storage.local).
+async function leerClave() {
+  const { clave } = await chrome.storage.local.get('clave');
+  return clave || null;   // { t, nombre, rol }
+}
+
+/** Saca el código de 64 caracteres de un link de invitación (o del código pegado solo). */
+function codigoDeInvitacion(txt) {
+  const m = String(txt || '').match(/[a-f0-9]{64}/);
+  return m ? m[0] : '';
+}
+
 // Plataforma: app del celular (Apps Script con google.script.run).
+// La clave de ESTE celular se guarda solo aquí (localStorage). Sin ella no se ve ningún dato.
+const CLAVE_LS = 'rre:clave';
+function llamar(fn, ...args) {
+  return new Promise((ok, mal) => {
+    google.script.run
+      .withSuccessHandler(j => (j && j.ok ? ok(j) : mal(new Error((j && j.error) || 'Error desconocido'))))
+      .withFailureHandler(e => mal(new Error((e && e.message) || String(e))))[fn](...args);
+  });
+}
+function leerClaveLS() { try { return JSON.parse(localStorage.getItem(CLAVE_LS)); } catch (e) { return null; } }
+function pantalla(html) {
+  document.getElementById('equipoBtn').hidden = true;
+  document.getElementById('refrescar').hidden = true;
+  document.getElementById('app').innerHTML = `<div class="bloqueo">${html}</div>`;
+}
+
 const PLAT = {
   movil: true,
   config: async () => ({ ...DEFAULTS, ...CONFIG_SERVIDOR }),
   faltaConfig: () => false,
-  api(metodo, datos) {
-    return new Promise((ok, mal) => {
-      const r = google.script.run
-        .withSuccessHandler(j => (j && j.ok ? ok(j) : mal(new Error((j && j.error) || 'Error desconocido'))))
-        .withFailureHandler(e => mal(new Error((e && e.message) || String(e))));
-      if (metodo === 'GET') r.appLista(LLAVE);
-      else r.appGuardar({ ...datos, k: LLAVE });
+
+  /** Si este celular no tiene clave: activa la invitación del link o muestra el candado. */
+  preparar() {
+    if (leerClaveLS()) return Promise.resolve(true);
+    let guarda = false;
+    try { localStorage.setItem('rre:prueba', '1'); localStorage.removeItem('rre:prueba'); guarda = true; } catch (e) { /* bloqueado */ }
+    if (!guarda) {
+      pantalla(`<div class="grande">⚠️</div><h2>Este navegador no deja guardar el acceso</h2>
+        <p>Abre el link en Chrome o Safari normal (no en modo incógnito ni dentro de WhatsApp).</p>`);
+      return Promise.resolve(false);
+    }
+    if (!INVITA) { PLAT.sinAcceso(); return Promise.resolve(false); }
+    return new Promise(listo => {
+      pantalla(`<div class="grande">🔐</div><h2>Activar este celular</h2>
+        <p>Esta invitación sirve <b>una sola vez</b>: solo el celular donde toques “Activar” tendrá acceso.</p>
+        <button id="btnActivar">Activar este celular</button><p id="msgActivar"></p>`);
+      document.getElementById('btnActivar').onclick = async ev => {
+        ev.target.disabled = true;
+        document.getElementById('msgActivar').textContent = 'Activando…';
+        try {
+          const j = await llamar('appActivar', INVITA);
+          localStorage.setItem(CLAVE_LS, JSON.stringify({ t: j.t, nombre: j.nombre, rol: j.rol }));
+          document.getElementById('refrescar').hidden = false;
+          toast(`✔ Listo: ${j.nombre}. Agrega esta página a la pantalla de inicio.`, 6000);
+          listo(true);
+        } catch (e) {
+          ev.target.disabled = false;
+          document.getElementById('msgActivar').textContent = '✖ ' + e.message;
+        }
+      };
     });
+  },
+  sinAcceso() {
+    try { localStorage.removeItem(CLAVE_LS); localStorage.removeItem('rre:cache'); } catch (e) { /* nada */ }
+    pantalla(`<div class="grande">🔒</div><h2>Este celular no está autorizado</h2>
+      <p>Pide una invitación al administrador. Las invitaciones sirven una sola vez y en un solo celular.</p>`);
+  },
+  api(metodo, datos) {
+    const c = leerClaveLS(), t = c && c.t;
+    if (datos.a === 'lista') return llamar('appLista', t);
+    if (datos.a === 'guardar') return llamar('appGuardar', { ...datos, t });
+    if (datos.a === 'equipo') return llamar('appEquipo', t);
+    if (datos.a === 'invitar') return llamar('appInvitar', t, datos.nombre);
+    if (datos.a === 'quitar') return llamar('appQuitar', t, datos.id);
+    return Promise.reject(new Error('Acción desconocida'));
   },
   async leerLocal(k) { try { return JSON.parse(localStorage.getItem('rre:' + k)); } catch (e) { return null; } },
   guardarLocal(k, v) { try { localStorage.setItem('rre:' + k, JSON.stringify(v)); } catch (e) {} },
@@ -375,6 +453,7 @@ const $app = document.getElementById('app');
 const $titulo = document.getElementById('titulo');
 const $atras = document.getElementById('atras');
 const $aviso = document.getElementById('aviso');
+const $equipoBtn = document.getElementById('equipoBtn');
 
 const st = {
   cfg: null,
@@ -389,7 +468,10 @@ const st = {
   borrador: null,     // { puntajes: {actitud: 7.5…}, notasFinal, estado, inicio }
   msg: { fecha: '', hora: '' },
   guardando: false,
-  primeraCarga: true
+  primeraCarga: true,
+  yo: null,           // { nombre, rol } del celular / PC que está usando la app
+  equipo: null,
+  invitacion: null
 };
 
 // ---------- utilidades ----------
@@ -466,13 +548,15 @@ const api = (metodo, datos) => PLAT.api(metodo, datos);
 async function cargar() {
   st.cfg = await PLAT.config();
   if (PLAT.faltaConfig(st.cfg)) {
-    $app.innerHTML = `<div class="caja"><h3>Falta configurar</h3><p>Pega la URL del Apps Script y la llave en Opciones (ver README).</p>
+    $app.innerHTML = `<div class="caja"><h3>Falta configurar</h3><p>Pega la URL del Apps Script y activa esta PC con una invitación en Opciones.</p>
       <button data-accion="opciones">Abrir opciones</button></div>`;
     return;
   }
   aviso('');
   try {
     const j = await api('GET', { a: 'lista' });
+    st.yo = j.yo || null;
+    $equipoBtn.hidden = !(st.yo && st.yo.rol === 'admin');
     st.estados = j.estados || [];
     st.cands = j.cands.map(c => ({ ...c, flags: evaluar(c.d) }));
     if (st.primeraCarga) {
@@ -482,6 +566,8 @@ async function cargar() {
     }
     PLAT.guardarLocal('cache', { estados: st.estados, cands: j.cands });
   } catch (e) {
+    // Acceso quitado o clave inválida: se borra todo lo guardado en este equipo y se bloquea.
+    if (e.message === 'NO_AUTORIZADO') { PLAT.borrarLocal('cache'); return PLAT.sinAcceso(); }
     const cache = await PLAT.leerLocal('cache');
     if (cache) {
       st.estados = cache.estados; st.cands = cache.cands.map(c => ({ ...c, flags: evaluar(c.d) }));
@@ -504,6 +590,7 @@ async function guardar(cambios, okTxt) {
     toast([okTxt || '✔ Guardado en el Sheet', ...(j.avisos || []).map(a => '⚠ ' + a)].join('\n'), j.avisos && j.avisos.length ? 8000 : 2500);
     return true;
   } catch (e) {
+    if (e.message === 'NO_AUTORIZADO') { PLAT.borrarLocal('cache'); PLAT.sinAcceso(); return false; }
     toast('✖ ' + e.message, 6000);
     return false;
   } finally {
@@ -529,6 +616,7 @@ function borrarBorrador() { PLAT.borrarLocal(claveBorrador()); }
 // ---------- vistas ----------
 function pintar() {
   $atras.hidden = st.vista === 'lista';
+  if (st.vista === 'equipo') { $titulo.textContent = '👥 Equipo'; return pintarEquipo(); }
   if (st.vista === 'lista') { $titulo.textContent = '🎯 Entrevistas'; pintarLista(); }
   else { $titulo.textContent = nombreDe(cand()); pintarFicha(); }
 }
@@ -771,6 +859,42 @@ function vistaMensajes(c) {
     </div>`).join('')}`;
 }
 
+// ---------- equipo: quién tiene acceso (solo administrador) ----------
+async function abrirEquipo() {
+  st.vista = 'equipo'; st.equipo = null; st.invitacion = null; pintar();
+  try { st.equipo = await api('POST', { a: 'equipo' }); } catch (e) { st.equipo = { error: e.message }; }
+  pintar();
+}
+
+function pintarEquipo() {
+  const eq = st.equipo;
+  if (!eq) { $app.innerHTML = '<p class="vacio">Cargando…</p>'; return; }
+  if (eq.error) { $app.innerHTML = `<div class="caja"><p>${esc(eq.error)}</p></div>`; return; }
+  const inv = st.invitacion;
+  const linkInv = inv ? `${inv.url}?invita=${inv.codigo}` : '';
+  const textoInv = inv ? `Hola 👋 Este es tu acceso a la app de entrevistas de Rurush. Ábrelo EN TU CELULAR y toca "Activar". Sirve una sola vez y vence en 24 horas; no lo reenvíes:\n${linkInv}` : '';
+  $app.innerHTML = `
+    <div class="caja"><h3>📱 Con acceso</h3>
+      ${eq.dispositivos.map(d => `<div class="disp">
+        <div><b>${esc(d.nombre)}</b> ${d.rol === 'admin' ? '<span class="pill">admin</span>' : ''} ${d.yo ? '<span class="pill est-contratado">este equipo</span>' : ''}
+          <div class="sub">Activado ${esc(d.creado || '')} · último uso ${esc((d.ultimo || '').replace(/(\d{4})-(\d\d)-(\d\d) (\d\d)/, '$3/$2 $4h'))}</div></div>
+        ${d.yo ? '' : `<button class="sec peligro" data-accion="quitar" data-id="${d.id}" data-nombre="${esc(d.nombre)}">Quitar acceso</button>`}
+      </div>`).join('')}
+      ${eq.pendientes.length ? `<p class="sub" style="margin:8px 0 0">⏳ Invitaciones sin usar: ${eq.pendientes.map(p => `${esc(p.nombre)} (vence ${esc(p.vence)})`).join(', ')}</p>` : ''}
+    </div>
+    <div class="caja"><h3>➕ Invitar un celular</h3>
+      <p class="sub">La invitación sirve <b>una sola vez</b> y vence en 24 horas. Al abrirla en el celular de la persona y tocar "Activar", solo ese celular queda con acceso. Si alguien la reenvía después, ya no sirve.</p>
+      <input id="invNombre" placeholder="Nombre (ej.: Celular administradora)" maxlength="40">
+      <div class="acciones"><button data-accion="invitar" ${st.guardando ? 'disabled' : ''}>Crear invitación</button></div>
+      ${inv ? `<div class="flag ok" style="margin-top:8px">✔ Invitación para <b>${esc(inv.nombre)}</b> lista</div>
+        <div class="acciones">
+          <a class="btn" target="_blank" href="https://wa.me/?text=${encodeURIComponent(textoInv)}">💬 Enviar por WhatsApp</a>
+          <button class="sec" data-accion="copiarInv" data-link="${esc(linkInv)}">📋 Copiar link</button>
+        </div>` : ''}
+    </div>
+    <p class="sub">Si se pierde o roban un celular: aquí mismo “Quitar acceso”. Apenas lo quitas, ese celular deja de ver datos y se borra lo que tenía guardado.</p>`;
+}
+
 // ---------- reloj ----------
 setInterval(() => {
   const el = document.getElementById('reloj');
@@ -836,6 +960,26 @@ document.addEventListener('click', async e => {
     if (okG) { borrarBorrador(); st.tab = 'resumen'; await abrirBorrador(); pintar(); }
     return;
   }
+  if (a === 'invitar') {
+    const nombre = document.getElementById('invNombre').value.trim();
+    if (!nombre) return toast('Ponle un nombre al celular');
+    st.guardando = true; pintar();
+    try { st.invitacion = { ...(await api('POST', { a: 'invitar', nombre })), nombre }; await abrirEquipoSinBorrar(); }
+    catch (err) { toast('✖ ' + err.message, 5000); }
+    finally { st.guardando = false; pintar(); }
+    return;
+  }
+  if (a === 'copiarInv') {
+    try { await navigator.clipboard.writeText(el.dataset.link); toast('✔ Link copiado'); }
+    catch (err) { prompt('Copia el link:', el.dataset.link); }
+    return;
+  }
+  if (a === 'quitar') {
+    if (!(await confirmar(`¿Quitar el acceso a “${el.dataset.nombre}”? Ese celular deja de ver todo al instante.`, 'Quitar acceso', 'Volver'))) return;
+    try { st.equipo = await api('POST', { a: 'quitar', id: el.dataset.id }); toast('✔ Acceso quitado'); }
+    catch (err) { toast('✖ ' + err.message, 5000); }
+    return pintar();
+  }
   if (a === 'agendar') {
     const { fecha, hora } = st.msg;
     const falta = !fecha || !hora ? 'Elige la fecha y la hora arriba'
@@ -895,14 +1039,20 @@ document.addEventListener('input', e => {
   }
 });
 
+async function abrirEquipoSinBorrar() {
+  try { st.equipo = await api('POST', { a: 'equipo' }); } catch (e) { /* se queda la lista anterior */ }
+}
+
 $atras.onclick = () => { st.vista = 'lista'; st.sel = null; pintar(); };
+$equipoBtn.onclick = () => abrirEquipo();
 document.getElementById('refrescar').onclick = async () => { toast('Leyendo el Sheet…'); await cargar(); };
 const $opc = document.getElementById('opciones');
 if (PLAT.opciones) $opc.onclick = () => PLAT.opciones(); else $opc.remove();
 if (PLAT.alCambiarConfig) PLAT.alCambiarConfig(cargar);
 if (PLAT.movil) document.body.classList.add('movil');
 
-cargar();
+// Antes de leer datos, la plataforma confirma que este equipo está autorizado (o lo activa).
+(PLAT.preparar ? PLAT.preparar() : Promise.resolve(true)).then(ok => { if (ok) cargar(); });
 </script>
 </body>
 </html>

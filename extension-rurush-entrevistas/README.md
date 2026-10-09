@@ -28,14 +28,16 @@ Mientras entrevistas, los puntajes se guardan solos en la PC: si cierras el pane
 
 ### 1. Apps Script (el puente con el Sheet)
 
-Es el mismo de la app del celular: sigue **`rurush-app-entrevistas/INSTALAR.md`** (pasos 1 a 6).
-Anota la **URL** (termina en `/exec`) y la **LLAVE** que salen al ejecutar `crearLlave`.
+Es el mismo de la app del celular: sigue **`rurush-app-entrevistas/INSTALAR.md`**.
+Anota la **URL** de la implementación (termina en `/exec`).
 
 ### 2. Extensión
 
 1. Descarga la carpeta `extension-rurush-entrevistas` a la PC.
 2. Chrome → `chrome://extensions` → **Modo de desarrollador** → **Cargar descomprimida** → elige la carpeta.
-3. Fíjala (📌) y haz clic derecho en el ícono → **Opciones**: pega la URL y la LLAVE → **Probar conexión** → **Guardar**.
+3. Fíjala (📌) y haz clic derecho en el ícono → **Opciones**: pega la URL. Desde tu celular
+   (👥 Equipo) crea una invitación para "PC de Omar", pega el link en **Invitación** y toca
+   **Activar esta PC**. Igual que los celulares: sirve una vez y se le puede quitar el acceso.
 4. Clic en el ícono → se abre el panel a la derecha y queda abierto mientras ves el CV o el video.
 
 Si cambias `Code.gs`: **Implementar → Gestionar implementaciones → ✏️ → Versión: nueva** (así la URL no cambia).

@@ -8,8 +8,9 @@
   label { display: block; margin: 14px 0 4px; font-weight: 600; }
   input { width: 100%; padding: 7px; box-sizing: border-box; }
   .hint { color: #666; font-size: 12px; font-weight: 400; }
-  button { margin-top: 20px; padding: 8px 16px; border: 0; border-radius: 6px; background: #e65100; color: #fff; cursor: pointer; }
-  #ok { margin-left: 10px; }
+  button { margin-top: 12px; padding: 8px 16px; border: 0; border-radius: 6px; background: #e65100; color: #fff; cursor: pointer; }
+  .estado { margin-top: 10px; padding: 8px 10px; border-radius: 6px; background: #f2f2f2; }
+  .ok { color: #1e6b35; } .mal { color: #a1281c; }
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 </style>
 </head>
@@ -19,21 +20,25 @@
   <label>URL de la Aplicación web <span class="hint">(termina en /exec)</span></label>
   <input type="text" id="url" placeholder="https://script.google.com/macros/s/…/exec">
 
-  <label>Llave <span class="hint">(la que sale al ejecutar crearLlave)</span></label>
-  <input type="password" id="llave" autocomplete="off">
+  <h3>🔐 Acceso de esta PC</h3>
+  <div id="acceso" class="estado"></div>
+  <label>Invitación <span class="hint">(pega el link o el código que te mandó el administrador · sirve una sola vez)</span></label>
+  <input type="text" id="invitacion" autocomplete="off">
+  <button id="activar">Activar esta PC</button>
+  <button id="salir" style="background:#555">Quitar acceso de esta PC</button>
 
+  <h3>Mensajes y recomendación</h3>
   <label>Tu nombre <span class="hint">(firma de los mensajes de WhatsApp)</span></label>
   <input type="text" id="firma" placeholder="Omar — Rurush Fitness Club">
-
-  <h3>Recomendación final (promedio de la entrevista, 1 a 10)</h3>
   <div class="grid">
     <div><label>✅ Avanzar desde</label><input type="number" id="umbralAvanzar" step="0.1" min="1" max="10"></div>
     <div><label>🟡 Evaluar desde</label><input type="number" id="umbralEvaluar" step="0.1" min="1" max="10"></div>
   </div>
   <p class="hint">Por debajo de "Evaluar" sugiere no avanzar. Es solo una sugerencia: la decisión la tomas tú.</p>
 
-  <button id="guardar">Guardar</button><button id="probar" style="background:#555">Probar conexión</button><span id="ok"></span>
+  <button id="guardar">Guardar</button> <span id="ok"></span>
   <script src="config.js"></script>
+  <script src="plataforma.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

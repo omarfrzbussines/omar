@@ -3,12 +3,11 @@
  * "ENTREVISTA ASESOR V3" (pestaña "Respuestas de formulario 2").
  *
  * Se implementa como Aplicación web (Ejecutar como: Yo · Acceso: Cualquier usuario).
- * Sin la llave no muestra ni responde nada.
+ * Solo responde a celulares autorizados con una invitación (ver ACCESO).
  *
- * GET  ?k=LLAVE                      → la app del celular (App.html)
- * GET  ?k=LLAVE&a=lista              → todos los postulantes (extensión)
- * POST {k, a:'guardar', fila, huella, ...} → guarda estado / notas / entrevista (extensión)
- * La app llama a appLista / appGuardar con google.script.run.
+ * GET  /exec[?invita=CÓDIGO]         → la app (sin un celular autorizado no muestra datos)
+ * POST {t, a:'lista'|'guardar'|…}    → extensión de Chrome (t = clave del dispositivo)
+ * La app llama a appLista / appGuardar / … con google.script.run.
  *
  * ⚠️ La pestaña del formulario NO se modifica en su estructura (ni columnas nuevas ni orden):
  * solo se escribe en columnas que ya se llenan a mano (ESTADO, NOTAS, FECHA E1/E2, puntajes).
@@ -65,40 +64,66 @@ var CAMPOS = [
   ['pf', /^final\/pf$/]
 ];
 
-function doGet(e) {
-  var p = (e && e.parameter) || {};
-  if (!p.a) return app_(p.k);
-  return responder_(function () {
-    validarLlave_(p.k);
-    if (p.a === 'lista') return lista_();
-    throw new Error('Acción desconocida');
+// ============ ACCESO: solo celulares autorizados (no hay "link con llave") ============
+// Cada celular recibe una invitación de UN solo uso. Al activarla, el servidor le da a ese
+// celular su propia clave secreta, que queda guardada SOLO en él. El link de la app, sin
+// esa clave, no muestra ningún dato. Desde el celular del administrador se ven los
+// celulares autorizados, se les quita el acceso y se invita a otros.
+//
+// ⚠️ Toda función sin "_" al final se puede llamar desde la página: por eso las de
+// trabajo terminan en "_" y las públicas validan el celular antes de hacer nada.
+
+var INVITACION_HORAS = 24;
+var NO_AUTORIZADO = 'NO_AUTORIZADO';
+
+/** Ejecutar desde el editor (▶): crea la invitación de administrador (la tuya) y la muestra en el registro. */
+function primerAcceso() {
+  var url = ScriptApp.getService().getUrl();
+  if (!url) throw new Error('Primero implementa como Aplicación web (Implementar → Nueva implementación)');
+  // Solo sirve mientras no haya administrador: así nadie puede usarla desde afuera después.
+  var hayAdmin = props_().getKeys().some(function (k) {
+    return k.indexOf('DISP_') === 0 && JSON.parse(props_().getProperty(k)).rol === 'admin';
   });
+  if (hayAdmin) throw new Error('Ya hay un celular administrador. Si lo perdiste: Configuración del proyecto → Propiedades del script → borra las que empiezan con DISP_ y vuelve a ejecutar primerAcceso.');
+  var codigo = invitar_('Omar', 'admin');
+  Logger.log('📱 Abre este link EN TU CELULAR y toca "Activar" (vale 1 sola vez, 24 horas):');
+  Logger.log(url + '?invita=' + codigo);
 }
 
-function app_(k) {
-  var llave = PropertiesService.getScriptProperties().getProperty('LLAVE');
-  var salida;
-  if (!llave || k !== llave) {
-    salida = HtmlService.createHtmlOutput('<p style="font:17px system-ui;padding:24px">🔒 Este link no tiene la llave correcta. Pide el link completo.</p>');
-  } else {
-    var t = HtmlService.createTemplateFromFile('App');
-    t.llave = k;
-    t.config = { firma: PropertiesService.getScriptProperties().getProperty('FIRMA') || 'Rurush Fitness Club' };
-    salida = t.evaluate();
-  }
-  return salida.setTitle('Rurush Entrevistas')
+function doGet(e) {
+  var p = (e && e.parameter) || {};
+  var t = HtmlService.createTemplateFromFile('App');
+  // Solo se acepta un código con forma válida: nada de texto libre dentro de la página.
+  t.invita = /^[a-f0-9]{64}$/.test(p.invita || '') ? p.invita : '';
+  t.config = { firma: props_().getProperty('FIRMA') || 'Rurush Fitness Club' };
+  return t.evaluate().setTitle('Rurush Entrevistas')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
-// Llamadas de la app (google.script.run)
-function appLista(k) { return envolver_(function () { validarLlave_(k); return lista_(); }); }
-function appGuardar(p) { return envolver_(function () { validarLlave_(p && p.k); return guardar_(p); }); }
+/** Para escribir datos dentro de un <script> sin que "</script>" pueda romperlo. */
+function jsonSeguro_(v) {
+  return JSON.stringify(v).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
+}
 
+// ---- Llamadas de la app del celular (google.script.run) ----
+function appActivar(codigo) { return envolver_(function () { return activar_(codigo); }); }
+function appLista(t) { return envolver_(function () { var yo = dispositivo_(t, true); var r = lista_(); r.yo = yo; return r; }); }
+function appGuardar(p) { return envolver_(function () { dispositivo_(p && p.t); return guardar_(p); }); }
+function appEquipo(t) { return envolver_(function () { return equipo_(admin_(t)); }); }
+function appInvitar(t, nombre) { return envolver_(function () { admin_(t); return { codigo: invitar_(nombre, 'evaluador'), url: ScriptApp.getService().getUrl() }; }); }
+function appQuitar(t, id) { return envolver_(function () { return quitar_(admin_(t), id); }); }
+
+// ---- Extensión de Chrome: todo por POST (la clave nunca va en la URL) ----
 function doPost(e) {
   return responder_(function () {
     var p = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    validarLlave_(p.k);
+    if (p.a === 'activar') return activar_(p.codigo);
+    var yo = dispositivo_(p.t, p.a === 'lista');
+    if (p.a === 'lista') { var r = lista_(); r.yo = yo; return r; }
     if (p.a === 'guardar') return guardar_(p);
+    if (p.a === 'equipo') return equipo_(admin_(p.t));
+    if (p.a === 'invitar') { admin_(p.t); return { codigo: invitar_(p.nombre, 'evaluador'), url: ScriptApp.getService().getUrl() }; }
+    if (p.a === 'quitar') return quitar_(admin_(p.t), p.id);
     throw new Error('Acción desconocida');
   });
 }
@@ -111,24 +136,88 @@ function responder_(fn) {
   return ContentService.createTextOutput(JSON.stringify(envolver_(fn))).setMimeType(ContentService.MimeType.JSON);
 }
 
-function validarLlave_(k) {
-  var llave = PropertiesService.getScriptProperties().getProperty('LLAVE');
-  if (!llave) throw new Error('Falta crear la llave: ejecuta crearLlave en el editor');
-  if (k !== llave) throw new Error('Llave incorrecta');
+function props_() { return PropertiesService.getScriptProperties(); }
+function hash_(s) {
+  return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(s))
+    .map(function (b) { return ('0' + (b & 255).toString(16)).slice(-2); }).join('');
+}
+function aleatorio_() { return (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, ''); } // 64 hex, 244 bits
+function ahora_() { return Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd HH:mm'); }
+
+/** Valida la clave del celular. Se guarda solo su huella (SHA-256), nunca la clave. */
+function dispositivo_(t, marcarUso) {
+  if (!/^[a-f0-9]{64}$/.test(t || '')) throw new Error(NO_AUTORIZADO);
+  var h = hash_(t);
+  var raw = props_().getProperty('DISP_' + h);
+  if (!raw) throw new Error(NO_AUTORIZADO);
+  var d = JSON.parse(raw);
+  if (marcarUso && d.ultimo !== ahora_().slice(0, 13)) {   // a lo más 1 escritura por hora
+    d.ultimo = ahora_().slice(0, 13);
+    props_().setProperty('DISP_' + h, JSON.stringify(d));
+  }
+  return { id: h.slice(0, 12), nombre: d.nombre, rol: d.rol };
 }
 
-/** Ejecutar UNA vez desde el editor: crea la llave y la muestra en el registro. */
-function crearLlave() {
-  var props = PropertiesService.getScriptProperties();
-  var llave = props.getProperty('LLAVE');
-  if (!llave) {
-    llave = Utilities.getUuid().replace(/-/g, '');
-    props.setProperty('LLAVE', llave);
+function admin_(t) {
+  var yo = dispositivo_(t);
+  if (yo.rol !== 'admin') throw new Error('Solo el administrador puede hacer esto');
+  return yo;
+}
+
+/** Invitación de un solo uso. La de admin ocupa siempre la misma ranura (no se acumulan). */
+function invitar_(nombre, rol) {
+  nombre = String(nombre || '').replace(/[<>]/g, '').trim().slice(0, 40);
+  if (!nombre) throw new Error('Ponle un nombre (ej.: Celular de la administradora)');
+  var codigo = aleatorio_();
+  var inv = { h: hash_(codigo), nombre: nombre, rol: rol, expira: Date.now() + INVITACION_HORAS * 3600000 };
+  props_().setProperty(rol === 'admin' ? 'INV_ADMIN' : 'INV_' + inv.h, JSON.stringify(inv));
+  return codigo;
+}
+
+function activar_(codigo) {
+  if (!/^[a-f0-9]{64}$/.test(codigo || '')) throw new Error('Invitación inválida');
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var p = props_(), h = hash_(codigo), clave = 'INV_' + h, raw = p.getProperty(clave);
+    if (!raw) {
+      var adm = p.getProperty('INV_ADMIN');
+      if (adm && JSON.parse(adm).h === h) { clave = 'INV_ADMIN'; raw = adm; }
+    }
+    if (!raw) throw new Error('Esta invitación ya se usó o no existe. Pide una nueva.');
+    var inv = JSON.parse(raw);
+    p.deleteProperty(clave);                       // un solo uso, aunque esté vencida
+    if (Date.now() > inv.expira) throw new Error('La invitación venció. Pide una nueva.');
+    var t = aleatorio_();
+    p.setProperty('DISP_' + hash_(t), JSON.stringify({ nombre: inv.nombre, rol: inv.rol, creado: ahora_(), ultimo: ahora_().slice(0, 13) }));
+    return { t: t, nombre: inv.nombre, rol: inv.rol };
+  } finally {
+    lock.releaseLock();
   }
-  var url = ScriptApp.getService().getUrl();
-  Logger.log('LLAVE → ' + llave);
-  Logger.log('URL   → ' + (url || '(implementa primero como Aplicación web)'));
-  if (url) Logger.log('📱 LINK DEL CELULAR → ' + url + '?k=' + llave);
+}
+
+function equipo_(yo) {
+  var todo = props_().getProperties(), lista = [], pendientes = [];
+  Object.keys(todo).forEach(function (k) {
+    if (k.indexOf('DISP_') !== 0 && k.indexOf('INV_') !== 0) return;   // FIRMA, CALENDARIO_ID…
+    var v = JSON.parse(todo[k]);
+    if (k.indexOf('DISP_') === 0) {
+      var id = k.slice(5, 17);
+      lista.push({ id: id, nombre: v.nombre, rol: v.rol, creado: v.creado, ultimo: v.ultimo, yo: id === yo.id });
+    } else if (k.indexOf('INV_') === 0 && Date.now() < v.expira) {
+      pendientes.push({ nombre: v.nombre, vence: Utilities.formatDate(new Date(v.expira), 'America/Lima', 'dd/MM HH:mm') });
+    }
+  });
+  return { dispositivos: lista, pendientes: pendientes };
+}
+
+function quitar_(yo, id) {
+  if (!/^[a-f0-9]{12}$/.test(id || '')) throw new Error('Celular inválido');
+  if (id === yo.id) throw new Error('No puedes quitarte el acceso a ti mismo desde aquí');
+  var p = props_(), claves = p.getKeys().filter(function (k) { return k.indexOf('DISP_' + id) === 0; });
+  if (!claves.length) throw new Error('Ese celular ya no tiene acceso');
+  p.deleteProperty(claves[0]);
+  return equipo_(yo);
 }
 
 function norm_(s) {

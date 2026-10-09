@@ -3,6 +3,7 @@ const $app = document.getElementById('app');
 const $titulo = document.getElementById('titulo');
 const $atras = document.getElementById('atras');
 const $aviso = document.getElementById('aviso');
+const $equipoBtn = document.getElementById('equipoBtn');
 
 const st = {
   cfg: null,
@@ -17,7 +18,10 @@ const st = {
   borrador: null,     // { puntajes: {actitud: 7.5…}, notasFinal, estado, inicio }
   msg: { fecha: '', hora: '' },
   guardando: false,
-  primeraCarga: true
+  primeraCarga: true,
+  yo: null,           // { nombre, rol } del celular / PC que está usando la app
+  equipo: null,
+  invitacion: null
 };
 
 // ---------- utilidades ----------
@@ -94,13 +98,15 @@ const api = (metodo, datos) => PLAT.api(metodo, datos);
 async function cargar() {
   st.cfg = await PLAT.config();
   if (PLAT.faltaConfig(st.cfg)) {
-    $app.innerHTML = `<div class="caja"><h3>Falta configurar</h3><p>Pega la URL del Apps Script y la llave en Opciones (ver README).</p>
+    $app.innerHTML = `<div class="caja"><h3>Falta configurar</h3><p>Pega la URL del Apps Script y activa esta PC con una invitación en Opciones.</p>
       <button data-accion="opciones">Abrir opciones</button></div>`;
     return;
   }
   aviso('');
   try {
     const j = await api('GET', { a: 'lista' });
+    st.yo = j.yo || null;
+    $equipoBtn.hidden = !(st.yo && st.yo.rol === 'admin');
     st.estados = j.estados || [];
     st.cands = j.cands.map(c => ({ ...c, flags: evaluar(c.d) }));
     if (st.primeraCarga) {
@@ -110,6 +116,8 @@ async function cargar() {
     }
     PLAT.guardarLocal('cache', { estados: st.estados, cands: j.cands });
   } catch (e) {
+    // Acceso quitado o clave inválida: se borra todo lo guardado en este equipo y se bloquea.
+    if (e.message === 'NO_AUTORIZADO') { PLAT.borrarLocal('cache'); return PLAT.sinAcceso(); }
     const cache = await PLAT.leerLocal('cache');
     if (cache) {
       st.estados = cache.estados; st.cands = cache.cands.map(c => ({ ...c, flags: evaluar(c.d) }));
@@ -132,6 +140,7 @@ async function guardar(cambios, okTxt) {
     toast([okTxt || '✔ Guardado en el Sheet', ...(j.avisos || []).map(a => '⚠ ' + a)].join('\n'), j.avisos && j.avisos.length ? 8000 : 2500);
     return true;
   } catch (e) {
+    if (e.message === 'NO_AUTORIZADO') { PLAT.borrarLocal('cache'); PLAT.sinAcceso(); return false; }
     toast('✖ ' + e.message, 6000);
     return false;
   } finally {
@@ -157,6 +166,7 @@ function borrarBorrador() { PLAT.borrarLocal(claveBorrador()); }
 // ---------- vistas ----------
 function pintar() {
   $atras.hidden = st.vista === 'lista';
+  if (st.vista === 'equipo') { $titulo.textContent = '👥 Equipo'; return pintarEquipo(); }
   if (st.vista === 'lista') { $titulo.textContent = '🎯 Entrevistas'; pintarLista(); }
   else { $titulo.textContent = nombreDe(cand()); pintarFicha(); }
 }
@@ -399,6 +409,42 @@ function vistaMensajes(c) {
     </div>`).join('')}`;
 }
 
+// ---------- equipo: quién tiene acceso (solo administrador) ----------
+async function abrirEquipo() {
+  st.vista = 'equipo'; st.equipo = null; st.invitacion = null; pintar();
+  try { st.equipo = await api('POST', { a: 'equipo' }); } catch (e) { st.equipo = { error: e.message }; }
+  pintar();
+}
+
+function pintarEquipo() {
+  const eq = st.equipo;
+  if (!eq) { $app.innerHTML = '<p class="vacio">Cargando…</p>'; return; }
+  if (eq.error) { $app.innerHTML = `<div class="caja"><p>${esc(eq.error)}</p></div>`; return; }
+  const inv = st.invitacion;
+  const linkInv = inv ? `${inv.url}?invita=${inv.codigo}` : '';
+  const textoInv = inv ? `Hola 👋 Este es tu acceso a la app de entrevistas de Rurush. Ábrelo EN TU CELULAR y toca "Activar". Sirve una sola vez y vence en 24 horas; no lo reenvíes:\n${linkInv}` : '';
+  $app.innerHTML = `
+    <div class="caja"><h3>📱 Con acceso</h3>
+      ${eq.dispositivos.map(d => `<div class="disp">
+        <div><b>${esc(d.nombre)}</b> ${d.rol === 'admin' ? '<span class="pill">admin</span>' : ''} ${d.yo ? '<span class="pill est-contratado">este equipo</span>' : ''}
+          <div class="sub">Activado ${esc(d.creado || '')} · último uso ${esc((d.ultimo || '').replace(/(\d{4})-(\d\d)-(\d\d) (\d\d)/, '$3/$2 $4h'))}</div></div>
+        ${d.yo ? '' : `<button class="sec peligro" data-accion="quitar" data-id="${d.id}" data-nombre="${esc(d.nombre)}">Quitar acceso</button>`}
+      </div>`).join('')}
+      ${eq.pendientes.length ? `<p class="sub" style="margin:8px 0 0">⏳ Invitaciones sin usar: ${eq.pendientes.map(p => `${esc(p.nombre)} (vence ${esc(p.vence)})`).join(', ')}</p>` : ''}
+    </div>
+    <div class="caja"><h3>➕ Invitar un celular</h3>
+      <p class="sub">La invitación sirve <b>una sola vez</b> y vence en 24 horas. Al abrirla en el celular de la persona y tocar "Activar", solo ese celular queda con acceso. Si alguien la reenvía después, ya no sirve.</p>
+      <input id="invNombre" placeholder="Nombre (ej.: Celular administradora)" maxlength="40">
+      <div class="acciones"><button data-accion="invitar" ${st.guardando ? 'disabled' : ''}>Crear invitación</button></div>
+      ${inv ? `<div class="flag ok" style="margin-top:8px">✔ Invitación para <b>${esc(inv.nombre)}</b> lista</div>
+        <div class="acciones">
+          <a class="btn" target="_blank" href="https://wa.me/?text=${encodeURIComponent(textoInv)}">💬 Enviar por WhatsApp</a>
+          <button class="sec" data-accion="copiarInv" data-link="${esc(linkInv)}">📋 Copiar link</button>
+        </div>` : ''}
+    </div>
+    <p class="sub">Si se pierde o roban un celular: aquí mismo “Quitar acceso”. Apenas lo quitas, ese celular deja de ver datos y se borra lo que tenía guardado.</p>`;
+}
+
 // ---------- reloj ----------
 setInterval(() => {
   const el = document.getElementById('reloj');
@@ -464,6 +510,26 @@ document.addEventListener('click', async e => {
     if (okG) { borrarBorrador(); st.tab = 'resumen'; await abrirBorrador(); pintar(); }
     return;
   }
+  if (a === 'invitar') {
+    const nombre = document.getElementById('invNombre').value.trim();
+    if (!nombre) return toast('Ponle un nombre al celular');
+    st.guardando = true; pintar();
+    try { st.invitacion = { ...(await api('POST', { a: 'invitar', nombre })), nombre }; await abrirEquipoSinBorrar(); }
+    catch (err) { toast('✖ ' + err.message, 5000); }
+    finally { st.guardando = false; pintar(); }
+    return;
+  }
+  if (a === 'copiarInv') {
+    try { await navigator.clipboard.writeText(el.dataset.link); toast('✔ Link copiado'); }
+    catch (err) { prompt('Copia el link:', el.dataset.link); }
+    return;
+  }
+  if (a === 'quitar') {
+    if (!(await confirmar(`¿Quitar el acceso a “${el.dataset.nombre}”? Ese celular deja de ver todo al instante.`, 'Quitar acceso', 'Volver'))) return;
+    try { st.equipo = await api('POST', { a: 'quitar', id: el.dataset.id }); toast('✔ Acceso quitado'); }
+    catch (err) { toast('✖ ' + err.message, 5000); }
+    return pintar();
+  }
   if (a === 'agendar') {
     const { fecha, hora } = st.msg;
     const falta = !fecha || !hora ? 'Elige la fecha y la hora arriba'
@@ -523,11 +589,17 @@ document.addEventListener('input', e => {
   }
 });
 
+async function abrirEquipoSinBorrar() {
+  try { st.equipo = await api('POST', { a: 'equipo' }); } catch (e) { /* se queda la lista anterior */ }
+}
+
 $atras.onclick = () => { st.vista = 'lista'; st.sel = null; pintar(); };
+$equipoBtn.onclick = () => abrirEquipo();
 document.getElementById('refrescar').onclick = async () => { toast('Leyendo el Sheet…'); await cargar(); };
 const $opc = document.getElementById('opciones');
 if (PLAT.opciones) $opc.onclick = () => PLAT.opciones(); else $opc.remove();
 if (PLAT.alCambiarConfig) PLAT.alCambiarConfig(cargar);
 if (PLAT.movil) document.body.classList.add('movil');
 
-cargar();
+// Antes de leer datos, la plataforma confirma que este equipo está autorizado (o lo activa).
+(PLAT.preparar ? PLAT.preparar() : Promise.resolve(true)).then(ok => { if (ok) cargar(); });

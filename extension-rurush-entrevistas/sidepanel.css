@@ -116,3 +116,16 @@ body.movil { font-size: 15px; }
 .caja.agenda .acciones { flex-wrap: wrap; }
 #toast { white-space: pre-line; text-align: center; }
 .movil .cita { font-size: 14px; }
+
+/* Equipo y acceso */
+.disp { display: flex; align-items: center; gap: 8px; justify-content: space-between; padding: 8px 0; border-top: 1px solid var(--borde); }
+.disp:first-of-type { border-top: 0; }
+button.peligro { color: var(--alerta); border-color: #f1b0a8; flex: none; }
+.bloqueo { text-align: center; padding: 40px 18px; }
+.bloqueo .grande { font-size: 48px; }
+.bloqueo h2 { margin: 10px 0; }
+.bloqueo p { color: var(--gris); }
+.bloqueo button { margin-top: 14px; width: 100%; max-width: 320px; }
+/* Textos de ayuda: que se lean completos (no cortados con …) */
+p.sub, .disp .sub { white-space: normal; overflow: visible; }
+.disp > div { min-width: 0; flex: 1; }
