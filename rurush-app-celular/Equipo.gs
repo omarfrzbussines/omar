@@ -1,6 +1,6 @@
 /* RURUSH Hoy — pestaña 👥 Equipo.
    Venta por asesora (Sheet VENTAS 2026, pestaña del mes) y llamadas por asesora
-   (Sheet BASE DE DATOS LEADS RFC, pestaña 2026). Solo lee: no escribe en ningún Sheet. */
+   (Sheet BASE DE DATOS LEADS RFC, pestaña 2026). Solo lee: no escribe en ningún Sheet (openById exige el permiso completo de Sheets). */
 
 const VENTAS_ID = '1P1FSx8BrKtCnM2E2wBqwG5-T9dcByOfW-Go8aKER4L0';
 const LEADS_ID = '1DzlEgYAdV02TAtR78zweTI0G-n-RwJwWgfwTqIILoJg';
