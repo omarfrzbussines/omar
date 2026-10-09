@@ -71,7 +71,7 @@ function normPhone_(raw) {
 }
 
 function sinTildes_(s) {
-  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
+  return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
 }
 
 function esTrue_(v) {

@@ -45,7 +45,7 @@ function normPhone(raw) {
 
 // Para comparar el borrador con el mensaje: solo letras y números, sin tildes ni emojis.
 function normTexto(s) {
-  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9ñ]/g, '');
+  return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9ñ]/g, '');
 }
 
 function diasEntre(isoA, isoB) {
