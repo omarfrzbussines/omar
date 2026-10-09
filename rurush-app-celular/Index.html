@@ -43,6 +43,15 @@
   nav button span { display:block; font-size:20px; }
   nav button.on { color:var(--tx); }
   .cargando { text-align:center; color:var(--mut); padding:60px 0; }
+  .seg { display:flex; background:var(--card); border-radius:10px; padding:3px; margin:4px 0 10px; }
+  .seg button { flex:1; background:none; border:0; color:var(--mut); padding:7px 0; border-radius:8px; font-size:13px; }
+  .seg button.on { background:var(--line); color:var(--tx); font-weight:600; }
+  .ase { background:var(--card); border-radius:14px; padding:12px; margin-bottom:10px; }
+  .ase .top { align-items:baseline; } .ase .nom { font-weight:700; font-size:16px; } .ase .pc { font-weight:700; color:var(--grn); }
+  .ase .d { color:var(--mut); font-size:12px; margin-top:4px; line-height:1.5; } .ase .d b { color:var(--tx); font-weight:600; }
+  .mini { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:10px; }
+  .mini div { background:var(--bg); border-radius:10px; padding:8px; } .mini b { display:block; font-size:18px; } .mini span { color:var(--mut); font-size:11px; }
+  .alerta { background:#3d2a12; color:#ffb74d; border-radius:10px; padding:7px 10px; font-size:12px; margin-top:8px; }
   .mas { display:block; width:100%; background:none; border:0; border-top:1px solid var(--line); color:var(--or); padding:11px; font-size:13px; }
 </style>
 </head>
@@ -59,10 +68,11 @@
   <button data-tab="hoy" class="on"><span>📊</span>Hoy</button>
   <button data-tab="fp"><span>🎟️</span>Free Pass</button>
   <button data-tab="ret"><span>🔥</span>Retención</button>
+  <button data-tab="eq"><span>👥</span>Equipo</button>
 </nav>
 
 <script>
-let D = null, tab = 'hoy', ase = 'TODAS';
+let D = null, tab = 'hoy', ase = 'TODAS', E = null, eqCargando = false, periodo = 'hoy';
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
@@ -78,6 +88,67 @@ function cargar(forzar) {
     .withSuccessHandler((d) => { D = d; pintar(); })
     .withFailureHandler((e) => { $('#main').innerHTML = `<div class="err">${esc(e.message || e)}</div>`; $('#sub').textContent = 'Error'; })
     .getDashboard(!!forzar);
+}
+
+function cargarEquipo(forzar) {
+  if (eqCargando) return;
+  eqCargando = true;
+  google.script.run
+    .withSuccessHandler((e) => { E = e; eqCargando = false; if (tab === 'eq') pintar(); })
+    .withFailureHandler((e) => { eqCargando = false; E = { errores: [e.message || String(e)] }; if (tab === 'eq') pintar(); })
+    .getEquipo(!!forzar);
+}
+
+const mmss = (s) => Math.floor(s / 60) + ':' + String(Math.round(s % 60)).padStart(2, '0');
+const hora12 = (m) => { const h = Math.floor(m / 60), mi = String(m % 60).padStart(2, '0'); return `${h % 12 || 12}:${mi} ${h < 12 ? 'am' : 'pm'}`; };
+const durTxt = (m) => m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`;
+
+function pintarEquipo() {
+  if (!E) { if (!eqCargando) cargarEquipo(false); return '<div class="cargando">Cargando ventas y llamadas…</div>'; }
+  let h = (E.errores || []).map((e) => `<div class="err">⚠️ ${esc(e)}</div>`).join('');
+  const v = E.ventas;
+  if (v) {
+    const lst = v.asesoras.filter((a) => ase === 'TODAS' || norm(a.nombre) === norm(ase));
+    h += `<h2>💰 Ventas ${esc(v.mes.toLowerCase())} <small>Sheet VENTAS 2026</small></h2>`;
+    if (ase === 'TODAS') h += `<div class="kpi big" style="margin-bottom:10px"><div class="top"><div class="n">${soles(v.avance)}</div><div class="pc" style="font-weight:700;color:var(--grn)">${pct(v.avance, v.meta)}%</div></div>
+      <div class="l">de ${soles(v.meta)} · faltan <b>${soles(v.falta)}</b> · hoy ${soles(v.hoy)}</div>
+      <div class="bar"><i style="width:${Math.min(pct(v.avance, v.meta), 100)}%"></i></div></div>`;
+    h += lst.map((a) => `<div class="ase"><div class="top"><span class="nom">${esc(a.nombre)}</span><span class="pc">${pct(a.avance, a.meta)}%</span></div>
+      <div class="d"><b>${soles(a.avance)}</b> de ${soles(a.meta)} · faltan ${soles(a.falta)}</div>
+      <div class="bar"><i style="width:${Math.min(pct(a.avance, a.meta), 100)}%"></i></div>
+      <div class="d">Hoy <b>${soles(a.hoy)}</b> · ${a.ventas} ventas · ticket ${soles(a.ticket)}<br>
+      Nuevos ${pct(a.nuevos, a.nuevos + a.fidel)}% · Fidelización ${pct(a.fidel, a.nuevos + a.fidel)}%</div></div>`).join('')
+      || '<div class="list"><div class="vacio">Sin datos de esta asesora.</div></div>';
+  }
+  const L = E.llamadas;
+  if (L) {
+    h += `<h2>📞 Llamadas <small>base 2026</small></h2>
+      <div class="seg">${[['hoy', 'Hoy'], ['semana', 'Semana'], ['mes', 'Mes']].map(([k, t]) => `<button data-p="${k}" class="${k === periodo ? 'on' : ''}">${t}</button>`).join('')}</div>`;
+    const P = L[periodo] || {};
+    const tot = Object.values(P).reduce((t, s) => t + s.n, 0);
+    const lst = Object.keys(P).filter((n) => ase === 'TODAS' || norm(n) === norm(ase)).sort((a, b) => P[b].n - P[a].n);
+    if (ase === 'TODAS') h += `<div class="sub" style="margin-bottom:8px">${tot} llamadas en total</div>`;
+    h += lst.map((n) => {
+      const s = P[n];
+      const al = [];
+      if (s.manual) al.push(`✍️ ${s.manual} marcadas en el Sheet, sin duración (no pasaron por la app)`);
+      (s.rafagas || []).forEach((r) => al.push(`⚡ ${r.n} llamadas marcadas en el mismo minuto (${hora12(r.min)})`));
+      if (periodo === 'hoy' && s.hueco >= 45) al.push(`⏸ ${durTxt(s.hueco)} sin llamar (desde ${hora12(s.huecoDesde)})`);
+      return `<div class="ase"><div class="top"><span class="nom">${esc(n)}</span><span class="pc" style="color:var(--tx)">${s.n} llamada${s.n === 1 ? "" : "s"}</span></div>
+        <div class="mini">
+          <div><b>${s.cont}</b><span>contestaron · ${pct(s.cont, s.n)}%</span></div>
+          <div><b>${s.agend}</b><span>agendados · ${pct(s.agend, s.cont)}%</span></div>
+          <div><b>${s.wa}</b><span>por 📲 WhatsApp</span></div>
+          <div><b>${s.durN ? mmss(s.durSum / s.durN) : '—'}</b><span>duración prom.</span></div>
+          <div><b>${s.timbN ? (s.timbSum / s.timbN).toFixed(1) : '—'}</b><span>timbradas prom.</span></div>
+          <div><b>${pct(s.agend, s.n)}%</b><span>llamada → FP</span></div>
+        </div>
+        ${periodo === 'hoy' && s.primera != null ? `<div class="d">🕘 Primera ${hora12(s.primera)} · última ${hora12(s.ultima)}</div>` : ''}
+        ${al.map((x) => `<div class="alerta">${x}</div>`).join('')}</div>`;
+    }).join('') || `<div class="list"><div class="vacio">Sin llamadas ${periodo === 'hoy' ? 'hoy' : periodo === 'semana' ? 'esta semana' : 'este mes'}.</div></div>`;
+  }
+  if (E.generado) h += `<div class="sub" style="margin-top:6px">Equipo actualizado ${esc(E.generado)} · cargó en ${E.seg} s</div>`;
+  return h;
 }
 
 function pintarChips() {
@@ -151,6 +222,8 @@ function pintar() {
     h += `<h2>Free Pass de mañana <small>${man.length}</small></h2>` + lista(man, filaFP, 'Nada agendado para mañana.', 30);
   }
 
+  if (tab === 'eq') h = pintarEquipo();
+
   if (tab === 'ret') {
     const riesgo = socios.filter((s) => s.sinVenir == null || s.sinVenir > 10)
       .sort((a, b) => (a.diasVence ?? 999) - (b.diasVence ?? 999));
@@ -167,6 +240,7 @@ function pintar() {
   }
 
   $('#main').innerHTML = h;
+  document.querySelectorAll('.seg button').forEach((b) => b.onclick = () => { periodo = b.dataset.p; pintar(); });
 }
 
 document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
@@ -174,7 +248,7 @@ document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
   document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('on', x === b));
   pintar(); window.scrollTo(0, 0);
 });
-$('#refresh').onclick = () => cargar(true);
+$('#refresh').onclick = () => { cargar(true); if (E || tab === 'eq') { E = null; cargarEquipo(true); } };
 cargar(false);
 </script>
 </body>
