@@ -61,6 +61,14 @@ $('rep').onclick = async () => {
   setTimeout(() => ($('rep').textContent = '📋 Copiar reporte de hoy'), 2000);
 };
 $('opts').onclick = () => chrome.runtime.openOptionsPage();
+// prueba: pone la etiqueta FREE PASS al chat que esté abierto en WhatsApp Web
+$('etq').onclick = async () => {
+  $('etq').disabled = true;
+  $('etq').textContent = 'Etiquetando…';
+  const r = await chrome.runtime.sendMessage({ type: 'probarEtiqueta' });
+  $('etq').textContent = r && r.ok ? (r.ya ? '✓ Ya tenía FREE PASS' : '✓ Etiquetado FREE PASS') : `⚠️ ${(r && r.error) || 'error'}`;
+  setTimeout(() => { $('etq').textContent = '🏷️ Probar etiqueta en el chat abierto'; $('etq').disabled = false; }, 5000);
+};
 chrome.runtime.sendMessage({ type: 'modulos' }, (m) => {
   MODS = m || {};
   for (const [k, nombre] of Object.entries(MODS)) {

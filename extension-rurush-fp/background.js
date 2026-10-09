@@ -282,7 +282,11 @@ const MODULOS = {
   m2:     { nombre: 'Refuerzo noche anterior',     reemplaza: 'FP 8PM (FP de mañana)', hora: [20, 0], dias: [0, 1, 2, 3, 4, 5] },
   m4:     { nombre: 'No-show de la tarde',         reemplaza: 'FP 8PM (no-shows)',  hora: [20, 10], dias: [1, 2, 3, 4, 5, 6] },
   m5:     { nombre: 'Domingo',                     reemplaza: 'DOMINGO REC FP 9 AM', hora: [9, 0], dias: [0] },
+  // pone la etiqueta de WhatsApp Business a todo el que tenga FP agendado (de hoy a 14 días)
+  et:     { nombre: 'Etiquetar FREE PASS',         reemplaza: '(nuevo)', hora: [8, 40], cadaMin: 120, dias: [0, 1, 2, 3, 4, 5, 6] },
 };
+const ETIQUETA_FP = 'FREE PASS';
+const MAX_ETIQUETAS_CORRIDA = 15;
 const REAGENDOS = new Set(['m3', 'm4', 'm5b', 'm6', 'm7']);
 const HORARIO = { 0: null, 6: [7, 18] }; // resto de días [6, 22]; domingo cerrado
 const abre = (dow) => (dow in HORARIO ? HORARIO[dow] : [6, 22]);
@@ -490,8 +494,23 @@ async function candidatosDe(key, cfg, now) {
       const fps = pasados(await fpsEntre(tok, sumarDias(hoy, -5), hoy), 60);
       return { lista: porPersona(fps), total: fps.length, fpsPorPersona: await porPersonaMapa(fps.length ? fps[0].date : hoy), decidir: (fp, msgs, ctx) => decidirNoShow(fp, msgs, now, ctx, 'sabado') };
     }
+    case 'et': {
+      const fps = await fpsEntre(tok, hoy, sumarDias(hoy, 14));
+      const { etiquetados = {} } = await chrome.storage.local.get('etiquetados');
+      const lista = porPersona(fps).filter((f) => !etiquetados['p' + (f.personId || f.id)]).slice(0, MAX_ETIQUETAS_CORRIDA);
+      return { lista, total: fps.length, decidir: () => ({ etiquetar: true }) };
+    }
     default: return null;
   }
+}
+
+// etiquetados['p<personId>'] = fecha ISO (para no abrir el chat de nuevo); se olvida a los 60 días
+async function marcarEtiquetado(personId) {
+  const { etiquetados = {} } = await chrome.storage.local.get('etiquetados');
+  const limite = Date.now() - 60 * 86400e3;
+  for (const k of Object.keys(etiquetados)) if (Date.parse(etiquetados[k]) < limite) delete etiquetados[k];
+  etiquetados['p' + personId] = new Date().toISOString();
+  await chrome.storage.local.set({ etiquetados });
 }
 
 // ── registro de envíos y de toques por teléfono ──
@@ -579,6 +598,7 @@ async function correrModulo(key, reason, programado) {
     const partes = key === 'm5' ? ['m5a', 'm5b'] : [key];
     let enviadosCorrida = 0;
     const tocados = new Set(); // un solo mensaje por teléfono por corrida
+    let fallosEtiqueta = 0;
     for (const parte of partes) {
      try {
       const plan = parte === 'm5a' ? await planDomingoLunes(cfg, now)
@@ -641,6 +661,22 @@ async function correrModulo(key, reason, programado) {
           if (msgs.length && !msgs.some((m) => m.date)) { resumen.alertas.push(`${etiqueta}: no pude leer las fechas del chat, no se envió por seguridad`); continue; }
 
           const d = plan.decidir(fp, msgs, { sent, fpsPorPersona: plan.fpsPorPersona || new Map() });
+          if (d.etiquetar) {
+            if (!real) { resumen.simulados.push(`${etiqueta} · ${phone} → se le pondría la etiqueta ${ETIQUETA_FP}`); continue; }
+            const r = await ask(tab.id, { type: 'etiquetar', nombre: ETIQUETA_FP, phone });
+            if (r && r.ok) {
+              await marcarEtiquetado(fp.personId || fp.id);
+              if (r.ya) resumen.saltados.push(`${etiqueta} (ya tenía la etiqueta)`);
+              else resumen.enviados.push(`${etiqueta} · ${phone} · 🏷️ ${ETIQUETA_FP}`);
+              fallosEtiqueta = 0;
+            } else {
+              resumen.alertas.push(`${etiqueta}: no se pudo etiquetar (${(r && r.error) || 'sin respuesta'})`);
+              // si falla dos veces seguidas es que WhatsApp cambió: no seguir abriendo chats
+              if (++fallosEtiqueta >= 2) { resumen.alertas.push('Etiquetar: 2 fallos seguidos, se detiene esta corrida'); break; }
+            }
+            await sleep(1500 + Math.random() * 1500);
+            continue;
+          }
           if (d.saltar) { if (d.marcar) await marcarSent(clave, d.marcar); resumen.saltados.push(`${etiqueta} (${d.saltar})`); continue; }
           if (d.alerta) { resumen.alertas.push(`${etiqueta}: ${d.alerta}`); continue; }
 
@@ -774,7 +810,7 @@ async function programar(soloFaltantes = false) {
   crear('reporte', { when: proximaLima(21, 5), periodInMinutes: 1440 });
   for (const [key, mod] of Object.entries(MODULOS)) {
     const hora = key === 'manana' ? [cfg.mananaHora, 0] : mod.hora;
-    if (hora) crear(`mod:${key}`, { when: proximaLima(hora[0], hora[1]), periodInMinutes: 1440 });
+    if (hora) crear(`mod:${key}`, { when: proximaLima(hora[0], hora[1]), periodInMinutes: mod.cadaMin || 1440 });
   }
 }
 
@@ -799,6 +835,15 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg.type === 'downloadReport') { descargarReporte().then(() => reply({ ok: true })); return true; }
   if (msg.type === 'reschedule') { programar().then(() => reply({ ok: true })); return true; }
   if (msg.type === 'waActivity') { chrome.storage.local.set({ waActivity: Date.now() }); }
+  if (msg.type === 'probarEtiqueta') {
+    (async () => {
+      const tabs = await chrome.tabs.query({ url: 'https://web.whatsapp.com/*' });
+      if (!tabs.length) return { ok: false, error: 'abre WhatsApp Web y un chat' };
+      await asegurarScript(tabs[0].id);
+      return (await ask(tabs[0].id, { type: 'etiquetar', nombre: ETIQUETA_FP })) || { ok: false, error: 'sin respuesta de WhatsApp Web' };
+    })().then(reply);
+    return true;
+  }
   return false;
 });
 

@@ -185,6 +185,108 @@ async function enviarRecordatorio(text, phone, header, conImagen = true) {
   return enviarTexto(text, seguro);
 }
 
+// ───────── etiqueta de WhatsApp Business ("FREE PASS") ─────────
+// Hace lo mismo que a mano: ⋮ del chat → Etiquetar chat → marca la etiqueta → Guardar.
+// Si algo no se reconoce con seguridad, NO toca nada (para no quitar una etiqueta por error).
+const visible = (el) => !!el && el.offsetParent !== null;
+const sinTilde = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+
+function clic(el) {
+  const o = { bubbles: true, cancelable: true, view: window };
+  el.dispatchEvent(new PointerEvent('pointerdown', o));
+  el.dispatchEvent(new MouseEvent('mousedown', o));
+  el.dispatchEvent(new PointerEvent('pointerup', o));
+  el.dispatchEvent(new MouseEvent('mouseup', o));
+  el.click();
+}
+
+async function buscar(fn, ms = 4000) {
+  for (let t = 0; t < ms; t += 200) {
+    const x = fn();
+    if (x) return x;
+    await esperar(200);
+  }
+  return null;
+}
+
+function botonMenuChat() {
+  const h = document.querySelector('#main header');
+  if (!h) return null;
+  const c = [...h.querySelectorAll('[aria-label], [data-icon]')].find((el) =>
+    /^(men[uú]|m[aá]s opciones|menu|more options)$/i.test(el.getAttribute('aria-label') || '') ||
+    /^(menu|more-refreshed|kebab)/i.test(el.getAttribute('data-icon') || ''));
+  return c ? (c.closest('button, [role="button"]') || c) : null;
+}
+
+// Elemento visible más chico cuyo texto completo cumple el patrón.
+function porTexto(rx, raiz = document) {
+  const els = [...raiz.querySelectorAll('li, [role="menuitem"], [role="button"], button, div, span')]
+    .filter((el) => visible(el) && rx.test(sinTilde(el.innerText)));
+  els.sort((a, b) => a.innerText.length - b.innerText.length || b.querySelectorAll('*').length - a.querySelectorAll('*').length);
+  return els[0] || null;
+}
+
+// true / false / null (no se pudo saber)
+function estaMarcada(fila) {
+  const cb = fila.querySelector('[role="checkbox"], input[type="checkbox"]') || (fila.matches('[role="checkbox"]') ? fila : null);
+  if (cb) {
+    if (cb.tagName === 'INPUT') return cb.checked;
+    const v = cb.getAttribute('aria-checked');
+    if (v === 'true' || v === 'false') return v === 'true';
+  }
+  const ic = [...fila.querySelectorAll('[data-icon]')].map((x) => x.getAttribute('data-icon')).join(' ');
+  if (/checkbox-checked|checkbox-on|check-box-checked/.test(ic)) return true;
+  if (/checkbox-unchecked|checkbox-off|check-box-unchecked|checkbox$/.test(ic)) return false;
+  return null;
+}
+
+function cerrarDialogo() {
+  const b = [...document.querySelectorAll('[aria-label]')].find((el) => visible(el) && /^(cerrar|close|cancelar|cancel)$/i.test(el.getAttribute('aria-label') || ''));
+  if (b) clic(b.closest('button, [role="button"]') || b);
+  else document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+}
+
+async function etiquetarChat(nombre, phone) {
+  const rxEtiqueta = new RegExp('^' + sinTilde(nombre).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s*') + '$', 'i');
+  if (phone && !chatEsDe(phone)) return { ok: false, error: 'el chat abierto no es el de este número' };
+  const menu = botonMenuChat();
+  if (!menu) return { ok: false, error: 'no encontré el menú ⋮ del chat' };
+  clic(menu);
+  const item = await buscar(() => porTexto(/^(etiquetar chat|label chat|etiquetar|agregar etiqueta|add label)$/));
+  if (!item) {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+    return { ok: false, error: 'el menú no tiene "Etiquetar chat" (¿es WhatsApp Business?)' };
+  }
+  clic(item.closest('li, [role="menuitem"], [role="button"]') || item);
+
+  const texto = await buscar(() => porTexto(rxEtiqueta));
+  if (!texto) { cerrarDialogo(); return { ok: false, error: `no encontré la etiqueta "${nombre}"` }; }
+  // fila = el contenedor de la etiqueta que también tiene su casilla
+  let fila = texto;
+  for (let i = 0; i < 8 && fila.parentElement; i++) {
+    if (estaMarcada(fila) !== null) break;
+    fila = fila.parentElement;
+  }
+  const marcada = estaMarcada(fila);
+  if (marcada === true) { cerrarDialogo(); return { ok: true, ya: true }; }
+  if (marcada === null) { cerrarDialogo(); return { ok: false, error: 'no pude saber si la etiqueta ya estaba puesta: no se tocó' }; }
+
+  clic(fila.querySelector('[role="checkbox"], input[type="checkbox"]') || fila);
+  await esperar(400);
+  if (estaMarcada(fila) !== true) { cerrarDialogo(); return { ok: false, error: 'no se pudo marcar la etiqueta' }; }
+
+  const guardar = await buscar(() => {
+    const b = [...document.querySelectorAll('[aria-label], [data-icon]')].find((el) => visible(el) && (
+      /^(guardar|save|listo|done)$/i.test(el.getAttribute('aria-label') || '') ||
+      /^(checkmark|checkmark-medium|checkmark-light|wds-ic-checkmark)/.test(el.getAttribute('data-icon') || '')));
+    return b ? (b.closest('button, [role="button"]') || b) : porTexto(/^(guardar|save)$/);
+  }, 2000);
+  if (!guardar) { cerrarDialogo(); return { ok: false, error: 'no encontré el botón Guardar' }; }
+  clic(guardar);
+  await esperar(800);
+  return { ok: true };
+}
+
 async function enviarTexto(text, seguro) {
   const c = compose();
   if (!c) return { ok: false, noEnviado: true, error: 'chat no abierto' };
@@ -208,6 +310,9 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   } else if (msg.type === 'prepNav') {
     document.documentElement.dataset.rurushNav = '1';
     reply({ ok: true });
+  } else if (msg.type === 'etiquetar') {
+    etiquetarChat(msg.nombre || 'FREE PASS', msg.phone).then(reply, (e) => reply({ ok: false, error: String(e) }));
+    return true;
   } else if (msg.type === 'sendReminder') {
     enviarRecordatorio(msg.text, msg.phone, msg.header, msg.conImagen !== false).then(reply, (e) => reply({ ok: false, error: String(e) }));
     return true;
