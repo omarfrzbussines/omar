@@ -25,6 +25,10 @@ function onOpen() {
     .addItem('Guardar token de Pipedrive', 'guardarTokenPipedrive')
     .addItem('Actualizar embudo ahora', 'actualizarEmbudoMenu')
     .addItem('Activar actualización diaria (9 pm)', 'activarEmbudoDiario')
+    .addSeparator()
+    .addItem('🏃 Guardar clave de Apps Fit', 'guardarClaveAppsFit')
+    .addItem('🏃 Armar lista de inasistencias ahora', 'generarInasistenciasMenu')
+    .addItem('🏃 Activar lista diaria (7 am, lun–sáb)', 'activarInasistenciasDiario')
     .addToUi();
 }
 

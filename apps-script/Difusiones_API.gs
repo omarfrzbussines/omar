@@ -51,7 +51,7 @@ function doGet(e) {
     switch (p.a) {
       case 'info': return json_(info_());
       case 'pendientes': return json_(pendientes_(p.tab, p.asesora, Number(p.dias) || 30));
-      case 'yaEnviado': return json_(yaEnviado_(p.celular, Number(p.dias) || 30));
+      case 'yaEnviado': return json_(yaEnviado_(p.celular, Number(p.dias) || 30, p.tab));
       case 'marcar': return json_(marcar_(p));
       case 'porRevisar': return json_(porRevisar_(p.asesora, Number(p.dias) || 3));
       case 'respuesta': return json_(respuesta_(p));
@@ -157,10 +157,14 @@ function indiceGlobal_() {
     filas_(t.sh, t.h).forEach(function (f) {
       var tel = normPhone_(f.v[t.h.celular]);
       if (!tel) return;
-      var e = idx[tel] || (idx[tel] = { ultimo: null, pestana: null, bloqueado: false });
+      var e = idx[tel] || (idx[tel] = { ultimo: null, pestana: null, bloqueado: false, socioActivo: false });
       var res = t.h.resultado >= 0 ? String(f.v[t.h.resultado]) : '';
       var nota = t.h.nota >= 0 ? String(f.v[t.h.nota]) : '';
-      if (CERRADOS.test(res) || /NO CONTACTAR/i.test(nota)) e.bloqueado = true;
+      if (CERRADOS.test(res) || /NO CONTACTAR/i.test(nota)) {
+        // «NO CONTACTAR - SOCIO ACTIVO» solo frena las difusiones; a los socios sí se les escribe
+        // desde 🏃 INASISTENCIAS.
+        if (/SOCIO ACTIVO/i.test(res + ' ' + nota)) e.socioActivo = true; else e.bloqueado = true;
+      }
       if (esTrue_(f.v[t.h.env])) {
         var d = t.h.fecha >= 0 ? parseFecha_(f.v[t.h.fecha]) : null;
         var ts = d ? d.getTime() : 1; // enviado sin fecha: cuenta como antiguo
@@ -216,6 +220,18 @@ function lineas_() {
   return out;
 }
 
+/** ¿La línea de esta asesora está marcada «SOLO INASISTENCIAS» en la nota de LINEAS (⚙️ CONFIG)? */
+function soloInasistencias_(asesora) {
+  var r = SpreadsheetApp.getActive().getRangeByName('LINEAS');
+  if (!r) return false;
+  var quien = sinTildes_(asesora), solo = false;
+  var sh = r.getSheet();
+  sh.getRange(r.getRow(), r.getColumn(), r.getNumRows(), 3).getDisplayValues().forEach(function (row) {
+    if (sinTildes_(row[0]) === quien && /SOLO INASIST/i.test(row[2])) solo = true;
+  });
+  return solo;
+}
+
 function mismaAsesora_(a, b) {
   return sinTildes_(a) && sinTildes_(a) === sinTildes_(b);
 }
@@ -232,7 +248,15 @@ function info_() {
   };
 }
 
+/** Pestaña de recordatorio a socios (se arma desde Apps Fit): reglas propias de repetición. */
+function esInasistencias_(tab) {
+  return /INASIST/i.test(String(tab || ''));
+}
+
 function pendientes_(tab, asesora, diasAntiDup) {
+  // En INASISTENCIAS la frecuencia ya la controla la lista (un mensaje cada 5 días):
+  // aquí solo se evita escribirle si recibió cualquier mensaje en los últimos 4 días.
+  if (esInasistencias_(tab)) diasAntiDup = Math.min(diasAntiDup, 4);
   var sh = SpreadsheetApp.getActive().getSheetByName(tab);
   if (!sh) return { ok: false, error: 'No existe la pestaña «' + tab + '».' };
   var h = cabecera_(sh);
@@ -242,6 +266,9 @@ function pendientes_(tab, asesora, diasAntiDup) {
   var lineas = lineas_();
   var linea = lineas[sinTildes_(asesora)];
   if (!linea) return { ok: false, error: (asesora || 'Esa asesora') + ' no tiene línea en ⚙️ CONFIG. No se envía nada.' };
+  if (soloInasistencias_(asesora) && !esInasistencias_(tab)) {
+    return { ok: false, error: 'La línea de ' + asesora + ' solo envía 🏃 INASISTENCIAS (⚙️ CONFIG). No se envía esta tanda.' };
+  }
 
   var dias = diasHoy_();
   var idx = indiceGlobal_();
@@ -265,7 +292,7 @@ function pendientes_(tab, asesora, diasAntiDup) {
     vistos[tel] = f.fila;
 
     var g = idx[tel];
-    if (g && g.bloqueado) return excluir('NO CONTACTAR en alguna pestaña');
+    if (g && (g.bloqueado || (g.socioActivo && !esInasistencias_(tab)))) return excluir('NO CONTACTAR en alguna pestaña');
     if (g && g.ultimo && (Date.now() - g.ultimo) / 86400000 < diasAntiDup) {
       return excluir('Ya recibió difusión el ' + Utilities.formatDate(new Date(g.ultimo), 'America/Lima', 'dd/MM') + ' (' + g.pestana + ')');
     }
@@ -284,18 +311,19 @@ function pendientes_(tab, asesora, diasAntiDup) {
     items.push({ fila: f.fila, nombre: nombre, celular: tel, mensaje: msj });
   });
 
-  return { ok: true, tab: tab, asesora: asesora, linea: linea, dias: dias, items: items, excluidos: excluidos };
+  return { ok: true, tab: tab, asesora: asesora, linea: linea, dias: dias, diasAntiDup: diasAntiDup, items: items, excluidos: excluidos };
 }
 
-function yaEnviado_(celular, diasAntiDup) {
+function yaEnviado_(celular, diasAntiDup, tab) {
   var tel = normPhone_(celular);
   if (!tel) return { ok: false, error: 'Celular inválido' };
+  if (esInasistencias_(tab)) diasAntiDup = Math.min(diasAntiDup, 4);
   var g = indiceGlobal_()[tel];
   if (!g) return { ok: true, enviado: false, bloqueado: false };
   var reciente = !!(g.ultimo && (Date.now() - g.ultimo) / 86400000 < diasAntiDup);
   return {
     ok: true,
-    bloqueado: g.bloqueado,
+    bloqueado: g.bloqueado || (g.socioActivo && !esInasistencias_(tab)),
     enviado: reciente,
     fecha: g.ultimo ? Utilities.formatDate(new Date(g.ultimo), 'America/Lima', 'dd/MM/yyyy') : null,
     pestana: g.pestana,
