@@ -67,16 +67,20 @@ function eq_iso(v) {
   return a + '-' + pad(m[2]) + '-' + pad(m[1]);
 }
 
-// "7:47 pm" → minutos del día.
+// "7:47 pm" (o la hora que el Sheet ya convirtió a Date) → minutos del día.
 function eq_min(v) {
+  if (v instanceof Date) return v.getHours() * 60 + v.getMinutes();
   const m = eq_txt(v).toLowerCase().match(/^(\d{1,2}):(\d{2})\s*([ap])?/);
   if (!m) return null;
   let h = Number(m[1]) % 12;
   if (m[3] === 'p') h += 12; else if (!m[3]) h = Number(m[1]);
   return h * 60 + Number(m[2]);
 }
-// "1:25" (m:ss) → segundos.
+// "1:25" (m:ss) → segundos. El Sheet suele convertir "1:25" en hora (1 h 25 min):
+// se lee igual, horas = minutos y minutos = segundos.
 function eq_seg(v) {
+  if (v instanceof Date) return v.getHours() * 60 + v.getMinutes();
+  if (typeof v === 'number') return v > 0 && v < 1 ? Math.round(v * 1440) : null;
   const m = eq_txt(v).match(/^(\d+):(\d{2})$/);
   return m ? Number(m[1]) * 60 + Number(m[2]) : null;
 }
@@ -178,7 +182,8 @@ function eq_llamadas() {
   if (!ultima) return { hoy: {}, semana: {}, mes: {} };
 
   const maxCol = Math.max.apply(null, bloques.map((b) => Math.max(b.asesor, b.timbrada, b.duracion, b.fecha, b.hora, b.estado, b.obs))) + 1;
-  const filas = sh.getRange(3, 1, ultima, maxCol).getDisplayValues();
+  // getValues (crudo) es varias veces más rápido que getDisplayValues en 6000 filas.
+  const filas = sh.getRange(3, 1, ultima, maxCol).getValues();
 
   const P = { hoy: {}, semana: {}, mes: {} };
   const minutosHoy = {};
