@@ -22,9 +22,9 @@
   .num { color:var(--mut); margin-top:4px; font-size:15px; }
   .meta { margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; }
   .tag { padding:2px 8px; border-radius:8px; font-size:12px; background:var(--line); color:var(--mut); }
-  .acciones { display:grid; grid-template-columns:2fr 1fr; gap:10px; margin:16px 0 4px; }
-  .llamar, .wa { display:flex; align-items:center; justify-content:center; gap:8px; border-radius:14px; padding:16px; font-size:18px; font-weight:700; text-decoration:none; }
-  .llamar { background:var(--grn); color:#062b12; } .wa { background:#1f3d2b; color:var(--grn); }
+  .acciones { display:grid; grid-template-columns:3fr 3fr 1fr; gap:8px; margin:16px 0 4px; }
+  .llamar, .wacall, .wa { display:flex; align-items:center; justify-content:center; gap:8px; border-radius:14px; padding:16px; font-size:18px; font-weight:700; text-decoration:none; }
+  .llamar { background:var(--grn); color:#062b12; white-space:nowrap; padding:16px 6px; } .wacall { background:#25d366; color:#062b12; font-size:15px; gap:4px; padding:16px 6px; white-space:nowrap; } .wa { background:#1f3d2b; color:var(--grn); }
   h2 { font-size:13px; color:var(--mut); font-weight:600; margin:18px 0 8px; text-transform:uppercase; letter-spacing:.04em; }
   .hist { font-size:13px; color:var(--mut); border-left:2px solid var(--line); padding-left:10px; }
   .hist div { margin:4px 0; } .hist b { color:var(--tx); font-weight:600; }
@@ -110,7 +110,7 @@ const actual = () => cola[idx];
 
 // Tiempo mínimo en el marcador para poder marcar cada resultado (igual que en el servidor).
 const MIN_SEG = { 'APAGADO': 0, 'NO CONTESTO': 15, 'CORTO': 15, 'CONTESTO': 40, 'AGENDADO': 40, 'CLIENTE': 40, 'DESCARTADO': 40, 'Otra Ciudad': 40 };
-let llamada = { fila: null, intentos: 0, fueraMs: 0, salio: null, toco: 0 };
+let llamada = { fila: null, intentos: 0, fueraMs: 0, salio: null, toco: 0, wa: 0 };
 const segundos = () => Math.round(llamada.fueraMs / 1000);
 const mmss = (s) => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
 function guardarLlamada() { try { localStorage.setItem('rr_llamada', JSON.stringify(llamada)); } catch (e) {} }
@@ -119,7 +119,7 @@ function nuevaLlamada(fila) {
     const g = JSON.parse(localStorage.getItem('rr_llamada') || 'null');
     if (g && g.fila === fila) { llamada = g; if (llamada.salio) { llamada.fueraMs += Date.now() - llamada.salio; llamada.salio = null; } return; }
   } catch (e) {}
-  llamada = { fila, intentos: 0, fueraMs: 0, salio: null, toco: 0 };
+  llamada = { fila, intentos: 0, fueraMs: 0, salio: null, toco: 0, wa: 0 };
 }
 // La app pasa a segundo plano cuando se abre el marcador, y vuelve al colgar.
 function salioDeLaApp() {
@@ -137,7 +137,7 @@ function actualizarBotones() {
   const med = $('#medidor');
   if (med) med.innerHTML = llamada.intentos
     ? `<span>📞 Intentos: <b>${llamada.intentos}</b></span><span>⏱ En llamada: <b>${mmss(seg)}</b></span>`
-    : '<span>Toca 📞 Llamar para habilitar los resultados</span>';
+    : '<span>Toca 📞 Llamar o 📲 WhatsApp para habilitar los resultados</span>';
   document.querySelectorAll('.est').forEach((b) => {
     const min = MIN_SEG[b.dataset.e] || 0;
     const ok = llamada.intentos > 0 && llamada.salio == null && seg >= min;
@@ -173,6 +173,7 @@ function pintar() {
       <div class="meta"><span class="tag">${p.ronda}ª llamada</span>${p.dia ? `<span class="tag">lead del ${esc(p.dia)}</span>` : ''}${p.origen ? `<span class="tag">${esc(p.origen)}</span>` : ''}</div>
       <div class="acciones">
         <a class="llamar" id="llamar" href="tel:+51${p.numero}">📞 Llamar</a>
+        <a class="wacall" id="wacall" href="https://wa.me/51${p.numero}" target="_blank">📲 WhatsApp</a>
         <a class="wa" href="https://wa.me/51${p.numero}" target="_blank">💬</a>
       </div>
       <div class="medidor" id="medidor"></div>
@@ -195,6 +196,8 @@ function pintar() {
   $('#guardar').onclick = guardar;
   nuevaLlamada(p.fila);
   $('#llamar').onclick = () => { llamada.intentos++; llamada.toco = Date.now(); guardarLlamada(); actualizarBotones(); };
+  // Llamada por WhatsApp: abre el chat (la asesora toca el 📞 de WhatsApp) y cuenta igual que una timbrada.
+  $('#wacall').onclick = () => { llamada.intentos++; llamada.wa = (llamada.wa || 0) + 1; llamada.toco = Date.now(); guardarLlamada(); actualizarBotones(); };
   actualizarBotones();
   $('#saltar').onclick = () => { idx++; pintar(); revisarCola(); guardarLocal(); };
   window.scrollTo(0, 0);
@@ -203,7 +206,7 @@ function pintar() {
 // Guardado en segundo plano: la asesora pasa a la siguiente sin esperar.
 function guardar() {
   const p = actual(); if (!p || !estado) return;
-  const obs = $('#obs').value;
+  const obs = (llamada.wa ? '📲 WA ' : '') + $('#obs').value;
   const fpf = $('#fpf') ? $('#fpf').value : '', fph = $('#fph') ? $('#fph').value : '';
   const e = estado;
   const intentos = llamada.intentos, seg = segundos();
