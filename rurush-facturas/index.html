@@ -268,15 +268,24 @@ async function raiz() {
 /* ---------- config compartida (config.json en la carpeta) ---------- */
 
 let CFG = normalizar(ls.get('config', CONFIG_BASE));
-async function cargarConfig() {
+// config.json tal como está en OneDrive (null si todavía no existe).
+async function leerConfig() {
   const R = await raiz();
   const r = await g('GET', `/drives/${R.driveId}/items/${R.id}:/config.json:/content`);
-  if (r.ok) {
-    CFG = normalizar(await r.json());
-  } else if (r.status === 404) {
-    CFG = Object.assign({}, CONFIG_BASE);
+  if (r.ok) return normalizar(await r.json());
+  if (r.status === 404) return null;
+  throw new Error('OneDrive respondió ' + r.status + ' al leer config.json');
+}
+async function cargarConfig() {
+  const c = await leerConfig();
+  const mia = !/^https?:\/\//i.test(carpetaConf());
+  if (c && (Object.values(c.celulares).some((x) => x && x.admin) || !mia)) CFG = c;
+  else if (mia) {
+    // Carpeta nueva (o sin administrador) en MI OneDrive: este celular queda aprobado y de administrador.
+    CFG = normalizar(c || CONFIG_BASE);
+    CFG.celulares[codigoCelular()] = { nombre: 'Administrador', modelo: modelo(), cuenta: yo(), fecha: isoLocal(new Date()), admin: true };
     await guardarConfig(CFG);
-  } else throw new Error('OneDrive respondió ' + r.status + ' al leer config.json');
+  } else CFG = normalizar(CONFIG_BASE);   // carpeta compartida sin config: su dueño debe abrir la app primero
   ls.set('config', CFG);
 }
 function normalizar(c) {
@@ -288,8 +297,105 @@ function normalizar(c) {
   return Object.assign({}, c, {
     igv: Number(c.igv) >= 0 ? Number(c.igv) : CONFIG_BASE.igv,
     personas: lista(c.personas, CONFIG_BASE.personas), categorias: lista(c.categorias, CONFIG_BASE.categorias),
-    metodos: lista(c.metodos, CONFIG_BASE.metodos), comprobantes: comp.length ? comp : CONFIG_BASE.comprobantes
+    metodos: lista(c.metodos, CONFIG_BASE.metodos), comprobantes: comp.length ? comp : CONFIG_BASE.comprobantes,
+    celulares: c.celulares && typeof c.celulares === 'object' && !Array.isArray(c.celulares) ? c.celulares : {}
   });
+}
+
+/* ---------- seguridad: solo celulares aprobados ----------
+   Cada celular tiene un código propio (guardado en el celular). Si no está en
+   config.json → celulares, la app queda bloqueada y manda una solicitud a
+   <carpeta>/solicitudes/ para que un administrador la apruebe desde ⚙️ Ajustes.
+   Administrador = un CELULAR aprobado con admin: true (no una cuenta: si el equipo
+   comparte una cuenta Microsoft, igual solo tus celulares administran). */
+
+function codigoCelular() {
+  let c = ls.get('celular');
+  if (!c) {
+    const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    c = Array.from(crypto.getRandomValues(new Uint8Array(8)), (x) => A[x % 32]).join('');
+    c = c.slice(0, 4) + '-' + c.slice(4);
+    ls.set('celular', c);
+  }
+  return c;
+}
+function modelo() {
+  const m = navigator.userAgent.match(/\(([^)]+)\)/);
+  return m ? m[1].replace(/Linux; |U; |; wv|; K/g, '').slice(0, 60) : 'Celular';
+}
+const yo = () => ((cuenta() && cuenta().username) || '').toLowerCase();
+const autorizado = () => !!CFG.celulares[codigoCelular()];
+const esAdmin = () => !!(CFG.celulares[codigoCelular()] || {}).admin;
+const hayAdmin = () => Object.values(CFG.celulares).some((x) => x && x.admin);
+
+async function solicitarAcceso(nombre) {
+  const R = await raiz();
+  const sol = await carpeta(R.driveId, R.id, 'solicitudes');
+  const datos = { codigo: codigoCelular(), nombre, modelo: modelo(), cuenta: yo(), fecha: isoLocal(new Date()) };
+  await gj('PUT', `/drives/${R.driveId}/items/${sol}:/${ruta(codigoCelular() + '.json')}:/content`, JSON.stringify(datos), { 'Content-Type': 'application/json' });
+  ls.set('solicitud', nombre);
+}
+let SOLIS = {};
+async function cargarSolicitudes() {
+  const R = await raiz();
+  const r = await g('GET', `/drives/${R.driveId}/items/${R.id}:/solicitudes:/children`);
+  if (r.status === 404) return [];
+  if (!r.ok) throw new Error('OneDrive respondió ' + r.status + ' al leer las solicitudes');
+  const lista = [];
+  for (const it of (await r.json()).value || []) {
+    if (!/\.json$/i.test(it.name)) continue;
+    try {
+      const d = await gj('GET', `/drives/${R.driveId}/items/${it.id}/content`);
+      if (d && d.codigo && !CFG.celulares[d.codigo]) lista.push(Object.assign(d, { sid: it.id }));
+      else if (d && CFG.celulares[d.codigo]) g('DELETE', `/drives/${R.driveId}/items/${it.id}`);   // ya aprobado
+    } catch (e) { /* archivo dañado: se ignora */ }
+  }
+  SOLIS = {};
+  lista.forEach((x) => { SOLIS[x.codigo] = x; });
+  return lista;
+}
+// Siempre sobre la última versión de config.json, para no pisar cambios de otro celular.
+async function cambiarCelulares(fn) {
+  const c = (await leerConfig()) || CFG;
+  fn(c.celulares);
+  await guardarConfig(c);
+}
+async function aprobar(codigo) {
+  const x = SOLIS[codigo]; if (!x) return;
+  await cambiarCelulares((cel) => { cel[codigo] = { nombre: x.nombre, modelo: x.modelo, cuenta: x.cuenta, fecha: isoLocal(new Date()) }; });
+  const R = await raiz();
+  await g('DELETE', `/drives/${R.driveId}/items/${x.sid}`);
+}
+async function rechazar(codigo) {
+  const x = SOLIS[codigo]; if (!x) return;
+  const R = await raiz();
+  await g('DELETE', `/drives/${R.driveId}/items/${x.sid}`);
+}
+async function quitarCelular(codigo) {
+  await cambiarCelulares((cel) => { delete cel[codigo]; });
+}
+
+function pantallaBloqueo() {
+  $('#nav').classList.add('hide');
+  $('#sub').textContent = 'Celular no autorizado';
+  const enviada = ls.get('solicitud', '');
+  const sinAdmin = !hayAdmin();
+  $('#main').innerHTML = `<div class="login">
+    <div style="font-size:54px">🔒</div>
+    <p>Este celular todavía no está autorizado.</p>
+    <div class="calc" style="text-align:center"><h3>CÓDIGO DE ESTE CELULAR</h3><div style="font-size:28px;font-weight:700;letter-spacing:2px">${esc(codigoCelular())}</div></div>
+    ${sinAdmin ? `<div class="estado err"><span>Esta carpeta todavía no tiene administrador: su dueño debe abrir la app primero.</span></div>`
+      : enviada ? `<div class="estado ok"><span>✅ Solicitud enviada como <b>${esc(enviada)}</b>. Avísale al administrador para que la apruebe.</span></div>`
+      : `<label style="text-align:left">Tu nombre</label><input id="bNombre" placeholder="Ej. LAURA" autocomplete="off">
+         <button class="guardar" id="bSolicitar">📨 Pedir acceso</button>`}
+    <button class="btn" id="bRevisar" style="width:100%;margin-top:12px">🔄 Ya me aprobaron</button>
+    <p style="font-size:12px">Sesión: ${esc(yo() || '—')} · <a href="#" id="cSalir" style="color:var(--or)">cerrar sesión</a></p></div>`;
+}
+let appVisible = false;
+function mostrarApp() {
+  appVisible = true;
+  $('#nav').classList.remove('hide');
+  pintarSub(); pintar();
 }
 async function guardarConfig(c) {
   const R = await raiz();
@@ -376,7 +482,7 @@ const colaDel = (id) => idb('readwrite', (s) => s.delete(id));
 
 let subiendo = false, otraVuelta = false, ultimoError = '';
 async function procesarCola() {
-  if (!cuenta()) return;
+  if (!cuenta() || !autorizado()) return;
   if (subiendo) { otraVuelta = true; return; }
   otraVuelta = false;
   subiendo = true; pintarEstado();
@@ -625,15 +731,32 @@ function pintarHist() {
 
 function pintarConf() {
   const R = ls.get('raiz');
-  return `
+  const propio = `
     <h2>Este celular</h2>
-    <div class="ayuda">Sesión: <b>${esc((cuenta() && cuenta().username) || '—')}</b></div>
+    <div class="ayuda">Sesión: <b>${esc(yo() || '—')}</b>${esAdmin() ? ' · <span class="tag ok">administrador</span>' : ''}<br>
+      Código: <b>${esc(codigoCelular())}</b> · Carpeta: <b>${esc((R && R.nombre) || carpetaConf())}</b></div>`;
+  const salir = `<button class="btn" id="cSalir" style="width:100%;margin-top:18px">Cerrar sesión de Microsoft</button>`;
+  if (!esAdmin()) return propio + `<div class="ayuda" style="margin-top:12px">Los ajustes los cambia el administrador.</div>` + salir;
+  const cel = Object.keys(CFG.celulares).map((k) => {
+    const x = CFG.celulares[k] || {};
+    const este = k === codigoCelular();
+    return `<div class="row"><div class="main"><div class="t">${esc(x.nombre || '—')}${x.admin ? '<span class="tag ok">admin</span>' : ''}${este ? '<span class="tag pend">este</span>' : ''}</div>
+      <div class="d">${esc(k)} · ${esc(x.modelo || '')} · ${esc(x.cuenta || '')} · desde ${fm(x.fecha || '')}</div></div>
+      ${este ? '' : `<button class="btn" data-admincel="${esc(k)}" title="Administrador">${x.admin ? '★' : '☆'}</button><button class="btn" data-quitarcel="${esc(k)}">Quitar</button>`}</div>`;
+  }).join('');
+  return propio + `
     <label>Carpeta de OneDrive</label>
     <input id="cCarpeta" value="${esc(carpetaConf())}">
-    <div class="ayuda">Un nombre (se crea en <i>tu</i> OneDrive) o el <b>link de una carpeta compartida</b> (con permiso de edición) para que todas suban a la misma.
-      ${R ? `<br>Ahora: <b>${esc(R.nombre)}</b>` : ''}</div>
+    <div class="ayuda">Un nombre (se crea en <i>tu</i> OneDrive) o el <b>link de una carpeta compartida</b> (con permiso de edición) para que todas suban a la misma.</div>
     <button class="btn" id="cCopiar" style="margin-top:8px">🔗 Copiar link para el equipo</button>
-    <div class="ayuda">Mándales ese link: al abrirlo, su celular queda apuntando a la misma carpeta.</div>
+    <div class="ayuda">Mándales ese link: al abrirlo, su celular queda apuntando a la misma carpeta y te pide acceso.</div>
+
+    <h2>📱 Solicitudes de acceso <button class="btn" id="cSolis" style="padding:4px 10px;font-size:12px">🔄</button></h2>
+    <div class="list" id="solis"><div class="vacio">Cargando…</div></div>
+    <h2>📱 Celulares autorizados <small>${Object.keys(CFG.celulares).length}</small></h2>
+    <div class="list">${cel || '<div class="vacio">Ninguno.</div>'}</div>
+    <div class="ayuda">Quitar: ese celular queda bloqueado la próxima vez que abra la app con internet.
+      ★ = administrador (aprueba celulares y cambia ajustes). Ten al menos 2 celulares admin por si pierdes uno.</div>
 
     <h2>Para todas <small>se guarda en config.json</small></h2>
     <label>Categorías (una por línea)</label>
@@ -646,8 +769,18 @@ function pintarConf() {
     <textarea id="cComprobantes" style="min-height:90px">${esc(CFG.comprobantes.map((c) => c.nombre + (c.igv ? ' | igv' : '')).join('\n'))}</textarea>
     <label>IGV %</label>
     <input id="cIgv" inputmode="decimal" value="${esc(CFG.igv)}">
-    <button class="guardar" id="cGuardar">💾 Guardar ajustes</button>
-    <button class="btn" id="cSalir" style="width:100%;margin-top:18px">Cerrar sesión de Microsoft</button>`;
+    <button class="guardar" id="cGuardar">💾 Guardar ajustes</button>` + salir;
+}
+async function pintarSolicitudes() {
+  const el = $('#solis'); if (!el) return;
+  try {
+    const l = await cargarSolicitudes();
+    if (!$('#solis')) return;
+    $('#solis').innerHTML = l.map((x) => `<div class="row"><div class="main"><div class="t">${esc(x.nombre)}</div>
+      <div class="d">${esc(x.codigo)} · ${esc(x.modelo || '')} · ${esc(x.cuenta || '')} · ${fm(x.fecha || '')}</div></div>
+      <button class="btn" data-aprobar="${esc(x.codigo)}" style="color:var(--grn)">Aprobar</button>
+      <button class="btn" data-rechazar="${esc(x.codigo)}">✕</button></div>`).join('') || '<div class="vacio">No hay solicitudes.</div>';
+  } catch (e) { if ($('#solis')) $('#solis').innerHTML = `<div class="vacio">⚠️ ${esc(e.message)}</div>`; }
 }
 
 async function guardarAjustes() {
@@ -670,6 +803,8 @@ async function guardarAjustes() {
       await cargarConfig();   // la carpeta nueva puede tener su propio config.json
       toast('📁 Carpeta cambiada. Revisa los ajustes y vuelve a guardar si quieres cambiarlos.', 4000);
     } else {
+      const ultima = await leerConfig();   // celulares aprobados mientras tanto
+      if (ultima) nueva.celulares = ultima.celulares;
       await guardarConfig(nueva);
       toast('💾 Ajustes guardados para todas');
     }
@@ -697,6 +832,7 @@ function pintarSub() {
 }
 function pintar() {
   $('#main').innerHTML = tab === 'nueva' ? pintarNueva() : tab === 'hist' ? pintarHist() : pintarConf();
+  if (tab === 'conf' && esAdmin()) pintarSolicitudes();
   document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
   pintarEstado();
 }
@@ -714,7 +850,8 @@ function pantallaLogin(msj) {
 /* ---------- eventos ---------- */
 
 document.addEventListener('click', async (ev) => {
-  const t = ev.target.closest('button, [data-tab]');
+  const t = ev.target.closest('button, [data-tab], a#cSalir');
+  if (t && t.id === 'cSalir' && t.tagName === 'A') ev.preventDefault();
   if (!t) return;
   if (t.dataset.tab) { tab = t.dataset.tab; pintar(); window.scrollTo(0, 0); return; }
   if (t.id === 'login') return MS.loginRedirect({ scopes: SCOPES, prompt: 'select_account' });
@@ -731,6 +868,33 @@ document.addEventListener('click', async (ev) => {
   if (t.id === 'cCopiar') {
     const link = location.origin + location.pathname + '?carpeta=' + encodeURIComponent($('#cCarpeta').value.trim() || carpetaConf());
     try { await navigator.clipboard.writeText(link); toast('🔗 Link copiado'); } catch (e) { prompt('Copia este link:', link); }
+    return;
+  }
+  if (t.id === 'bSolicitar') {
+    const nombre = ($('#bNombre').value || '').trim().toUpperCase();
+    if (!nombre) return toast('Escribe tu nombre.');
+    t.disabled = true;
+    try { await solicitarAcceso(nombre); pantallaBloqueo(); } catch (e) { t.disabled = false; toast('❌ ' + e.message, 5000); }
+    return;
+  }
+  if (t.id === 'bRevisar') {
+    t.disabled = true;
+    try { await cargarConfig(); } catch (e) { toast('❌ ' + e.message, 5000); }
+    if (autorizado()) { ls.set('solicitud', ''); mostrarApp(); procesarCola(); } else { t.disabled = false; toast('Todavía no está aprobado.'); }
+    return;
+  }
+  if (t.id === 'cSolis') return pintarSolicitudes();
+  if (t.dataset.aprobar || t.dataset.rechazar || t.dataset.quitarcel || t.dataset.admincel) {
+    const k = t.dataset.aprobar || t.dataset.rechazar || t.dataset.quitarcel || t.dataset.admincel;
+    if (t.dataset.quitarcel && !confirm('¿Quitar el acceso a ' + ((CFG.celulares[k] || {}).nombre || k) + '?')) return;
+    t.disabled = true;
+    try {
+      if (t.dataset.aprobar) { await aprobar(k); toast('✅ Aprobado'); }
+      else if (t.dataset.rechazar) { await rechazar(k); toast('Solicitud rechazada'); }
+      else if (t.dataset.admincel) { await cambiarCelulares((cel) => { if (cel[k]) cel[k].admin = !cel[k].admin; }); toast('Listo'); }
+      else { await quitarCelular(k); toast('Celular quitado'); }
+      pintar();
+    } catch (e) { t.disabled = false; toast('❌ ' + e.message, 5000); }
     return;
   }
   if (t.id === 'cSalir') { if (confirm('¿Cerrar sesión de Microsoft en este celular?')) MS.logoutRedirect({ account: cuenta() }); }
@@ -776,18 +940,20 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.se
   let acc;
   try { acc = await iniciarMsal(); } catch (e) { return pantallaLogin(e.message); }
   if (!acc) return pantallaLogin();
-  $('#nav').classList.remove('hide');
-  pintarSub(); pintar();
+  // Con la config guardada: si este celular ya estaba aprobado, abre al toque (también sin internet).
+  if (autorizado()) mostrarApp();
+  else $('#main').innerHTML = '<div class="login"><p>Revisando este celular…</p></div>';
   try {
     await raiz();
     await cargarConfig();
     if (!compActual()) F.comprobante = (CFG.comprobantes[0] || {}).nombre || '';
-    pintarSub();
-    if (formVacio()) pintar();
   } catch (e) {
     // Sin internet o sin permiso: se trabaja con la config guardada y todo queda en cola.
     toast('⚠️ ' + e.message, 5000);
   }
+  if (!autorizado()) { appVisible = false; return pantallaBloqueo(); }   // nunca aprobado, o lo quitaron
+  if (!appVisible) mostrarApp();
+  else { pintarSub(); if (formVacio()) pintar(); }
   procesarCola();
 })();
 </script>

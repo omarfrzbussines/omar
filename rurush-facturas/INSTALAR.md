@@ -69,8 +69,12 @@ Si la publicas en otra dirección, esa misma dirección exacta debe estar en el 
 
 Para que **todo el equipo suba a TU OneDrive** hay dos formas:
 
+> ⚠️ **Ábrela primero TÚ, en tu celular.** El primer celular que abre la app crea la carpeta
+> y queda como **administrador** (es el que aprueba a los demás celulares).
+
 **A) Una cuenta Microsoft del gym para todas (lo más simple).**
 Todas entran a la app con esa misma cuenta. No hay que configurar nada más.
+Aunque compartan la cuenta, solo tus celulares administran y cada celular nuevo necesita tu aprobación.
 
 **B) Cada una con su cuenta + carpeta compartida.**
 1. Tú abres la app con tu cuenta → se crea `RURUSH Facturas` en tu OneDrive.
@@ -88,7 +92,42 @@ Todas entran a la app con esa misma cuenta. No hay que configurar nada más.
 2. Agrégala a la pantalla de inicio:
    - **Android:** menú ⋮ → **Agregar a la pantalla principal**.
    - **iPhone:** compartir ⬆️ → **Agregar a inicio**.
-3. Toca su nombre en "¿Quién registra?" (queda recordado).
+3. La app sale **🔒 bloqueada** con un código (ej. `K7QM-3XPA`): escribe su nombre → **📨 Pedir acceso**.
+4. Tú, en tu celular: **⚙️ Ajustes → 📱 Solicitudes de acceso** → revisa el nombre y el código
+   (que coincida con el que ve en su pantalla) → **Aprobar**.
+5. Ella toca **🔄 Ya me aprobaron** → entra. Toca su nombre en "¿Quién registra?" (queda recordado).
+
+## 🔒 Seguridad: quién puede abrir la app
+
+Hay **dos candados**:
+
+1. **Microsoft / OneDrive (el fuerte):** sin una cuenta que tenga acceso a tu carpeta no se puede
+   ver ni subir nada, aunque tengan el link de la app. Esto lo controla Microsoft.
+2. **Celulares aprobados (en la app):** cada celular tiene su código. Uno nuevo queda bloqueado
+   hasta que lo apruebes; uno que quites queda bloqueado la próxima vez que abra la app con internet.
+   Desde un celular bloqueado tampoco se sube lo que haya quedado en cola.
+
+En **⚙️ Ajustes → 📱 Celulares autorizados** ves cada celular (nombre, código, modelo, cuenta, fecha):
+- **Quitar** → ese celular pierde el acceso.
+- **★** → lo haces administrador (puede aprobar celulares y cambiar ajustes). Ten **2 celulares admin**
+  (el tuyo y otro de confianza) por si pierdes el tuyo.
+- Las asesoras no ven estas opciones: en sus Ajustes solo aparece su código.
+
+**Para cortarle el acceso a alguien de verdad** (por ejemplo si deja de trabajar):
+1. **Quitar** su celular en la app, **y**
+2. en OneDrive: quítala de la carpeta compartida (opción B), o **cambia la contraseña** de la cuenta
+   del gym (opción A) y vuelve a entrar en los celulares que sigan.
+
+Por qué el paso 2: el candado de celulares vive en `config.json`, dentro de la misma carpeta. Alguien
+con conocimientos técnicos y acceso de edición a la carpeta podría saltárselo editando ese archivo.
+Contra eso solo sirve el candado de Microsoft.
+
+**Si un celular borra los datos del navegador** (o se reinstala Chrome), cambia su código y hay que
+aprobarlo otra vez (lo de "en cola" no enviado se pierde). Quita el código viejo.
+
+**Si pierdes tu celular admin y no tienes otro:** en OneDrive web abre la carpeta, borra `config.json`
+y abre la app primero en tu celular nuevo: queda de administrador (las categorías vuelven a las de
+fábrica y hay que aprobar de nuevo a todos los celulares).
 
 ## 5. Ajustes
 
@@ -108,6 +147,8 @@ Todas entran a la app con esa misma cuenta. No hay que configurar nada más.
 | "OneDrive respondió 403" | Esa persona no tiene permiso de **edición** en la carpeta compartida |
 | "El Excel está bloqueado" | Alguien tiene el Excel abierto en Excel de escritorio. Se reintenta solo; mejor abrirlo en Excel web |
 | "No encuentro la tabla Gastos" | Renombraron o borraron la tabla. Borra el Excel y el próximo gasto lo crea de nuevo |
+| 🔒 "Este celular no está autorizado" | Pide acceso y que el administrador lo apruebe (ver paso 4) |
+| "La carpeta todavía no tiene administrador" | La abrió alguien antes que tú con el link compartido: ábrela tú primero en tu celular |
 | ⚠️ N sin subir | Toca **Reintentar**. Lo que está en cola no se borra hasta subirse |
 
 No cambies, agregues ni borres columnas de la tabla del Excel (la app escribe 22 columnas fijas). Para resúmenes o tablas dinámicas usa hojas aparte.
