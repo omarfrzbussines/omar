@@ -143,13 +143,14 @@ function app_getCola(llave, base, excluir) {
   };
 }
 
-function app_guardar(llave, base, fila, numero, estado, obs, fpFecha, fpHora) {
+function app_guardar(llave, base, fila, numero, estado, obs, fpFecha, fpHora, intentos, segundos) {
   const asesora = app_asesora(llave);
   if (APP_BASES.indexOf(base) < 0) throw new Error("Base no habilitada: " + base);
   if (APP_ESTADOS.indexOf(estado) < 0) throw new Error("Estado no válido.");
   const r = ll_registrar({
     base: base, fila: Number(fila), telefono: numero, asesora: asesora, estado: estado,
-    observacion: obs || "", fechaFp: fpFecha || "", horaFp: fpHora || ""
+    observacion: obs || "", fechaFp: fpFecha || "", horaFp: fpHora || "",
+    intentos: Number(intentos) || 0, segundos: Number(segundos) || 0
   });
   const cache = CacheService.getScriptCache();
   cache.remove("r" + base + fila);

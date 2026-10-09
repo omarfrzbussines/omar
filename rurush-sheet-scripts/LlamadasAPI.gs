@@ -92,9 +92,11 @@ function ll_estructura(hoja) {
   const rondas = [];
   for (let i = 0; i < head.length; i++) {
     if (head[i] !== "ESTADO") continue;
-    const ro = { asesor: -1, fecha: -1, hora: -1, estado: i, obs: -1, fpFecha: -1, fpHora: -1 };
+    const ro = { asesor: -1, timbrada: -1, duracion: -1, fecha: -1, hora: -1, estado: i, obs: -1, fpFecha: -1, fpHora: -1 };
     for (let j = i - 1; j >= 0; j--) {
       if (head[j] === "ESTADO") break;
+      if (ro.timbrada < 0 && head[j] === "TIMBRADA") ro.timbrada = j;
+      if (ro.duracion < 0 && (head[j] === "DURACION" || head[j] === "DURACIÓN")) ro.duracion = j;
       if (ro.hora < 0 && head[j] === "HORA") ro.hora = j;
       if (ro.fecha < 0 && head[j] === "FECHA") ro.fecha = j;
       if (head[j] === "ASESOR") { ro.asesor = j; break; }
@@ -104,6 +106,7 @@ function ll_estructura(hoja) {
     for (let j = i + 1; j < head.length; j++) {
       if (head[j] === "ASESOR" || head[j] === "ESTADO") break;
       if (ro.obs < 0 && (head[j] === "OBSERVACION" || head[j] === "OBSERVACIÓN")) ro.obs = j;
+      if (ro.duracion < 0 && (head[j] === "DURACION" || head[j] === "DURACIÓN")) ro.duracion = j;
       if (ro.fpFecha < 0 && head[j] === "FECHA FP") ro.fpFecha = j;
       if (ro.fpHora < 0 && head[j] === "HORA FP") ro.fpHora = j;
     }
@@ -190,8 +193,18 @@ function ll_contarBases(asesora) {
 
 /* ---------- registrar una llamada (extensión y app del celular) ---------- */
 
+// Tiempo mínimo fuera de la app (en el marcador) para poder marcar cada resultado.
+// Una llamada que no contestan timbra ~25-40 s; una conversación dura más.
+const LL_MIN_SEG = { "APAGADO": 0, "NO CONTESTO": 15, "CORTO": 15,
+                     "CONTESTO": 40, "AGENDADO": 40, "CLIENTE": 40, "DESCARTADO": 40, "OTRA CIUDAD": 40 };
+
 function ll_registrar(d) {
   if (!d.fila || !d.estado) throw new Error("Faltan datos de la llamada");
+  if (d.segundos != null) {          // viene de la app del celular: se exige haber llamado
+    const min = LL_MIN_SEG[String(d.estado).trim().toUpperCase()] || 0;
+    if (!(Number(d.intentos) > 0)) throw new Error("Primero toca 📞 Llamar.");
+    if (Number(d.segundos) < min) throw new Error("Para marcar " + d.estado + " la llamada debe durar al menos " + min + " s.");
+  }
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
@@ -217,7 +230,13 @@ function ll_registrar(d) {
     set(ro.fecha, hoy);
     set(ro.hora, ll_horaDeLista(ahora));
     set(ro.estado, estado);
-    if (d.observacion) set(ro.obs, d.observacion);
+    // intentos (Timbrada 1-3) y duración, si la llamada viene de la app
+    const dur = d.segundos != null ? ll_duracion(d.segundos) : "";
+    if (d.intentos != null) set(ro.timbrada, Math.min(Math.max(Number(d.intentos) || 0, 0), 3));
+    if (dur && ro.duracion >= 0) set(ro.duracion, dur);
+    let obs = String(d.observacion || "").trim();
+    if (dur && ro.duracion < 0) obs = (obs ? obs + " " : "") + "[⏱ " + dur + (d.intentos > 1 ? " · " + d.intentos + " intentos" : "") + "]";
+    if (obs) set(ro.obs, obs);
 
     // Si agendó free pass: fecha y hora del FP en ESTA llamada, y se crea en Pipedrive.
     if (estado === "AGENDADO" && d.fechaFp) {
@@ -242,6 +261,12 @@ function ll_horaDeLista(fecha) {
   const l = new Date(fecha.getTime() - 5 * 3600 * 1000);
   const h = l.getUTCHours(), m = l.getUTCMinutes();
   return (((h + 11) % 12) + 1) + ":" + ll_2(m) + " " + (h < 12 ? "am" : "pm");
+}
+
+// 135 → "2:15"
+function ll_duracion(seg) {
+  const s = Math.max(0, Math.round(Number(seg) || 0));
+  return Math.floor(s / 60) + ":" + ll_2(s % 60);
 }
 
 // "2026-10-09" (lo que manda un <input type=date>) → "09/10/2026"

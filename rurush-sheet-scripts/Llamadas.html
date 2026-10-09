@@ -35,6 +35,10 @@
   textarea { min-height:84px; resize:vertical; }
   .tip { color:var(--mut); font-size:12px; margin-top:6px; }
   .fila2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
+  .medidor { margin-top:10px; font-size:14px; color:var(--mut); display:flex; gap:12px; }
+  .medidor b { color:var(--tx); }
+  .est:disabled { opacity:.35; }
+  .est small { display:block; font-size:11px; color:var(--mut); margin-top:2px; }
   .guardar { width:100%; margin-top:16px; background:var(--red); color:#fff; border:0; border-radius:14px; padding:16px; font-size:17px; font-weight:700; }
   .guardar:disabled { opacity:.45; }
   .saltar { width:100%; margin-top:8px; background:none; border:0; color:var(--mut); padding:10px; font-size:14px; }
@@ -104,6 +108,45 @@ function traer(reset) {
 
 const actual = () => cola[idx];
 
+// Tiempo mínimo en el marcador para poder marcar cada resultado (igual que en el servidor).
+const MIN_SEG = { 'APAGADO': 0, 'NO CONTESTO': 15, 'CORTO': 15, 'CONTESTO': 40, 'AGENDADO': 40, 'CLIENTE': 40, 'DESCARTADO': 40, 'Otra Ciudad': 40 };
+let llamada = { fila: null, intentos: 0, fueraMs: 0, salio: null, toco: 0 };
+const segundos = () => Math.round(llamada.fueraMs / 1000);
+const mmss = (s) => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+function guardarLlamada() { try { localStorage.setItem('rr_llamada', JSON.stringify(llamada)); } catch (e) {} }
+function nuevaLlamada(fila) {
+  try {
+    const g = JSON.parse(localStorage.getItem('rr_llamada') || 'null');
+    if (g && g.fila === fila) { llamada = g; if (llamada.salio) { llamada.fueraMs += Date.now() - llamada.salio; llamada.salio = null; } return; }
+  } catch (e) {}
+  llamada = { fila, intentos: 0, fueraMs: 0, salio: null, toco: 0 };
+}
+// La app pasa a segundo plano cuando se abre el marcador, y vuelve al colgar.
+function salioDeLaApp() {
+  if (llamada.salio == null && llamada.toco && Date.now() - llamada.toco < 20000) { llamada.salio = Date.now(); guardarLlamada(); }
+}
+function volvioALaApp() {
+  if (llamada.salio != null) { llamada.fueraMs += Date.now() - llamada.salio; llamada.salio = null; guardarLlamada(); actualizarBotones(); }
+}
+document.addEventListener('visibilitychange', () => (document.hidden ? salioDeLaApp() : volvioALaApp()));
+window.addEventListener('blur', salioDeLaApp);
+window.addEventListener('focus', volvioALaApp);
+
+function actualizarBotones() {
+  const seg = segundos();
+  const med = $('#medidor');
+  if (med) med.innerHTML = llamada.intentos
+    ? `<span>📞 Intentos: <b>${llamada.intentos}</b></span><span>⏱ En llamada: <b>${mmss(seg)}</b></span>`
+    : '<span>Toca 📞 Llamar para habilitar los resultados</span>';
+  document.querySelectorAll('.est').forEach((b) => {
+    const min = MIN_SEG[b.dataset.e] || 0;
+    const ok = llamada.intentos > 0 && llamada.salio == null && seg >= min;
+    b.disabled = !ok;
+    b.querySelector('small').textContent = ok ? '' : (llamada.intentos ? `🔒 mín. ${min} s` : '🔒');
+    if (!ok && estado === b.dataset.e) { estado = null; b.classList.remove('on'); $('#guardar').disabled = true; }
+  });
+}
+
 function pintarMarcador() {
   const total = Object.values(hoy).reduce((a, b) => a + b, 0);
   const cont = (hoy.CONTESTO || 0) + (hoy.CORTO || 0) + (hoy.AGENDADO || 0) + (hoy.CLIENTE || 0);
@@ -121,7 +164,7 @@ function pintar() {
   const hist = p.rondas.length
     ? `<h2>Llamadas anteriores</h2><div class="hist">${p.rondas.map((r) => `<div><b>${r.n}ª</b> · ${esc(r.fecha)} · ${esc(r.asesor)} · <b>${esc(r.estado)}</b>${r.obs ? ' — ' + esc(r.obs) : ''}</div>`).join('')}</div>`
     : '';
-  const fp = p.ronda === 1 ? `<div id="fpbox" style="display:none"><h2>Fecha y hora del Free Pass</h2>
+  const fp = true ? `<div id="fpbox" style="display:none"><h2>Fecha y hora del Free Pass</h2>
       <div class="fila2"><input type="date" id="fpf"><select id="fph"><option value="">Hora</option>${HORAS.map((h) => `<option>${h}</option>`).join('')}</select></div></div>` : '';
   $('#main').innerHTML = `
     <div class="card">
@@ -129,13 +172,14 @@ function pintar() {
       <div class="num">+51 ${esc(p.numero.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3'))}</div>
       <div class="meta"><span class="tag">${p.ronda}ª llamada</span>${p.dia ? `<span class="tag">lead del ${esc(p.dia)}</span>` : ''}${p.origen ? `<span class="tag">${esc(p.origen)}</span>` : ''}</div>
       <div class="acciones">
-        <a class="llamar" href="tel:+51${p.numero}">📞 Llamar</a>
+        <a class="llamar" id="llamar" href="tel:+51${p.numero}">📞 Llamar</a>
         <a class="wa" href="https://wa.me/51${p.numero}" target="_blank">💬</a>
       </div>
+      <div class="medidor" id="medidor"></div>
     </div>
     ${hist}
     <h2>¿Cómo salió?</h2>
-    <div class="estados">${ESTADOS.map((e) => `<button class="est" data-e="${esc(e)}">${esc(e)}</button>`).join('')}</div>
+    <div class="estados">${ESTADOS.map((e) => `<button class="est" data-e="${esc(e)}" disabled>${esc(e)}<small></small></button>`).join('')}</div>
     ${fp}
     <h2>Observación</h2>
     <textarea id="obs" placeholder="Toca aquí y usa el 🎤 del teclado para dictar"></textarea>
@@ -149,6 +193,9 @@ function pintar() {
     const box = $('#fpbox'); if (box) box.style.display = estado === 'AGENDADO' ? 'block' : 'none';
   });
   $('#guardar').onclick = guardar;
+  nuevaLlamada(p.fila);
+  $('#llamar').onclick = () => { llamada.intentos++; llamada.toco = Date.now(); guardarLlamada(); actualizarBotones(); };
+  actualizarBotones();
   $('#saltar').onclick = () => { idx++; pintar(); revisarCola(); guardarLocal(); };
   window.scrollTo(0, 0);
 }
@@ -159,12 +206,14 @@ function guardar() {
   const obs = $('#obs').value;
   const fpf = $('#fpf') ? $('#fpf').value : '', fph = $('#fph') ? $('#fph').value : '';
   const e = estado;
+  const intentos = llamada.intentos, seg = segundos();
+  try { localStorage.removeItem('rr_llamada'); } catch (err) {}
   hoy[e] = (hoy[e] || 0) + 1; pintarMarcador();
   idx++; pintar(); revisarCola(); guardarLocal();
   google.script.run
     .withSuccessHandler(() => toast(`✓ Guardado: ${e}`))
     .withFailureHandler((err) => { hoy[e]--; pintarMarcador(); toast(`No se guardó (${p.numero}): ${err.message || err}`, true); })
-    .app_guardar(LLAVE, BASE, p.fila, p.numero, e, obs, fpf, fph);
+    .app_guardar(LLAVE, BASE, p.fila, p.numero, e, obs, fpf, fph, intentos, seg);
 }
 
 function revisarCola() { if (cola.length - idx <= 5) traer(false); }
