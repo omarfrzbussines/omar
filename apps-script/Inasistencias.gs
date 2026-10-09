@@ -3,9 +3,9 @@
  * «WTS SEGUIMIENTO INASISTENCIAS»). Va en el mismo proyecto que Difusiones_API.gs.
  *
  * Todos los días (lun–sáb, 7 am) consulta Apps Fit y arma la pestaña 🏃 INASISTENCIAS:
- *   - socios con plan vigente que llevan de 4 a 30 días sin venir (los vencidos no entran),
+ *   - socios con plan vigente que llevan 4 días o más sin venir (los vencidos no entran),
  *   - asesora = la responsable/vendedora del socio en Apps Fit (Laura, Mónica o Danna),
- *   - grupo por días sin venir: A 4–6 · B 7–10 · C 11–15 · D 16–30,
+ *   - grupo por días sin venir: A 4–6 · B 7–10 · C 11–15 · D 16–30 · E 31 o más,
  *   - a cada socio, como máximo un mensaje cada 5 días; si respondió y a los 3 días no vino,
  *     un SEGUIMIENTO,
  *   - salta a los de ⏸️ PAUSAS y a los marcados NO CONTACTAR.
@@ -25,6 +25,7 @@ var MENSAJES_INASIST = {
   B: '¡Hola {NOMBRE}! Te habla {ASESORA} de Rurush 👋 No queremos que pierdas el ritmo que llevabas 🔥 ¿Vienes {DIAS}?',
   C: '{NOMBRE}, soy {ASESORA} de Rurush 👋 Si se te complicó el horario, te ayudo a encontrar uno que te acomode 💪 ¿Te queda {DIAS}?',
   D: 'Hola {NOMBRE} 👋 soy {ASESORA} de Rurush. Sé que cuesta retomar, por eso te escribo 🙌 Volvemos con una rutina a tu medida, ¿empezamos {DIAS}?',
+  E: 'Hola {NOMBRE} 👋 soy {ASESORA} de Rurush. Hace un tiempo que no te vemos y queremos ayudarte a volver 💪 Empezamos con una rutina suave, a tu ritmo. ¿Te queda {DIAS}?',
   SEGUIMIENTO: '{NOMBRE}, te esperábamos estos días 😊 ¿Seguimos en pie? ¿Te queda {DIAS}?',
 };
 var NOMBRE_ASESORA = { LAURA: 'Laura', 'MÓNICA': 'Mónica', DANNA: 'Danna' };
@@ -109,7 +110,7 @@ function generarInasistencias(manual) {
   var nuevos = [], sinAsesora = 0, cuenta = {};
   Object.keys(socios).forEach(function (tel) {
     var s = socios[tel];
-    if (!s.activo || s.dias === null || s.dias < 4 || s.dias > 30) return;
+    if (!s.activo || s.dias === null || s.dias < 4) return;
     if (pausas[tel] || (idx[tel] && idx[tel].bloqueado)) return;
     if (!s.asesora) { sinAsesora++; return; }
     var h = hist[tel], grupo;
@@ -119,7 +120,7 @@ function generarInasistencias(manual) {
       if (!(respondio && desde >= INASIST_SEGUIMIENTO && h.grupo !== 'SEGUIMIENTO')) return;
       grupo = 'SEGUIMIENTO';
     } else {
-      grupo = s.dias <= 6 ? 'A' : s.dias <= 10 ? 'B' : s.dias <= 15 ? 'C' : 'D';
+      grupo = s.dias <= 6 ? 'A' : s.dias <= 10 ? 'B' : s.dias <= 15 ? 'C' : s.dias <= 30 ? 'D' : 'E';
     }
     var msj = MENSAJES_INASIST[grupo].replace('{ASESORA}', NOMBRE_ASESORA[s.asesora]);
     msj = conNombre_(msj, primerNombre_(s.nombres));
@@ -135,7 +136,7 @@ function generarInasistencias(manual) {
     sh.getRange(INASIST_FILA_CAB + 1, 1, filas.length, ancho).setValues(filas);
     sh.getRange(INASIST_FILA_CAB + 1, 9, filas.length, 1).insertCheckboxes();
   }
-  sh.getRange(1, 1).setValue('🏃 INASISTENCIAS — lista del ' + ddmm_(hoyIso) + ': ' + nuevos.length + ' para enviar · socios activos de 4 a 30 días sin venir');
+  sh.getRange(1, 1).setValue('🏃 INASISTENCIAS — lista del ' + ddmm_(hoyIso) + ': ' + nuevos.length + ' para enviar · socios activos con 4 o más días sin venir');
   var seguimientos = nuevos.filter(function (r) { return r[4] === 'SEGUIMIENTO'; }).length;
   var ahora = new Date();
   log_([Utilities.formatDate(ahora, 'America/Lima', 'dd/MM/yyyy'), Utilities.formatDate(ahora, 'America/Lima', 'HH:mm'),
@@ -202,11 +203,14 @@ function sociosAppsFit_() {
   return out;
 }
 
-/** Responsable del socio en Apps Fit (si viene) o su Vendedor → LAURA / MÓNICA / DANNA. */
+/**
+ * Asesora del socio = su VENDEDOR en la membresía de Apps Fit (monica10da, DANNA123, LAURA31…).
+ * El «Responsable» del registro es quien lo dio de alta (p. ej. recepción), no su asesora:
+ * solo se usa si el socio no tiene vendedor.
+ */
 function asesoraDe_(c) {
-  var valores = [];
+  var valores = [c.Vendedor];
   Object.keys(c).forEach(function (k) { if (/respons/i.test(k) && c[k]) valores.push(c[k]); });
-  valores.push(c.Vendedor);
   for (var i = 0; i < valores.length; i++) {
     var v = sinTildes_(valores[i]);
     if (/^LAURA/.test(v)) return 'LAURA';
@@ -242,10 +246,10 @@ function hojaInasistencias_() {
   var gr = function (g) { return '--(TO_TEXT(' + E + ')="' + g + '")'; };
   sh.getRange(1, 1, 12, 9).setValues([
     ['🏃 INASISTENCIAS', '', '', '', '', '', '', '', ''],
-    ['Se arma sola cada mañana desde Apps Fit (socios activos de 4 a 30 días sin venir). Volvieron = entrenó después del mensaje.', '', '', '', '', '', '', '', ''],
+    ['Se arma sola cada mañana desde Apps Fit (socios activos con 4 o más días sin venir). Volvieron = entrenó después del mensaje.', '', '', '', '', '', '', '', ''],
     cab('📊 AVANCE'), fila('TOTAL', '', 4),
     cab('POR ASESORA'), fila('LAURA', as('L'), 6), fila('MÓNICA', as('M'), 7), fila('DANNA', as('D'), 8),
-    cab('POR GRUPO'), fila('A · 4 a 6 días', gr('A'), 10), fila('B, C y D · 7 a 30 días', '--REGEXMATCH(TO_TEXT(' + E + '),"^[BCD]$")', 11),
+    cab('POR GRUPO'), fila('A · 4 a 6 días', gr('A'), 10), fila('B a E · 7 días o más', '--REGEXMATCH(TO_TEXT(' + E + '),"^[BCDE]$")', 11),
     fila('SEGUIMIENTO', gr('SEGUIMIENTO'), 12),
   ]);
   sh.getRange(INASIST_FILA_CAB, 1, 1, 12).setValues([['LISTA DEL', 'NOMBRE', 'CELULAR', 'ASESORA', 'GRUPO', 'DÍAS SIN VENIR', 'CÓD SOCIO', 'MENSAJE', 'ENV', 'FECHA', 'RESULTADO', 'NOTA']]);

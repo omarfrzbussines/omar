@@ -1,7 +1,7 @@
 const DEFAULTS = {
   apiUrl: '', apiKey: '', dryRun: true, pausaMinS: 45, pausaMaxS: 90, topeDiario: 30,
   diasAntiDup: 30, horaInicio: 8, horaFin: 20, blocklist: ['51942853538', '51953876647'],
-  revisarActivo: true, esperarSiUsan: false, autoActivo: false, autoHora: 8, autoDias: [1, 2, 3, 4, 5], autoPestanas: ['📨 TANDA 8 EX ALUMNOS'],
+  revisarActivo: true, esperarSiUsan: false, autoActivo: false, autoHora: 8, autoDias: [1, 2, 3, 4, 5], autoPestanas: ['🏃 INASISTENCIAS', '📨 TANDA 8 EX ALUMNOS'],
 };
 const NUM = ['pausaMinS', 'pausaMaxS', 'topeDiario', 'diasAntiDup', 'horaInicio', 'horaFin', 'autoHora'];
 const dias = () => [...document.querySelectorAll('#autoDias input')];

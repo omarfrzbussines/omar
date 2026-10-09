@@ -27,7 +27,7 @@ const DEFAULTS = {
   autoActivo: false,
   autoHora: 8,
   autoDias: [1, 2, 3, 4, 5],  // 0 = domingo … 6 = sábado
-  autoPestanas: ['📨 TANDA 8 EX ALUMNOS'],
+  autoPestanas: ['🏃 INASISTENCIAS', '📨 TANDA 8 EX ALUMNOS'],
   // Revisión de respuestas: 2 h después del último envío del día y cada mañana,
   // sobre lo enviado en los últimos 3 días que sigue «ENVIADO SIN RESPUESTA».
   revisarActivo: true,
@@ -194,6 +194,8 @@ async function cargar(tab, asesora) {
   const run = {
     estado: 'listo', motivo: '', tab, asesora, linea: data.linea, dias: data.dias,
     items: data.items, excluidos: data.excluidos, idx: 0, cargadoEl: limaNow().date,
+    // días sin repetir: los manda la API (en 🏃 INASISTENCIAS son 4, en las difusiones los de Opciones)
+    diasAntiDup: data.diasAntiDup || cfg.diasAntiDup,
     res: { enviados: 0, simulados: 0, saltados: 0, alertas: 0 },
     simulacion: cfg.dryRun,
   };
@@ -285,6 +287,8 @@ async function unPaso() {
     const linea = `✅ ${r.enviados} enviados · 🧪 ${r.simulados} simulados · ⏭️ ${r.saltados} saltados · ⚠️ ${r.alertas} alertas`;
     await log('ok', `Terminó ${run.tab} · ${run.asesora}: ${linea}`);
     notify('Rurush Difusiones — terminó', linea);
+    // Modo automático: si queda cupo hoy, sigue con la próxima pestaña de la lista.
+    if (run.auto && (await siguientePestanaAuto(run))) return false;
     const tab = await waTab();
     await chrome.tabs.update(tab.id, { url: 'https://web.whatsapp.com/' });
     return false;
@@ -334,12 +338,13 @@ async function unPaso() {
   // 2. registro local de esta PC
   const { enviados = {} } = await chrome.storage.local.get('enviados');
   const previo = enviados[tel];
-  if (previo && diasEntre(previo.fecha, now.date) <= cfg.diasAntiDup) {
+  const dup = run.diasAntiDup || cfg.diasAntiDup;
+  if (previo && diasEntre(previo.fecha, now.date) < dup) {
     return saltar(`esta PC ya le envió el ${previo.fecha} (${previo.tab})`, run.simulacion ? null : 'YA_CONTACTADO');
   }
 
   // 3. el Sheet, ahora mismo (por si otra PC envió mientras tanto)
-  const g = await api({ a: 'yaEnviado', celular: tel, dias: cfg.diasAntiDup });
+  const g = await api({ a: 'yaEnviado', celular: tel, dias: dup, tab: run.tab });
   if (g.bloqueado) return saltar('NO CONTACTAR en el Sheet');
   if (g.enviado) return saltar(`ya recibió difusión el ${g.fecha} (${g.pestana})`, run.simulacion ? null : 'YA_CONTACTADO');
 
@@ -373,7 +378,7 @@ async function unPaso() {
     const d = await ask(tab.id, { type: 'diag' });
     if (d) await log('info', `🔎 Chat leído: ${d.pre} con fecha · ${d.idTrue} propios por id · ${d.out} por clase · ${d.textos} textos · ${d.filas} filas · ${d.iconos} íconos.`);
   }
-  const escrito = yaEscritoEnChat(estadoChat.messages, now.date, cfg.diasAntiDup);
+  const escrito = yaEscritoEnChat(estadoChat.messages, now.date, dup);
   if (escrito.si) {
     if (!run.simulacion) await ask(tab.id, { type: 'clearDraft' });
     return saltar(`el chat ya tiene un mensaje de Rurush (${escrito.fecha})`, run.simulacion ? null : 'YA_CONTACTADO');
@@ -593,6 +598,26 @@ async function autoCheck() {
   } finally {
     revisandoAuto = false;
   }
+}
+
+async function siguientePestanaAuto(run) {
+  const cfg = await getConfig();
+  if (!run.simulacion && (await contador(run.linea)) >= cfg.topeDiario) return false;
+  const lista = cfg.autoPestanas;
+  for (const pestana of lista.slice(lista.indexOf(run.tab) + 1)) {
+    let nuevo;
+    try { nuevo = await cargar(pestana, run.asesora); } catch (e) {
+      await log('info', `🤖 ${pestana}: ${e.message || e}`);
+      continue;
+    }
+    if (!nuevo.items.length) continue;
+    Object.assign(nuevo, { auto: true, dia: run.dia, estado: 'corriendo', diagHecho: true });
+    await setRun(nuevo);
+    await log('info', `🤖 Sigue con ${pestana}: ${nuevo.items.length} pendientes.`);
+    await programar(30);
+    return true;
+  }
+  return false;
 }
 
 function programarAuto() {
