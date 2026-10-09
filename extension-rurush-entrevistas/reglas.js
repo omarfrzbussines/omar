@@ -83,11 +83,19 @@ function evaluar(d) {
   const edad = parseInt(s('edad'), 10);
   if (edad && edad < 18) alerta(`Menor de edad (${edad})`);
 
+  // Opciones reales del formulario: "🌅 6:00 AM - 2:00 PM (full-time mañana)", "🌆 2:00 PM - 10:00 PM
+  // (full-time tarde-noche)", "🔥 … (partido)", "✅ Cualquier horario", "Solo Lunes-Viernes 5:00-9:00 PM (noche)",
+  // "Sábado 9:00 AM - 6:00 PM", "Domingo (cualquier horario)". Se puede marcar varias.
   const horario = s('horario');
   if (horario) {
-    if (/solo lunes.?viernes|lunes a viernes/i.test(horario) && !/s[aá]bado/i.test(horario)) alerta('No puede sábados');
-    if (/noche|tarde|pm/i.test(horario.replace(/6:00 AM - 2:00 PM/i, ''))) ok('Cubre la hora pico (tarde-noche)');
+    const cualquiera = /✅|^cualquier|, cualquier/i.test(horario);
+    const opciones = horario.split(/,\s*(?=[^\d\s])/);
+    const entreSemana = opciones.filter(o => !/^(s[aá]bado|domingo)/i.test(o.trim()));
+    if (cualquiera) ok('Cualquier horario');
+    else if (!entreSemana.length) alerta('Solo fines de semana');
+    else if (/tarde|noche|partido|pm - 10|5:00 ?pm/i.test(entreSemana.join(' ').replace(/6:00 AM - 2:00 PM/i, ''))) ok('Cubre la hora pico (tarde-noche)');
     else alerta('Solo mañana: no cubre la hora pico');
+    if (!cualquiera && /solo lunes.?viernes/i.test(horario) && !/s[aá]bado/i.test(horario)) alerta('No puede sábados');
   }
 
   const jornada = s('jornada');
@@ -113,16 +121,23 @@ function evaluar(d) {
   const gym = s('gimnasio');
   if (/membres[ií]as de gimnasio/i.test(gym)) ok('Ya vendió membresías de gym');
   else if (/fitness/i.test(gym)) ok('Vendió productos fitness');
+  else if (/nunca|primera vez/i.test(gym)) info('Primera vez vendiendo');
 
   const prom = s('promedioVentas');
   if (/m[aá]s de 40|20 a 40/i.test(prom)) ok(`Vendía ${prom}`);
   else if (/menos de 5|^0|ninguna/i.test(prom)) alerta(`Vendía poco: ${prom}`);
+  else if (/no tengo/i.test(prom)) info('Sin trabajo anterior en ventas');
 
   const wa = s('whatsappVentas');
   if (/canal principal/i.test(wa)) ok('Cierra por WhatsApp');
-  else if (/^no/i.test(wa)) alerta('Nunca cerró por WhatsApp');
+  else if (/^no|nunca/i.test(wa)) alerta('Nunca cerró por WhatsApp');
 
-  if (/^no/i.test(s('comision'))) alerta('No le motiva la comisión');
+  const com = s('comision');
+  if (/^no|sueldo fijo/i.test(com)) alerta('Prefiere sueldo fijo (no le motiva la comisión)');
+
+  const metas = s('metas');
+  if (/^no|estres|no me gustan/i.test(metas)) alerta(`Metas diarias: ${metas}`);
+  else if (/aunque no/i.test(metas)) info(`Metas diarias: ${metas}`);
 
   const fit = parseInt(s('fitness'), 10);
   if (fit && fit <= 2) alerta(`Poco interés en fitness (${fit}/5)`);

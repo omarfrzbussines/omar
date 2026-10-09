@@ -246,11 +246,19 @@ function evaluar(d) {
   const edad = parseInt(s('edad'), 10);
   if (edad && edad < 18) alerta(`Menor de edad (${edad})`);
 
+  // Opciones reales del formulario: "🌅 6:00 AM - 2:00 PM (full-time mañana)", "🌆 2:00 PM - 10:00 PM
+  // (full-time tarde-noche)", "🔥 … (partido)", "✅ Cualquier horario", "Solo Lunes-Viernes 5:00-9:00 PM (noche)",
+  // "Sábado 9:00 AM - 6:00 PM", "Domingo (cualquier horario)". Se puede marcar varias.
   const horario = s('horario');
   if (horario) {
-    if (/solo lunes.?viernes|lunes a viernes/i.test(horario) && !/s[aá]bado/i.test(horario)) alerta('No puede sábados');
-    if (/noche|tarde|pm/i.test(horario.replace(/6:00 AM - 2:00 PM/i, ''))) ok('Cubre la hora pico (tarde-noche)');
+    const cualquiera = /✅|^cualquier|, cualquier/i.test(horario);
+    const opciones = horario.split(/,\s*(?=[^\d\s])/);
+    const entreSemana = opciones.filter(o => !/^(s[aá]bado|domingo)/i.test(o.trim()));
+    if (cualquiera) ok('Cualquier horario');
+    else if (!entreSemana.length) alerta('Solo fines de semana');
+    else if (/tarde|noche|partido|pm - 10|5:00 ?pm/i.test(entreSemana.join(' ').replace(/6:00 AM - 2:00 PM/i, ''))) ok('Cubre la hora pico (tarde-noche)');
     else alerta('Solo mañana: no cubre la hora pico');
+    if (!cualquiera && /solo lunes.?viernes/i.test(horario) && !/s[aá]bado/i.test(horario)) alerta('No puede sábados');
   }
 
   const jornada = s('jornada');
@@ -276,16 +284,23 @@ function evaluar(d) {
   const gym = s('gimnasio');
   if (/membres[ií]as de gimnasio/i.test(gym)) ok('Ya vendió membresías de gym');
   else if (/fitness/i.test(gym)) ok('Vendió productos fitness');
+  else if (/nunca|primera vez/i.test(gym)) info('Primera vez vendiendo');
 
   const prom = s('promedioVentas');
   if (/m[aá]s de 40|20 a 40/i.test(prom)) ok(`Vendía ${prom}`);
   else if (/menos de 5|^0|ninguna/i.test(prom)) alerta(`Vendía poco: ${prom}`);
+  else if (/no tengo/i.test(prom)) info('Sin trabajo anterior en ventas');
 
   const wa = s('whatsappVentas');
   if (/canal principal/i.test(wa)) ok('Cierra por WhatsApp');
-  else if (/^no/i.test(wa)) alerta('Nunca cerró por WhatsApp');
+  else if (/^no|nunca/i.test(wa)) alerta('Nunca cerró por WhatsApp');
 
-  if (/^no/i.test(s('comision'))) alerta('No le motiva la comisión');
+  const com = s('comision');
+  if (/^no|sueldo fijo/i.test(com)) alerta('Prefiere sueldo fijo (no le motiva la comisión)');
+
+  const metas = s('metas');
+  if (/^no|estres|no me gustan/i.test(metas)) alerta(`Metas diarias: ${metas}`);
+  else if (/aunque no/i.test(metas)) info(`Metas diarias: ${metas}`);
 
   const fit = parseInt(s('fitness'), 10);
   if (fit && fit <= 2) alerta(`Poco interés en fitness (${fit}/5)`);
@@ -470,7 +485,8 @@ async function abrirBorrador() {
   if (guardado) { st.borrador = guardado; return; }
   const puntajes = {};
   CRITERIOS.forEach(cr => { const v = num(c.d[cr.id + 'E' + st.ronda]); if (v != null) puntajes[cr.id] = v; });
-  st.borrador = { puntajes, notasFinal: c.d.notasFinal || '', estado: '', inicio: null };
+  // notasFinalBase = lo que decía el Sheet al empezar (para no pisar cambios de otra persona).
+  st.borrador = { puntajes, notasFinal: c.d.notasFinal || '', notasFinalBase: c.d.notasFinal || '', estado: '', inicio: null };
 }
 function persistirBorrador() { PLAT.guardarLocal(claveBorrador(), st.borrador); }
 function borrarBorrador() { PLAT.borrarLocal(claveBorrador()); }
@@ -505,12 +521,13 @@ function pintarLista() {
     .filter(c => !q || [c.d.nombre, c.d.email, c.d.wa, c.d.notas, c.d.ciudad].join(' ').toLowerCase().includes(q))
     .sort((a, b) => b.fila - a.fila);
 
-  const foco = document.activeElement && document.activeElement.id === 'q';
-  $app.innerHTML = `
-    <input id="q" class="buscar" placeholder="🔎 Buscar nombre, celular, nota…" value="${esc(st.q)}">
-    <div class="chips">${chips.map(([v, t, n]) => `<button class="chip ${st.filtro === v ? 'activo' : ''}" data-accion="filtro" data-v="${esc(v)}">${esc(t)} · ${n}</button>`).join('')}</div>
-    ${lista.length ? lista.map(tarjeta).join('') : '<p class="vacio">Nadie en este filtro.</p>'}`;
-  if (foco) { const i = document.getElementById('q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
+  // El buscador no se vuelve a crear al escribir: así el teclado del celular no se cierra ni pierde letras.
+  if (!document.getElementById('q')) {
+    $app.innerHTML = `<input id="q" class="buscar" type="search" placeholder="🔎 Buscar nombre, celular, nota…" value="${esc(st.q)}">
+      <div id="chips" class="chips"></div><div id="resultados"></div>`;
+  }
+  document.getElementById('chips').innerHTML = chips.map(([v, t, n]) => `<button class="chip ${st.filtro === v ? 'activo' : ''}" data-accion="filtro" data-v="${esc(v)}">${esc(t)} · ${n}</button>`).join('');
+  document.getElementById('resultados').innerHTML = lista.length ? lista.map(tarjeta).join('') : '<p class="vacio">Nadie en este filtro.</p>';
 }
 
 function tarjeta(c) {
@@ -534,7 +551,10 @@ function pintarFicha() {
   if (!c) { st.vista = 'lista'; return pintar(); }
   const d = c.d;
   const opciones = [...new Set([...(st.estados || []), d.estado].filter(Boolean))];
-  const enlace = (href, txt) => `<a href="${esc(href || '#')}" target="_blank" class="${href ? '' : 'falta'}">${txt}</a>`;
+  const enlace = (href, txt) => {
+    href = /^(https:\/\/|http:\/\/|tel:)/i.test(String(href || '').trim()) ? String(href).trim() : '';
+    return `<a href="${esc(href || '#')}" target="_blank" class="${href ? '' : 'falta'}">${txt}</a>`;
+  };
   const ig = d.ig && !/^no$/i.test(d.ig.trim()) ? `https://instagram.com/${d.ig.trim().replace(/^@/, '').replace(/^https?:\/\/(www\.)?instagram\.com\//, '')}` : '';
   $app.innerHTML = `
     <div class="cabecera">
@@ -698,11 +718,12 @@ setInterval(() => {
 async function abrir(fila) {
   st.sel = fila; st.vista = 'ficha'; st.tab = 'resumen'; st.abiertos = {};
   const c = cand();
-  st.ronda = c.d.fechaE1 && !c.d.fechaE2 ? 2 : 1;
+  st.ronda = c.d.fechaE1 || c.d.fechaE2 ? 2 : 1;
   st.borrador = null;
   pintar();
-  await abrirBorrador();
   window.scrollTo(0, 0);
+  await abrirBorrador();
+  if (st.sel === fila && st.tab === 'entrevista') pintar();
 }
 
 document.addEventListener('click', async e => {
@@ -717,7 +738,7 @@ document.addEventListener('click', async e => {
   if (a === 'abrir') return abrir(Number(el.dataset.fila));
   if (a === 'tab') { st.tab = el.dataset.v; return pintar(); }
 
-  if (a === 'guardarNotas') return guardar({ notas: document.getElementById('notas').value }, '✔ Notas guardadas');
+  if (a === 'guardarNotas') return guardar({ notas: document.getElementById('notas').value, notasBase: cand().d.notas || '' }, '✔ Notas guardadas');
 
   if (a === 'ronda') {
     st.ronda = Number(el.dataset.v); st.borrador = null; pintar();
@@ -739,12 +760,13 @@ document.addEventListener('click', async e => {
     const b = st.borrador;
     const faltan = CRITERIOS.filter(cr => b.puntajes[cr.id] == null).map(cr => cr.nombre);
     if (faltan.length && !(await confirmar(`Faltan: ${faltan.join(', ')}. ¿Guardar igual?`, 'Guardar igual'))) return;
-    const okG = await guardar({
-      ronda: st.ronda,
-      puntajes: b.puntajes,
-      notasFinal: b.notasFinal,
-      estado: document.getElementById('estadoFinal').value
-    }, `✔ E${st.ronda} guardada en el Sheet`);
+    const datos = { ronda: st.ronda, puntajes: b.puntajes, estado: document.getElementById('estadoFinal').value };
+    const notasSheet = cand().d.notasFinal || '';
+    if (b.notasFinal.trim() !== notasSheet.trim()) {
+      datos.notasFinal = b.notasFinal;
+      datos.notasFinalBase = b.notasFinalBase != null ? b.notasFinalBase : notasSheet;
+    }
+    const okG = await guardar(datos, `✔ E${st.ronda} guardada en el Sheet`);
     if (okG) { borrarBorrador(); st.tab = 'resumen'; await abrirBorrador(); pintar(); }
     return;
   }

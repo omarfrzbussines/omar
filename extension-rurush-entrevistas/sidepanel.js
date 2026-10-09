@@ -124,7 +124,8 @@ async function abrirBorrador() {
   if (guardado) { st.borrador = guardado; return; }
   const puntajes = {};
   CRITERIOS.forEach(cr => { const v = num(c.d[cr.id + 'E' + st.ronda]); if (v != null) puntajes[cr.id] = v; });
-  st.borrador = { puntajes, notasFinal: c.d.notasFinal || '', estado: '', inicio: null };
+  // notasFinalBase = lo que decía el Sheet al empezar (para no pisar cambios de otra persona).
+  st.borrador = { puntajes, notasFinal: c.d.notasFinal || '', notasFinalBase: c.d.notasFinal || '', estado: '', inicio: null };
 }
 function persistirBorrador() { PLAT.guardarLocal(claveBorrador(), st.borrador); }
 function borrarBorrador() { PLAT.borrarLocal(claveBorrador()); }
@@ -159,12 +160,13 @@ function pintarLista() {
     .filter(c => !q || [c.d.nombre, c.d.email, c.d.wa, c.d.notas, c.d.ciudad].join(' ').toLowerCase().includes(q))
     .sort((a, b) => b.fila - a.fila);
 
-  const foco = document.activeElement && document.activeElement.id === 'q';
-  $app.innerHTML = `
-    <input id="q" class="buscar" placeholder="🔎 Buscar nombre, celular, nota…" value="${esc(st.q)}">
-    <div class="chips">${chips.map(([v, t, n]) => `<button class="chip ${st.filtro === v ? 'activo' : ''}" data-accion="filtro" data-v="${esc(v)}">${esc(t)} · ${n}</button>`).join('')}</div>
-    ${lista.length ? lista.map(tarjeta).join('') : '<p class="vacio">Nadie en este filtro.</p>'}`;
-  if (foco) { const i = document.getElementById('q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
+  // El buscador no se vuelve a crear al escribir: así el teclado del celular no se cierra ni pierde letras.
+  if (!document.getElementById('q')) {
+    $app.innerHTML = `<input id="q" class="buscar" type="search" placeholder="🔎 Buscar nombre, celular, nota…" value="${esc(st.q)}">
+      <div id="chips" class="chips"></div><div id="resultados"></div>`;
+  }
+  document.getElementById('chips').innerHTML = chips.map(([v, t, n]) => `<button class="chip ${st.filtro === v ? 'activo' : ''}" data-accion="filtro" data-v="${esc(v)}">${esc(t)} · ${n}</button>`).join('');
+  document.getElementById('resultados').innerHTML = lista.length ? lista.map(tarjeta).join('') : '<p class="vacio">Nadie en este filtro.</p>';
 }
 
 function tarjeta(c) {
@@ -188,7 +190,10 @@ function pintarFicha() {
   if (!c) { st.vista = 'lista'; return pintar(); }
   const d = c.d;
   const opciones = [...new Set([...(st.estados || []), d.estado].filter(Boolean))];
-  const enlace = (href, txt) => `<a href="${esc(href || '#')}" target="_blank" class="${href ? '' : 'falta'}">${txt}</a>`;
+  const enlace = (href, txt) => {
+    href = /^(https:\/\/|http:\/\/|tel:)/i.test(String(href || '').trim()) ? String(href).trim() : '';
+    return `<a href="${esc(href || '#')}" target="_blank" class="${href ? '' : 'falta'}">${txt}</a>`;
+  };
   const ig = d.ig && !/^no$/i.test(d.ig.trim()) ? `https://instagram.com/${d.ig.trim().replace(/^@/, '').replace(/^https?:\/\/(www\.)?instagram\.com\//, '')}` : '';
   $app.innerHTML = `
     <div class="cabecera">
@@ -352,11 +357,12 @@ setInterval(() => {
 async function abrir(fila) {
   st.sel = fila; st.vista = 'ficha'; st.tab = 'resumen'; st.abiertos = {};
   const c = cand();
-  st.ronda = c.d.fechaE1 && !c.d.fechaE2 ? 2 : 1;
+  st.ronda = c.d.fechaE1 || c.d.fechaE2 ? 2 : 1;
   st.borrador = null;
   pintar();
-  await abrirBorrador();
   window.scrollTo(0, 0);
+  await abrirBorrador();
+  if (st.sel === fila && st.tab === 'entrevista') pintar();
 }
 
 document.addEventListener('click', async e => {
@@ -371,7 +377,7 @@ document.addEventListener('click', async e => {
   if (a === 'abrir') return abrir(Number(el.dataset.fila));
   if (a === 'tab') { st.tab = el.dataset.v; return pintar(); }
 
-  if (a === 'guardarNotas') return guardar({ notas: document.getElementById('notas').value }, '✔ Notas guardadas');
+  if (a === 'guardarNotas') return guardar({ notas: document.getElementById('notas').value, notasBase: cand().d.notas || '' }, '✔ Notas guardadas');
 
   if (a === 'ronda') {
     st.ronda = Number(el.dataset.v); st.borrador = null; pintar();
@@ -393,12 +399,13 @@ document.addEventListener('click', async e => {
     const b = st.borrador;
     const faltan = CRITERIOS.filter(cr => b.puntajes[cr.id] == null).map(cr => cr.nombre);
     if (faltan.length && !(await confirmar(`Faltan: ${faltan.join(', ')}. ¿Guardar igual?`, 'Guardar igual'))) return;
-    const okG = await guardar({
-      ronda: st.ronda,
-      puntajes: b.puntajes,
-      notasFinal: b.notasFinal,
-      estado: document.getElementById('estadoFinal').value
-    }, `✔ E${st.ronda} guardada en el Sheet`);
+    const datos = { ronda: st.ronda, puntajes: b.puntajes, estado: document.getElementById('estadoFinal').value };
+    const notasSheet = cand().d.notasFinal || '';
+    if (b.notasFinal.trim() !== notasSheet.trim()) {
+      datos.notasFinal = b.notasFinal;
+      datos.notasFinalBase = b.notasFinalBase != null ? b.notasFinalBase : notasSheet;
+    }
+    const okG = await guardar(datos, `✔ E${st.ronda} guardada en el Sheet`);
     if (okG) { borrarBorrador(); st.tab = 'resumen'; await abrirBorrador(); pintar(); }
     return;
   }

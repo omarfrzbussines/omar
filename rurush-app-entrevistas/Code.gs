@@ -83,7 +83,7 @@ function app_(k) {
     salida = t.evaluate();
   }
   return salida.setTitle('Rurush Entrevistas')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1');
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
 // Llamadas de la app (google.script.run)
@@ -161,9 +161,18 @@ function columnas_(encabezados) {
   return cols;
 }
 
+/** Identifica la fila aunque alguien ordene el Sheet. Las filas sin marca/correo/nombre
+ *  (leads cargados a mano) se reconocen por su celular y NOTAS para no confundirlas entre sí. */
 function huella_(fila, cols) {
-  return [fila[cols.marca - 1], fila[cols.email - 1], fila[cols.nombre - 1]]
-    .map(function (v) { return String(v == null ? '' : v).trim(); }).join('|');
+  var v = function (k) { return cols[k] ? String(fila[cols[k] - 1] == null ? '' : fila[cols[k] - 1]).trim() : ''; };
+  var h = [v('marca'), v('email'), v('nombre')].join('|');
+  return h === '||' ? h + '|' + v('wa') + '|' + v('notas') : h;
+}
+
+/** Texto tal cual: sin esto Sheets convierte "=…" en fórmula y "3/10" en fecha. */
+function texto_(v) {
+  v = String(v);
+  return /^[=+\-@]/.test(v) || /^[\d\s\/.,:%-]+$/.test(v) ? "'" + v : v;
 }
 
 function lista_() {
@@ -206,6 +215,14 @@ function guardar_(p) {
       throw new Error('El Sheet cambió (¿se ordenó o se borró una fila?). Toca 🔄 y vuelve a intentar.');
     }
 
+    // Las notas se mandan completas: si alguien las cambió en el Sheet desde que se leyeron, no se pisan.
+    [['notas', 'notasBase'], ['notasFinal', 'notasFinalBase']].forEach(function (n) {
+      if (p[n[0]] == null || p[n[1]] == null || !cols[n[0]]) return;
+      if (String(actual[cols[n[0]] - 1]).trim() !== String(p[n[1]]).trim()) {
+        throw new Error('Alguien cambió las notas en el Sheet mientras tanto. Copia tu texto, toca 🔄 y vuelve a guardar.');
+      }
+    });
+
     var ronda = Number(p.ronda);
     if (ronda === 1 || ronda === 2) {
       var pts = p.puntajes || {};
@@ -222,9 +239,9 @@ function guardar_(p) {
       if (!p.estado) p.estado = 'Entrevista ' + ronda + ' hecha';
     }
 
-    if (p.estado != null) sh.getRange(fila, cols.estado).setValue(String(p.estado));
-    if (p.notas != null && cols.notas) sh.getRange(fila, cols.notas).setValue(String(p.notas));
-    if (p.notasFinal != null && cols.notasFinal) sh.getRange(fila, cols.notasFinal).setValue(String(p.notasFinal));
+    if (p.estado != null) sh.getRange(fila, cols.estado).setValue(texto_(p.estado));
+    if (p.notas != null && cols.notas) sh.getRange(fila, cols.notas).setValue(texto_(p.notas));
+    if (p.notasFinal != null && cols.notasFinal) sh.getRange(fila, cols.notasFinal).setValue(texto_(p.notasFinal));
 
     SpreadsheetApp.flush();
     var nueva = sh.getRange(fila, 1, 1, enc.length).getDisplayValues()[0];
