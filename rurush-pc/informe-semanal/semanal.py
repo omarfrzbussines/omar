@@ -21,6 +21,8 @@ def correr(cmd):
     if r.returncode != 0:
         log("ERROR en " + " ".join(cmd) + ":\n" + ((r.stderr or "") + "\n" + "\n".join(salida[-10:])).strip())
         sys.exit(1)
+    for l in salida:
+        if "ERROR" in l.upper() and l != (salida[-1] if salida else ""): log("  " + l.strip())
     if salida: log(salida[-1])
 
 def main():

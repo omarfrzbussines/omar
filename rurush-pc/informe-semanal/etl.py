@@ -468,8 +468,33 @@ def main():
                 "no_vinieron":[{"nombre":n,"dias":ds,"celular":c} for n,ds,c in top_no]})
         print(f"  Apps Fit: {len(af_socios)} socios, {af_total_a} activos, retención {af_pct_g}%")
     except Exception as e:
-        print(f"  Apps Fit ERROR: {e}")
+        print(f"  Apps Fit ERROR: {e} -> uso BASE DIARIA para la retencion")
         retencion_uso=None
+    if retencion_uso is None:
+        # Respaldo: misma medida (vino en los ultimos 7 dias) con la BASE DIARIA ya descargada
+        try:
+            r_ini=hoy-datetime.timedelta(days=7)
+            r_map={"MÓNICA":"Mónica","LAURA":"Laura","DANNA":"Danna"}
+            r_st=defaultdict(lambda:{"activos":0,"vinieron":0,"no_vinieron":[]})
+            for cod,(ff,r) in best.items():
+                if ff.date()<hoy: continue
+                a=r_map.get(asesora(b.cell(r,13).value),"Otros")
+                r_st[a]["activos"]+=1
+                ua=parse_ua(b.cell(r,11).value)
+                if ua and r_ini<=ua.date()<=hoy: r_st[a]["vinieron"]+=1
+                else: r_st[a]["no_vinieron"].append([limpia(b.cell(r,2).value),(hoy-ua.date()).days if ua else -1,str(b.cell(r,5).value or "")])
+            r_ord=[a for a in ["Mónica","Laura","Danna"] if a in r_st]+[a for a in r_st if a not in ["Mónica","Laura","Danna"]]
+            ta=sum(r_st[a]["activos"] for a in r_st); tv=sum(r_st[a]["vinieron"] for a in r_st)
+            retencion_uso={"periodo":f"{r_ini.isoformat()} a {hoy.isoformat()}","meta":85,"fuente":"BASE DIARIA",
+                "global":{"activos":ta,"vinieron":tv,"pct":round(tv/ta*100) if ta else 0},"asesoras":[]}
+            for a in r_ord:
+                d=r_st[a]; top_no=sorted(d["no_vinieron"],key=lambda x:x[1],reverse=True)[:5]
+                retencion_uso["asesoras"].append({"nombre":a,"activos":d["activos"],"vinieron":d["vinieron"],
+                    "pct":round(d["vinieron"]/d["activos"]*100) if d["activos"] else 0,
+                    "no_vinieron":[{"nombre":n,"dias":ds,"celular":c} for n,ds,c in top_no]})
+            print(f"  Retencion (BASE DIARIA): {ta} activos, {retencion_uso['global']['pct']}% vino en 7 dias")
+        except Exception as e2:
+            print(f"  Retencion ERROR: {e2}")
 
     # ---------- ARMAR data.json ----------
     tot_n=round(sum(nuevos),2); tot_f=round(sum(fidel),2); tot=round(tot_n+tot_f,2)
@@ -515,7 +540,7 @@ def main():
                ["Activar a quien no vende",f"{', '.join(ceros)} sin produccion. Reasignar leads o revisar carga." if ceros else "Sostener el ritmo de agendamiento por chat."],
                ["Subir la inscripcion","El chat es el unico canal que convierte; la llamada trae volumen pero casi nadie asiste."]],
     }
-    json.dump(D,open("data.json","w"),ensure_ascii=False,indent=1)
+    json.dump(D,open("data.json","w",encoding="utf-8"),ensure_ascii=False,indent=1)
     print(f"OK data.json | semana {rango} | ingreso {tot} | FP {int(fp_prog)}>{int(fp_asis)}>{sem_ins} | vencidos {sum(len(v) for v in venc.values())} | renovar {sum(len(v) for v in reno.values())}")
 
 if __name__=="__main__": main()
