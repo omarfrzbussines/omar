@@ -1,6 +1,6 @@
 /* RURUSH Hoy — Cuadro diario de ventas (reemplaza la tarea "$ CUADRO DIARIO VENTAS").
    Lo hace Google solo: 0 tokens, sin claves. Lee la Hoja de Reportes 2026 V2:
-     - metas:     pestaña "<MES> <AÑO>", columna BF (LAURA fila 2, DANNA fila 9, MÓNICA fila 16)
+     - metas:     fijas en DV_METAS (Mónica 18,000 · Danna 11,000 · Laura 11,000)
      - ingresos:  pestaña "DATOS_ORIGEN_<MES>" (fecha, asesora, referidos, redes, visitó, cobros,
                   renovaciones, ampliaciones), que es donde están los montos día por día.
    Plazo de la meta: día 21 del mes (DV_PLAZO). Solo cuentan días hábiles de lunes a viernes.
@@ -8,7 +8,7 @@
 
 const DV_ID = '1DHEBkhtGgOvSkUZDsdokVOVozHhujUF77sFUWgv9Ves';
 const DV_PLAZO = 21;
-const DV_META_FILA = { LAURA: 2, DANNA: 9, MONICA: 16 };   // filas de la columna BF
+const DV_METAS = { MONICA: 18000, DANNA: 11000, LAURA: 11000 };   // metas del mes (cámbialas aquí)
 const DV_ASESORAS = ['DANNA', 'MONICA', 'LAURA'];
 const DV_NOMBRE = { DANNA: 'DANNA', MONICA: 'MÓNICA', LAURA: 'LAURA' };
 const DV_DIAS = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
@@ -34,16 +34,14 @@ function dv_datos() {
   const y = Number(hoy.slice(0, 4)), m = Number(hoy.slice(5, 7));
   const MES = MESES[m - 1];
   const r = Sheets.Spreadsheets.Values.batchGet(DV_ID, {
-    ranges: ["'" + MES + ' ' + y + "'!BF1:BF20", "'DATOS_ORIGEN_" + MES + "'!C1:J800"],
+    ranges: ["'DATOS_ORIGEN_" + MES + "'!C1:J800"],
     valueRenderOption: 'UNFORMATTED_VALUE'
   });
-  const bf = (r.valueRanges[0].values || []);
-  const filas = (r.valueRanges[1].values || []);
+  const filas = (r.valueRanges[0].values || []);
 
   const A = {};
   DV_ASESORAS.forEach((n) => {
-    const v = bf[DV_META_FILA[n] - 1];
-    A[n] = { nombre: DV_NOMBRE[n], meta: v ? dv_num(v[0]) : 0, acum: 0, porDia: {} };
+    A[n] = { nombre: DV_NOMBRE[n], meta: DV_METAS[n], acum: 0, porDia: {} };
   });
   filas.forEach((f) => {
     if (typeof f[0] !== 'number') return;                 // encabezados y filas vacías
