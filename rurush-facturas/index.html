@@ -253,7 +253,7 @@ const carpetaConf = () => ls.get('carpeta', 'RURUSH Facturas');
 async function raiz() {
   const conf = carpetaConf();
   const c = ls.get('raiz');
-  if (c && c.conf === conf) return c;
+  if (c && c.conf === conf && (c.compartida || yo() === DUENA)) return c;
   let item, compartida = false;
   if (/^https?:\/\//i.test(conf)) {
     compartida = true;
@@ -268,7 +268,7 @@ async function raiz() {
     // Si la carpeta no está en Mis archivos pero me la compartieron (ej. la cuenta del equipo),
     // se usa la compartida: así todas abren el mismo link y caen en la carpeta del gym.
     const primera = sinTildes(partes[0] || '');
-    let it = (await hijos(d)).find((x) => sinTildes(x.name) === primera);
+    let it = (await hijos(d)).find((x) => sinTildes(x.name) === primera && (yo() === DUENA || x.remoteItem));
     if (!it) {
       try { it = ((await gj('GET', '/me/drive/sharedWithMe')).value || []).find((x) => x.remoteItem && sinTildes(x.name) === primera); } catch (e) { /* no disponible */ }
     }
@@ -353,7 +353,7 @@ async function solicitarAcceso(nombre) {
   const sol = await carpeta(R.driveId, R.id, 'solicitudes');
   const datos = { codigo: codigoCelular(), nombre, modelo: modelo(), cuenta: yo(), fecha: isoLocal(new Date()) };
   await gj('PUT', `/drives/${R.driveId}/items/${sol}:/${ruta(codigoCelular() + '.json')}:/content`, JSON.stringify(datos), { 'Content-Type': 'application/json' });
-  ls.set('solicitud', nombre);
+  ls.set('solicitud', { nombre, raiz: R.id });   // enviada a ESTA carpeta
 }
 let SOLIS = {};
 async function cargarSolicitudes() {
@@ -407,7 +407,8 @@ function pantallaCuentaNoPermitida() {
 function pantallaBloqueo() {
   $('#nav').classList.add('hide');
   $('#sub').textContent = 'Celular no autorizado';
-  const enviada = ls.get('solicitud', '');
+  const sol = ls.get('solicitud', null);
+  const enviada = sol && sol.raiz && sol.raiz === (ls.get('raiz') || {}).id ? sol.nombre : '';
   const sinAdmin = !hayAdmin();
   $('#main').innerHTML = `<div class="login">
     <div style="font-size:54px">🔒</div>
@@ -418,7 +419,8 @@ function pantallaBloqueo() {
       : `<label style="text-align:left">Tu nombre</label><input id="bNombre" placeholder="Ej. LAURA" autocomplete="off">
          <button class="guardar" id="bSolicitar">📨 Pedir acceso</button>`}
     <button class="btn" id="bRevisar" style="width:100%;margin-top:12px">🔄 Ya me aprobaron</button>
-    <p style="font-size:12px">Sesión: ${esc(yo() || '—')} · <a href="#" id="cSalir" style="color:var(--or)">cerrar sesión</a></p></div>`;
+    <p style="font-size:12px">Sesión: ${esc(yo() || '—')} · <a href="#" id="cSalir" style="color:var(--or)">cerrar sesión</a>
+      <br>Carpeta: ${esc(((ls.get('raiz') || {}).nombre) || '—')} ${(ls.get('raiz') || {}).compartida ? '(compartida ✅)' : '(propia)'}</p></div>`;
 }
 let appVisible = false;
 function mostrarApp() {
@@ -872,6 +874,10 @@ function pintarConf() {
 
     <h2>📱 Solicitudes de acceso <button class="btn" id="cSolis" style="padding:4px 10px;font-size:12px">🔄</button></h2>
     <div class="list" id="solis"><div class="vacio">Cargando…</div></div>
+    <div class="ayuda">¿No aparece? Aprueba escribiendo el código que sale en su pantalla:</div>
+    <div class="dos"><input id="cCodigo" placeholder="X9ZP-K3VW" autocomplete="off" style="text-transform:uppercase">
+      <input id="cCodNombre" placeholder="Nombre (ej. MÓNICA)" autocomplete="off"></div>
+    <button class="btn" id="cAprobarCod" style="margin-top:8px">✅ Aprobar este código</button>
     <h2>📱 Celulares autorizados <small>${Object.keys(CFG.celulares).length}</small></h2>
     <div class="list">${cel || '<div class="vacio">Ninguno.</div>'}</div>
     <div class="ayuda">Quitar: ese celular queda bloqueado la próxima vez que abra la app con internet.
@@ -1006,6 +1012,18 @@ document.addEventListener('click', async (ev) => {
     return;
   }
   if (t.id === 'cSolis') return pintarSolicitudes();
+  if (t.id === 'cAprobarCod') {
+    const k = $('#cCodigo').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^(.{4})(.{4})$/, '$1-$2');
+    const nombre = ($('#cCodNombre').value || '').trim().toUpperCase() || 'SIN NOMBRE';
+    if (!/^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(k)) return toast('Escribe el código como sale en su pantalla (ej. X9ZP-K3VW).', 4000);
+    t.disabled = true;
+    try {
+      await cambiarCelulares((cel) => { cel[k] = { nombre, modelo: '', cuenta: '', fecha: isoLocal(new Date()) }; });
+      toast('✅ ' + k + ' aprobado. En ese celular: "Ya me aprobaron".', 4000);
+      pintar();
+    } catch (e) { t.disabled = false; toast('❌ ' + e.message, 5000); }
+    return;
+  }
   if (t.id === 'cProbarFotos') {
     const antes = CFG.fotos;
     CFG.fotos = $('#cFotos').value.trim();
