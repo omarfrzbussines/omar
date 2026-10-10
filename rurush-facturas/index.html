@@ -409,20 +409,27 @@ function pantallaBloqueo() {
   $('#sub').textContent = 'Celular no autorizado';
   const sol = ls.get('solicitud', null);
   const enviada = sol && sol.raiz && sol.raiz === (ls.get('raiz') || {}).id ? sol.nombre : '';
+  const R = ls.get('raiz') || {};
+  // La cuenta del equipo sin conexión a la carpeta compartida: pedir el link (no mostrar datos de cachés viejas).
+  const sinCarpeta = yo() !== DUENA && !R.compartida;
   const sinAdmin = !hayAdmin();
   $('#main').innerHTML = `<div class="login">
     <div style="font-size:54px">🔒</div>
     <p>Este celular todavía no está autorizado.</p>
     <div class="calc" style="text-align:center"><h3>CÓDIGO DE ESTE CELULAR</h3><div style="font-size:28px;font-weight:700;letter-spacing:2px">${esc(codigoCelular())}</div></div>
-    ${sinAdmin ? `<div class="estado err"><span>Esta carpeta todavía no tiene administrador: su dueño debe abrir la app primero.</span></div>`
+    ${sinCarpeta ? `<div class="estado err"><span>Todavía no está conectado a la carpeta del gym.${ERROR_INICIO ? '<br><small>' + esc(ERROR_INICIO) + '</small>' : ''}</span></div>
+         <label style="text-align:left">Pega el link de la carpeta "RURUSH Facturas" que te pasó el administrador</label>
+         <input id="bLink" placeholder="https://1drv.ms/f/…" autocomplete="off">
+         <button class="guardar" id="bConectar">🔗 Conectar</button>`
+      : sinAdmin ? `<div class="estado err"><span>Esta carpeta todavía no tiene administrador: su dueño debe abrir la app primero.</span></div>`
       : enviada ? `<div class="estado ok"><span>✅ Solicitud enviada como <b>${esc(enviada)}</b>. Avísale al administrador para que la apruebe.</span></div>`
       : `<label style="text-align:left">Tu nombre</label><input id="bNombre" placeholder="Ej. LAURA" autocomplete="off">
          <button class="guardar" id="bSolicitar">📨 Pedir acceso</button>`}
     <button class="btn" id="bRevisar" style="width:100%;margin-top:12px">🔄 Ya me aprobaron</button>
     <p style="font-size:12px">Sesión: ${esc(yo() || '—')} · <a href="#" id="cSalir" style="color:var(--or)">cerrar sesión</a>
-      <br>Carpeta: ${esc(((ls.get('raiz') || {}).nombre) || '—')} ${(ls.get('raiz') || {}).compartida ? '(compartida ✅)' : '(propia)'}</p></div>`;
+      <br>Carpeta: ${sinCarpeta ? 'sin conectar' : esc(R.nombre || '—') + (R.compartida ? ' (compartida ✅)' : '')}</p></div>`;
 }
-let appVisible = false;
+let appVisible = false, ERROR_INICIO = '';
 function mostrarApp() {
   appVisible = true;
   $('#nav').classList.remove('hide');
@@ -1005,6 +1012,14 @@ document.addEventListener('click', async (ev) => {
     try { await solicitarAcceso(nombre); pantallaBloqueo(); } catch (e) { t.disabled = false; toast('❌ ' + e.message, 5000); }
     return;
   }
+  if (t.id === 'bConectar') {
+    const link = ($('#bLink').value || '').trim();
+    const url = (link.match(/https?:\/\/\S+/) || [])[0];
+    if (!url) return toast('Pega el link completo (empieza con https://).', 4000);
+    ls.set('carpeta', url); ['raiz', 'excel', 'config', 'solicitud'].forEach((k) => ls.set(k, null));
+    location.reload();
+    return;
+  }
   if (t.id === 'bRevisar') {
     t.disabled = true;
     try { await cargarConfig(); } catch (e) { toast('❌ ' + e.message, 5000); }
@@ -1109,6 +1124,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.se
     if (!compActual()) F.comprobante = (CFG.comprobantes[0] || {}).nombre || '';
   } catch (e) {
     // Sin internet o sin permiso: se trabaja con la config guardada y todo queda en cola.
+    ERROR_INICIO = e.message;
     toast('⚠️ ' + e.message, 5000);
   }
   if (!autorizado()) { appVisible = false; return pantallaBloqueo(); }   // nunca aprobado, o lo quitaron
