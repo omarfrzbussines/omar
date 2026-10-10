@@ -68,6 +68,18 @@ function app_activarCelular(k, pin, modelo) {
   } finally { lock.releaseLock(); }
   return { ok: true };
 }
+/** Ejecutar desde el editor: muestra el link de CADA asesora y crea solo el que falte
+ *  (no cambia los links que ya existen, a diferencia de app_crearLlaves). */
+function app_verLinks() {
+  const llaves = JSON.parse(app_props().getProperty("APP_LLAVES") || "{}");
+  const url = ScriptApp.getService().getUrl();
+  APP_ASESORAS.forEach(function (a) {
+    let k = Object.keys(llaves).filter(function (x) { return llaves[x] === a; })[0];
+    if (!k) { k = Utilities.getUuid().replace(/-/g, "").slice(0, 20); llaves[k] = a; Logger.log("(nuevo) " + a); }
+    Logger.log(a + " → " + url + "?k=" + k);
+  });
+  app_props().setProperty("APP_LLAVES", JSON.stringify(llaves));
+}
 /** Ejecutar desde el editor para ver qué celular tiene cada asesora. */
 function app_verCelulares() {
   const c = app_celulares();
