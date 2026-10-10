@@ -184,6 +184,10 @@ function eq_llamadas() {
   const d = new Date(Date.parse(hoy + 'T12:00:00Z'));
   const lunes = new Date(d.getTime() - ((d.getUTCDay() + 6) % 7) * 86400e3).toISOString().slice(0, 10);
   const mes = hoy.slice(0, 8) + '01';
+  // día hábil anterior (lun-vie), para el cuadro de ventas de las 7 am
+  let ay = new Date(d.getTime() - 86400e3);
+  while (ay.getUTCDay() === 0 || ay.getUTCDay() === 6) ay = new Date(ay.getTime() - 86400e3);
+  const ayer = ay.toISOString().slice(0, 10);
 
   const T = EQ_T; let t = Date.now();
   const lap = (k) => { const n = Date.now(); T[k] = Math.round((n - t) / 100) / 10; t = n; };
@@ -231,7 +235,7 @@ function eq_llamadas() {
   });
   lap('fechas');
 
-  const P = { hoy: {}, semana: {}, mes: {} };
+  const P = { hoy: {}, ayer: {}, semana: {}, mes: {} };
   const minutosHoy = {};
   const nueva = () => ({ n: 0, wa: 0, cont: 0, agend: 0, durSum: 0, durN: 0, timbSum: 0, timbN: 0, manual: 0, bases: {} });
 
@@ -245,7 +249,7 @@ function eq_llamadas() {
       const dur = b.duracion >= 0 ? eq_seg(f[b.duracion]) : null;
       const timb = b.timbrada >= 0 ? Number(eq_txt(f[b.timbrada])) || 0 : 0;
       const wa = b.obs >= 0 && /^📲\s*WA/.test(eq_txt(f[b.obs]));
-      const periodos = ['mes'].concat(fecha >= lunes ? ['semana'] : [], fecha === hoy ? ['hoy'] : []);
+      const periodos = ['mes'].concat(fecha >= lunes ? ['semana'] : [], fecha === hoy ? ['hoy'] : [], fecha === ayer ? ['ayer'] : []);
       periodos.forEach((p) => {
         const s = P[p][ase] || (P[p][ase] = nueva());
         s.n++;

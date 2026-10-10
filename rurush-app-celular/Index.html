@@ -69,6 +69,7 @@
   <button data-tab="fp"><span>🎟️</span>Free Pass</button>
   <button data-tab="ret"><span>🔥</span>Retención</button>
   <button data-tab="eq"><span>👥</span>Equipo</button>
+  <button data-tab="vd"><span>📈</span>Ventas</button>
 </nav>
 
 <script>
@@ -88,6 +89,15 @@ function cargar(forzar) {
     .withSuccessHandler((d) => { D = d; pintar(); })
     .withFailureHandler((e) => { $('#main').innerHTML = `<div class="err">${esc(e.message || e)}</div>`; $('#sub').textContent = 'Error'; })
     .getDashboard(!!forzar);
+}
+
+let VD = null, vdCargando = false;
+function cargarVentasDia(forzar) {
+  vdCargando = true;
+  google.script.run
+    .withSuccessHandler((html) => { VD = html; vdCargando = false; if (tab === 'vd') pintar(); })
+    .withFailureHandler((e) => { VD = `<div class="err">⚠️ ${esc(e.message || e)}</div>`; vdCargando = false; if (tab === 'vd') pintar(); })
+    .getVentasDia(!!forzar);
 }
 
 function cargarEquipo(forzar) {
@@ -224,6 +234,10 @@ function pintar() {
   }
 
   if (tab === 'eq') h = pintarEquipo();
+  if (tab === 'vd') {
+    if (VD == null) { if (!vdCargando) cargarVentasDia(false); h = '<div class="cargando">Cargando cuadro de ventas…</div>'; }
+    else h = VD;
+  }
 
   if (tab === 'ret') {
     const riesgo = socios.filter((s) => s.sinVenir == null || s.sinVenir > 10)
@@ -249,7 +263,7 @@ document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
   document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('on', x === b));
   pintar(); window.scrollTo(0, 0);
 });
-$('#refresh').onclick = () => { cargar(true); if (E || tab === 'eq') { E = null; cargarEquipo(false); } };
+$('#refresh').onclick = () => { if (VD != null || tab === 'vd') { VD = null; cargarVentasDia(true); } cargar(true); if (E || tab === 'eq') { E = null; cargarEquipo(false); } };
 cargar(false);
 </script>
 </body>
