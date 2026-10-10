@@ -74,3 +74,18 @@ OCTUBRE, NOVIEMBRE y DICIEMBRE: columna **COD** en ventas y renovación (autocom
 - DANNA = 51926918075 en ⚙️ CONFIG con nota «SOLO INASISTENCIAS» (no envía difusiones).
 - Rutina «WTS SEGUIMIENTO INASISTENCIAS» pausada (opción A): la extensión 1.3.0 la reemplaza, con Sábado
   marcado en el modo automático.
+
+## Actualización 10-oct — Tandas para 2–3 semanas
+- **📨 TANDA 5 FP NO INSCRITOS** (sheetId 920005): 314 (Laura 174 / Mónica 140). Vinieron al FP en 2026 y no se inscribieron.
+- **📨 TANDA 6 FP NO VINIERON** (sheetId 920006): 700 más recientes (07-abr → 02-oct; Laura 350 / Mónica 350).
+  Quedan ~700 de ene–mar sin cargar (posible TANDA 6B) y ~2,970 leads 2026 (posible TANDA 7).
+- Copiadas de TANDA 8 (mismo formato y KPIs). MENSAJE = ARRAYFORMULA en H14 (no escribir en H); usa la columna oculta
+  M «SALUDO» (primer nombre limpio o vacío → «¡Hola!» / «Hola, ¿cómo estás?»). V1/V2 alternan por asesora.
+- Exclusiones: socio activo, ya está en otra pestaña, descartado / no le interesa / fuera / otro gym, se inscribió,
+  FP de los últimos 5 días (T5) o 7 días (T6) porque las asesoras los siguen a mano.
+- Auditoría 10-oct: 0 repetidos dentro de T5/T6 y 0 cruces con cualquier otra pestaña (T2, T3, T4, T8, 100 DE HOY,
+  FP 28, LEADS AGOSTO, DIFUSIONES 6 AGOS, EN RIESGO, INASISTENCIAS). En pestañas viejas hay 111 números repetidos,
+  pero ninguno puede salir: o ya se enviaron (la API los bloquea), o están marcados MOVIDO/MALO, y esas pestañas no
+  están en el modo automático.
+- Modo automático, pestañas por línea: Laura y Mónica = 🏃 INASISTENCIAS → 📨 TANDA 5 FP NO INSCRITOS →
+  📨 TANDA 6 FP NO VINIERON. Línea 075 = solo 🏃 INASISTENCIAS.
