@@ -104,7 +104,12 @@ Aunque compartan la cuenta, solo tus celulares administran y cada celular nuevo 
 
 ## 🔒 Seguridad: quién puede abrir la app
 
-Hay **dos candados**:
+Hay **tres candados**:
+
+0. **Solo cuentas del gym:** la app solo funciona con `rurushfitclub@outlook.com` (la dueña) y
+   `rurush.gastos1@outlook.com` (el equipo). Con cualquier otra cuenta de Microsoft sale ⛔ "cuenta no
+   autorizada" y la app no hace nada en su OneDrive. Solo la dueña puede crear la carpeta y quedar de
+   administrador. Para agregar otra cuenta hay que cambiar la lista `CUENTAS` en `index.html`.
 
 1. **Microsoft / OneDrive (el fuerte):** sin una cuenta que tenga acceso a tu carpeta no se puede
    ver ni subir nada, aunque tengan el link de la app. Esto lo controla Microsoft.

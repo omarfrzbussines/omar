@@ -109,6 +109,11 @@
 // ⬇️ PEGA AQUÍ el "Id. de aplicación (cliente)" de Azure (ver INSTALAR.md, paso 1).
 const CLIENT_ID = '6e095c1c-f8a0-4afc-bee9-d13f0a2bdb2d';
 
+// Solo estas cuentas de Microsoft pueden usar la app. Cualquier otra ve "cuenta no autorizada"
+// y la app no hace nada en su OneDrive. Solo la DUEÑA puede crear la carpeta y quedar de admin.
+const DUENA = 'rurushfitclub@outlook.com';
+const CUENTAS = [DUENA, 'rurush.gastos1@outlook.com'];
+
 const SCOPES = ['User.Read', 'Files.ReadWrite.All'];
 const GRAPH = 'https://graph.microsoft.com/v1.0';
 const EXCEL = 'Control de gastos.xlsx';
@@ -268,6 +273,7 @@ async function raiz() {
       try { it = ((await gj('GET', '/me/drive/sharedWithMe')).value || []).find((x) => x.remoteItem && sinTildes(x.name) === primera); } catch (e) { /* no disponible */ }
     }
     if (it) { d = destinoDe(it, d.driveId); compartida = !!it.remoteItem; partes.shift(); }
+    else if (yo() !== DUENA) throw new Error(`La carpeta "${partes[0]}" no está compartida con ${yo()}. Pídele a ${DUENA} que se la comparta (con permiso de edición).`);
     for (const parte of partes) d = { driveId: d.driveId, id: await carpeta(d.driveId, d.id, parte) };
     item = await gj('GET', `/drives/${d.driveId}/items/${d.id}`);
     item.parentReference = Object.assign({}, item.parentReference, { driveId: d.driveId });
@@ -290,7 +296,7 @@ async function leerConfig() {
 }
 async function cargarConfig() {
   const c = await leerConfig();
-  const mia = !(await raiz()).compartida;
+  const mia = !(await raiz()).compartida && yo() === DUENA;
   if (c && (Object.values(c.celulares).some((x) => x && x.admin) || !mia)) CFG = c;
   else if (mia) {
     // Carpeta nueva (o sin administrador) en MI OneDrive: este celular queda aprobado y de administrador.
@@ -389,6 +395,14 @@ async function quitarCelular(codigo) {
   await cambiarCelulares((cel) => { delete cel[codigo]; });
 }
 
+function pantallaCuentaNoPermitida() {
+  $('#nav').classList.add('hide');
+  $('#sub').textContent = 'Cuenta no autorizada';
+  $('#main').innerHTML = `<div class="login">
+    <div style="font-size:54px">⛔</div>
+    <p>La cuenta <b>${esc(yo())}</b> no puede usar esta app.<br>Entra con la cuenta del gym que te dieron.</p>
+    <button class="guardar" id="cSalir">Cerrar sesión y entrar con otra cuenta</button></div>`;
+}
 function pantallaBloqueo() {
   $('#nav').classList.add('hide');
   $('#sub').textContent = 'Celular no autorizado';
@@ -496,7 +510,7 @@ const colaDel = (id) => idb('readwrite', (s) => s.delete(id));
 
 let subiendo = false, otraVuelta = false, ultimoError = '';
 async function procesarCola() {
-  if (!cuenta() || !autorizado()) return;
+  if (!cuenta() || !CUENTAS.includes(yo()) || !autorizado()) return;
   if (subiendo) { otraVuelta = true; return; }
   otraVuelta = false;
   subiendo = true; pintarEstado();
@@ -1057,6 +1071,14 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.se
   let acc;
   try { acc = await iniciarMsal(); } catch (e) { return pantallaLogin(e.message); }
   if (!acc) return pantallaLogin();
+  if (!CUENTAS.includes(yo())) return pantallaCuentaNoPermitida();
+  // Otra cuenta en este celular: olvidar carpeta, Excel y ajustes de la cuenta anterior
+  // (si no, seguiría usando la carpeta y el permiso de admin de la otra cuenta).
+  if (ls.get('cuenta', '') !== yo()) {
+    ['raiz', 'excel', 'config', 'solicitud'].forEach((k) => ls.set(k, null));
+    CFG = normalizar(CONFIG_BASE);
+    ls.set('cuenta', yo());
+  }
   // Con la config guardada: si este celular ya estaba aprobado, abre al toque (también sin internet).
   if (autorizado()) mostrarApp();
   else $('#main').innerHTML = '<div class="login"><p>Revisando este celular…</p></div>';
