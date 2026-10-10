@@ -364,11 +364,12 @@ async function cargarSolicitudes() {
   const lista = [];
   for (const it of (await r.json()).value || []) {
     if (!/\.json$/i.test(it.name)) continue;
-    try {
-      const d = await gj('GET', `/drives/${R.driveId}/items/${it.id}/content`);
-      if (d && d.codigo && !CFG.celulares[d.codigo]) lista.push(Object.assign(d, { sid: it.id }));
-      else if (d && CFG.celulares[d.codigo]) g('DELETE', `/drives/${R.driveId}/items/${it.id}`);   // ya aprobado
-    } catch (e) { /* archivo dañado: se ignora */ }
+    const codigo = it.name.replace(/\.json$/i, '').toUpperCase();
+    if (CFG.celulares[codigo]) { g('DELETE', `/drives/${R.driveId}/items/${it.id}`); continue; }   // ya aprobado
+    let d;
+    try { d = await gj('GET', `/drives/${R.driveId}/items/${it.id}/content`); } catch (e) { d = { error: e.message }; }
+    // Aunque no se pueda leer el contenido, la solicitud se muestra con su código (el nombre del archivo).
+    lista.push(Object.assign({ nombre: '(sin nombre)', modelo: '', cuenta: '', fecha: '' }, d && typeof d === 'object' ? d : {}, { codigo, sid: it.id }));
   }
   SOLIS = {};
   lista.forEach((x) => { SOLIS[x.codigo] = x; });
@@ -895,7 +896,7 @@ async function pintarSolicitudes() {
     const l = await cargarSolicitudes();
     if (!$('#solis')) return;
     $('#solis').innerHTML = l.map((x) => `<div class="row"><div class="main"><div class="t">${esc(x.nombre)}</div>
-      <div class="d">${esc(x.codigo)} · ${esc(x.modelo || '')} · ${esc(x.cuenta || '')} · ${fm(x.fecha || '')}</div></div>
+      <div class="d">${esc(x.codigo)} · ${esc(x.modelo || '')} · ${esc(x.cuenta || '')} · ${fm(x.fecha || '')}${x.error ? '<br>⚠️ ' + esc(x.error) : ''}</div></div>
       <button class="btn" data-aprobar="${esc(x.codigo)}" style="color:var(--grn)">Aprobar</button>
       <button class="btn" data-rechazar="${esc(x.codigo)}">✕</button></div>`).join('') || '<div class="vacio">No hay solicitudes.</div>';
   } catch (e) { if ($('#solis')) $('#solis').innerHTML = `<div class="vacio">⚠️ ${esc(e.message)}</div>`; }
@@ -952,6 +953,8 @@ function pintarSub() {
 function pintar() {
   $('#main').innerHTML = tab === 'nueva' ? pintarNueva() : tab === 'hist' ? pintarHist() : pintarConf();
   if (tab === 'conf' && esAdmin()) pintarSolicitudes();
+  clearInterval(pintar.t);
+  if (tab === 'conf' && esAdmin()) pintar.t = setInterval(() => { if (tab === 'conf' && document.visibilityState === 'visible') pintarSolicitudes(); }, 8000);
   document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
   pintarEstado();
 }
