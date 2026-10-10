@@ -135,10 +135,22 @@ function respuestas(inicio) {
   const textos = [...main.querySelectorAll('span.selectable-text, span[dir], div[dir]')].filter((n) =>
     !n.closest('footer') && (nuestro.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING)
     && !nuestro.contains(n) && !n.querySelector('span.selectable-text, span[dir], div[dir]'));
+  // Lado de la burbuja: las del contacto van a la izquierda, las nuestras a la derecha y los avisos
+  // de WhatsApp al centro. Es lo más confiable porque no depende de cómo WhatsApp arma el HTML.
+  const caja = main.getBoundingClientRect();
+  const lado = (n) => {
+    const r = n.getBoundingClientRect();
+    if (caja.width < 300 || !r.width) return null;
+    const c = (r.left + r.right) / 2 - caja.left;
+    return c < caja.width * 0.42 ? 'contacto' : c > caja.width * 0.58 ? 'nuestro' : 'centro';
+  };
+  const usarLado = lado(nuestro) === 'nuestro'; // solo si nuestra burbuja sí se ve a la derecha
   const out = [];
   for (const n of textos) {
     const t = (n.innerText || '').trim();
     if (!t || /^\d{1,2}:\d{2}/.test(t) || esSistema(t)) continue;
+    const l = usarLado ? lado(n) : null;
+    if (l) { if (l === 'contacto') out.push(t); continue; }
     let fila = n, propio = false;
     for (let i = 0; i < 6 && fila.parentElement && !fila.parentElement.contains(nuestro); i++) {
       fila = fila.parentElement;
