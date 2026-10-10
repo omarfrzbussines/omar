@@ -249,20 +249,30 @@ async function raiz() {
   const conf = carpetaConf();
   const c = ls.get('raiz');
   if (c && c.conf === conf) return c;
-  let item;
+  let item, compartida = false;
   if (/^https?:\/\//i.test(conf)) {
+    compartida = true;
     item = await gj('GET', `/shares/${shareId(conf)}/driveItem`);
     if (!item.folder) throw new Error('El link de la carpeta no es de una carpeta.');
     if (!item.parentReference || !item.parentReference.driveId) throw new Error('No pude abrir la carpeta compartida: comparte una subcarpeta, no todo el OneDrive.');
   } else {
     const drive = await gj('GET', '/me/drive');
     const root = await gj('GET', '/me/drive/root');
-    let id = root.id;
-    for (const parte of conf.split('/').map((s) => s.trim()).filter(Boolean)) id = await carpeta(drive.id, id, parte);
-    item = await gj('GET', `/drives/${drive.id}/items/${id}`);
-    item.parentReference = Object.assign({}, item.parentReference, { driveId: drive.id });
+    const partes = conf.split('/').map((s) => s.trim()).filter(Boolean);
+    let d = { driveId: drive.id, id: root.id };
+    // Si la carpeta no está en Mis archivos pero me la compartieron (ej. la cuenta del equipo),
+    // se usa la compartida: así todas abren el mismo link y caen en la carpeta del gym.
+    const primera = sinTildes(partes[0] || '');
+    let it = (await hijos(d)).find((x) => sinTildes(x.name) === primera);
+    if (!it) {
+      try { it = ((await gj('GET', '/me/drive/sharedWithMe')).value || []).find((x) => x.remoteItem && sinTildes(x.name) === primera); } catch (e) { /* no disponible */ }
+    }
+    if (it) { d = destinoDe(it, d.driveId); compartida = !!it.remoteItem; partes.shift(); }
+    for (const parte of partes) d = { driveId: d.driveId, id: await carpeta(d.driveId, d.id, parte) };
+    item = await gj('GET', `/drives/${d.driveId}/items/${d.id}`);
+    item.parentReference = Object.assign({}, item.parentReference, { driveId: d.driveId });
   }
-  const res = { conf, driveId: item.parentReference.driveId, id: item.id, nombre: item.name, web: item.webUrl };
+  const res = { conf, driveId: item.parentReference.driveId, id: item.id, nombre: item.name, web: item.webUrl, compartida };
   ls.set('raiz', res);
   return res;
 }
@@ -280,7 +290,7 @@ async function leerConfig() {
 }
 async function cargarConfig() {
   const c = await leerConfig();
-  const mia = !/^https?:\/\//i.test(carpetaConf());
+  const mia = !(await raiz()).compartida;
   if (c && (Object.values(c.celulares).some((x) => x && x.admin) || !mia)) CFG = c;
   else if (mia) {
     // Carpeta nueva (o sin administrador) en MI OneDrive: este celular queda aprobado y de administrador.
@@ -549,7 +559,7 @@ async function baseFotos() {
       if (!it && i === 0) {
         try { it = ((await gj('GET', '/me/drive/sharedWithMe')).value || []).find((x) => sinTildes(x.name) === sinTildes(partes[0])); } catch (e) { /* no disponible */ }
       }
-      if (!it) throw new Error(`No encuentro la carpeta "${partes[i]}" (${conf}). En OneDrive web: Compartidos → CONTABILIDAD - RURUSH → "Añadir acceso directo a Mis archivos", o pega el link de COMPRAS en ⚙️ Ajustes.`);
+      if (!it) throw new Error(`La cuenta ${yo()} no ve la carpeta "${partes[i]}": pídele a la contadora que se la comparta (con permiso de edición). Se sube sola cuando lo haga.`);
       d = destinoDe(it, d.driveId);
     }
   }
