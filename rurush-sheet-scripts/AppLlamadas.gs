@@ -16,11 +16,63 @@ const APP_ESTADOS = ["CONTESTO", "NO CONTESTO", "CORTO", "APAGADO", "AGENDADO", 
 const APP_TAM_COLA = 30;
 const APP_RESERVA_SEG = 30 * 60;   // lo que se le muestra a una asesora no le sale a otra por 30 min
 
-function app_asesora(k) {
-  const llaves = JSON.parse(PropertiesService.getScriptProperties().getProperty("APP_LLAVES") || "{}");
-  const a = llaves[String(k || "")];
+/* ---------- candado por celular ----------
+   Cada link (llave) queda amarrado a UN celular. El celular se activa una sola vez con el PIN de Omar
+   (Propiedad del script APP_PIN). Si la propiedad APP_PIN no existe, el candado está apagado.
+   El celular manda "llave|idDelCelular"; el id se crea al azar y vive en ese navegador. */
+function app_props() { return PropertiesService.getScriptProperties(); }
+function app_celulares() { return JSON.parse(app_props().getProperty("APP_CELULARES") || "{}"); }
+
+// Solo la llave (para abrir la página).
+function app_asesoraLlave(k) {
+  const llaves = JSON.parse(app_props().getProperty("APP_LLAVES") || "{}");
+  const a = llaves[String(k || "").split("|")[0]];
   if (!a) throw new Error("Link no válido. Pídele a Omar tu link de acceso.");
   return a;
+}
+// Llave + celular (para leer la cola y guardar llamadas).
+function app_asesora(k) {
+  const a = app_asesoraLlave(k);
+  if (!app_props().getProperty("APP_PIN")) return a;          // candado apagado
+  const disp = String(k || "").split("|")[1] || "";
+  const cel = app_celulares()[a];
+  if (!disp || !cel || cel.id !== disp) throw new Error("CELULAR_NO_AUTORIZADO: este link solo funciona en el celular activado de " + a + ".");
+  return a;
+}
+// La página pregunta al abrir si este celular está autorizado.
+function app_estadoCelular(k) {
+  const a = app_asesoraLlave(k);
+  try { app_asesora(k); return { ok: true }; } catch (e) {
+    const cel = app_celulares()[a];
+    return { ok: false, asesora: a, tiene: !!cel, desde: cel ? cel.desde : "" };
+  }
+}
+// Omar escribe el PIN en el celular de la asesora: ese celular queda como el único autorizado (reemplaza al anterior).
+function app_activarCelular(k, pin, modelo) {
+  const a = app_asesoraLlave(k);
+  const disp = String(k || "").split("|")[1] || "";
+  if (!/^[a-z0-9]{16,}$/.test(disp)) throw new Error("No se pudo identificar este celular.");
+  const cache = CacheService.getScriptCache(), kf = "pinfail" + a;
+  const fallos = Number(cache.get(kf) || 0);
+  if (fallos >= 5) throw new Error("Demasiados intentos. Espera 15 minutos.");
+  const PIN = app_props().getProperty("APP_PIN");
+  if (!PIN || String(pin || "").trim() !== PIN.trim()) {
+    cache.put(kf, String(fallos + 1), 900);
+    throw new Error("PIN incorrecto.");
+  }
+  const lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    const c = app_celulares();
+    c[a] = { id: disp, desde: Utilities.formatDate(new Date(), "America/Lima", "dd/MM/yyyy HH:mm"), modelo: String(modelo || "").slice(0, 80) };
+    app_props().setProperty("APP_CELULARES", JSON.stringify(c));
+  } finally { lock.releaseLock(); }
+  return { ok: true };
+}
+/** Ejecutar desde el editor para ver qué celular tiene cada asesora. */
+function app_verCelulares() {
+  const c = app_celulares();
+  Logger.log("Candado " + (app_props().getProperty("APP_PIN") ? "ENCENDIDO" : "APAGADO (falta la propiedad APP_PIN)"));
+  APP_ASESORAS.forEach(function (a) { Logger.log(a + ": " + (c[a] ? "activado " + c[a].desde + " · " + c[a].modelo : "SIN CELULAR (nadie puede usar su link)")); });
 }
 
 /** Ejecutar UNA vez después de implementar (y cuando quieras cambiar los links).
@@ -38,7 +90,7 @@ function app_crearLlaves() {
 
 function app_doGet(e) {
   let asesora;
-  try { asesora = app_asesora(e.parameter.k); } catch (err) {
+  try { asesora = app_asesoraLlave(e.parameter.k); } catch (err) {
     return HtmlService.createHtmlOutput('<p style="font:18px sans-serif;padding:24px">' + err.message + "</p>")
       .addMetaTag("viewport", "width=device-width, initial-scale=1");
   }

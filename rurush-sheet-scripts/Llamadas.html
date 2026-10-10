@@ -61,7 +61,9 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const LLAVE = <?!= JSON.stringify(llave) ?>;
+// id de ESTE celular (se crea una vez y queda guardado en el navegador) → candado por celular
+const DISP = (() => { try { let d = localStorage.getItem('rr_disp'); if (!d) { d = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()) + Date.now()).replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 32); localStorage.setItem('rr_disp', d); } return d; } catch (e) { return ''; } })();
+const LLAVE = <?!= JSON.stringify(llave) ?> + '|' + DISP;
 const ASESORA = <?!= JSON.stringify(asesora) ?>;
 const BASES = <?!= JSON.stringify(bases) ?>;
 // base elegida (se recuerda en el celular)
@@ -107,7 +109,7 @@ function traer(reset) {
       pintarMarcador();
       if (!mostrando || !actual()) { mostrando = true; pintar(); }
     })
-    .withFailureHandler((e) => { trayendo = false; toast(e.message || String(e), true); if (!cola.length) $('#main').innerHTML = `<div class="vacio">${esc(e.message || e)}</div>`; })
+    .withFailureHandler((e) => { trayendo = false; if (/CELULAR_NO_AUTORIZADO/.test(e.message || e)) return google.script.run.withSuccessHandler(pantallaPin).app_estadoCelular(LLAVE); toast(e.message || String(e), true); if (!cola.length) $('#main').innerHTML = `<div class="vacio">${esc(e.message || e)}</div>`; })
     .app_getCola(LLAVE, BASE, excluir);
 }
 
@@ -237,10 +239,34 @@ $('#base').onchange = () => {
   if (l) { cola = l.cola; mostrando = true; pintar(); } else $('#main').innerHTML = '<div class="vacio">Cargando la base ' + esc(BASE) + '…</div>';
   traer(true);
 };
-// Al abrir: si hay una cola guardada de hoy, se muestra al instante y se actualiza por detrás.
-const local = leerLocal();
-if (local) { cola = local.cola; ESTADOS = local.ESTADOS; HORAS = local.HORAS; mostrando = true; pintar(); pintarMarcador(); }
-traer(true);
+function iniciar() {
+  // Al abrir: si hay una cola guardada de hoy, se muestra al instante y se actualiza por detrás.
+  const local = leerLocal();
+  if (local) { cola = local.cola; ESTADOS = local.ESTADOS; HORAS = local.HORAS; mostrando = true; pintar(); pintarMarcador(); }
+  traer(true);
+}
+function pantallaPin(r) {
+  $('#base').style.display = 'none';
+  $('#main').innerHTML = `<div class="card" style="margin-top:20px">
+    <div class="nombre">🔒 Celular no autorizado</div>
+    <div class="num" style="margin-top:8px">Este link de <b>${esc(r.asesora)}</b> solo funciona en su celular.
+    ${r.tiene ? 'Ya hay un celular activado desde el ' + esc(r.desde) + '. Si activas este, el otro deja de funcionar.' : ''}</div>
+    <div class="tip" style="margin:14px 0 6px">PIN de Omar para activar este celular:</div>
+    <input id="pin" type="password" inputmode="numeric" autocomplete="off" placeholder="PIN">
+    <button class="guardar" id="activar">Activar este celular</button></div>`;
+  $('#activar').onclick = () => {
+    $('#activar').disabled = true;
+    google.script.run
+      .withSuccessHandler(() => { toast('✓ Celular activado'); $('#base').style.display = ''; $('#main').innerHTML = '<div class="vacio">Cargando tu cola…</div>'; iniciar(); })
+      .withFailureHandler((e) => { $('#activar').disabled = false; toast('⚠️ ' + (e.message || e), true); })
+      .app_activarCelular(LLAVE, $('#pin').value, navigator.userAgent);
+  };
+}
+if (!DISP) $('#main').innerHTML = '<div class="vacio">⚠️ Este navegador no guarda datos (¿modo incógnito?). Ábrelo en Chrome normal.</div>';
+else google.script.run
+  .withSuccessHandler((r) => { if (r.ok) iniciar(); else pantallaPin(r); })
+  .withFailureHandler((e) => { $('#main').innerHTML = `<div class="vacio">⚠️ ${esc(e.message || e)}</div>`; })
+  .app_estadoCelular(LLAVE);
 </script>
 </body>
 </html>
