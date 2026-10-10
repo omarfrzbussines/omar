@@ -89,3 +89,7 @@ OCTUBRE, NOVIEMBRE y DICIEMBRE: columna **COD** en ventas y renovación (autocom
   están en el modo automático.
 - Modo automático, pestañas por línea: Laura y Mónica = 🏃 INASISTENCIAS → 📨 TANDA 5 FP NO INSCRITOS →
   📨 TANDA 6 FP NO VINIERON. Línea 075 = solo 🏃 INASISTENCIAS.
+- Mensajes T5/T6 con «Rurush sede Larco». T5 V1 = «Cuéntame qué te faltó para empezar 🙌 Te invito a otra clase, ¿puedes {DIAS}?».
+- **🗓 CALENDARIO DIFUSIONES** (sheetId 920010): plan diario con 35 por línea (≈3 inasistencias + 32 difusión, 15% sin WhatsApp),
+  lun–sáb desde sáb 10/10. T5 termina mié 14 (Mónica) / jue 15 (Laura); T6 termina lun 26/10. Columnas REAL salen
+  del 📜 LOG EXTENSIÓN (ESTADO = ENVIADO por fecha y asesora). Requiere subir el tope de la extensión de 30 a 35.
