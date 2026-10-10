@@ -8,6 +8,7 @@
 
 const DV_ID = '1DHEBkhtGgOvSkUZDsdokVOVozHhujUF77sFUWgv9Ves';
 const DV_PLAZO = 21;
+const DV_CORREO = 'omarfrz@gmail.com';   // a quién llega el cuadro diario
 const DV_METAS = { MONICA: 18000, DANNA: 11000, LAURA: 11000 };   // metas del mes (cámbialas aquí)
 const DV_ASESORAS = ['DANNA', 'MONICA', 'LAURA'];
 const DV_NOMBRE = { DANNA: 'DANNA', MONICA: 'MÓNICA', LAURA: 'LAURA' };
@@ -159,7 +160,7 @@ function dv_enviarCorreo() {
   const d = dv_datos();
   const resumen = d.lista.map((a) => a.nombre + ' ' + Math.round(a.pct * 100) + '%').join(' · ');
   MailApp.sendEmail({
-    to: Session.getEffectiveUser().getEmail(),
+    to: DV_CORREO,
     subject: '📈 Ventas ' + hoy.slice(8) + '/' + hoy.slice(5, 7) + ' · equipo ' + Math.round(d.acum / Math.max(1, d.meta) * 100) + '% · ' + resumen,
     htmlBody: dv_html(d),
     name: 'RURUSH Hoy'
@@ -173,7 +174,7 @@ function dv_instalar() {
     .forEach((t) => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('dv_enviarCorreo').timeBased().atHour(7).nearMinute(0).everyDays(1).inTimezone('America/Lima').create();
   const d = dv_datos();
-  MailApp.sendEmail({ to: Session.getEffectiveUser().getEmail(), subject: '📈 PRUEBA · Cuadro de ventas', htmlBody: dv_html(d), name: 'RURUSH Hoy' });
-  Logger.log('Listo: correo de prueba enviado a ' + Session.getEffectiveUser().getEmail() + '. ' +
+  MailApp.sendEmail({ to: DV_CORREO, subject: '📈 PRUEBA · Cuadro de ventas', htmlBody: dv_html(d), name: 'RURUSH Hoy' });
+  Logger.log('Listo: correo de prueba enviado a ' + DV_CORREO + '. ' +
     d.lista.map((a) => a.nombre + ' ' + Math.round(a.acum) + '/' + a.meta + ' → hoy ' + Math.round(a.metaHoy)).join(' | '));
 }
