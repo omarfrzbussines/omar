@@ -39,7 +39,7 @@
   .vacio { color:var(--mut); padding:14px 12px; font-size:13px; }
   .err { background:#3d1b1b; color:#ff8a80; border-radius:12px; padding:10px 12px; margin-bottom:12px; font-size:13px; }
   nav { position:fixed; bottom:0; left:0; right:0; display:flex; background:#161618; border-top:1px solid var(--line); padding-bottom:env(safe-area-inset-bottom); }
-  nav button { flex:1; background:none; border:0; color:var(--mut); padding:10px 0 12px; font-size:12px; }
+  nav button { flex:1; background:none; border:0; color:var(--mut); padding:10px 0 12px; font-size:11px; }
   nav button span { display:block; font-size:20px; }
   nav button.on { color:var(--tx); }
   .cargando { text-align:center; color:var(--mut); padding:60px 0; }
@@ -70,6 +70,7 @@
   <button data-tab="ret"><span>🔥</span>Retención</button>
   <button data-tab="eq"><span>👥</span>Equipo</button>
   <button data-tab="vd"><span>📈</span>Ventas</button>
+  <button data-tab="sm"><span>🗓️</span>Semana</button>
 </nav>
 
 <script>
@@ -98,6 +99,15 @@ function cargarVentasDia(forzar) {
     .withSuccessHandler((html) => { VD = html; vdCargando = false; if (tab === 'vd') pintar(); })
     .withFailureHandler((e) => { VD = `<div class="err">⚠️ ${esc(e.message || e)}</div>`; vdCargando = false; if (tab === 'vd') pintar(); })
     .getVentasDia(!!forzar);
+}
+
+let SM = null, smCargando = false;
+function cargarSemanal(forzar) {
+  smCargando = true;
+  google.script.run
+    .withSuccessHandler((html) => { SM = html; smCargando = false; if (tab === 'sm') pintar(); })
+    .withFailureHandler((e) => { SM = `<div class="err">⚠️ ${esc(e.message || e)}</div>`; smCargando = false; if (tab === 'sm') pintar(); })
+    .getSemanal(!!forzar);
 }
 
 function cargarEquipo(forzar) {
@@ -238,6 +248,10 @@ function pintar() {
     if (VD == null) { if (!vdCargando) cargarVentasDia(false); h = '<div class="cargando">Cargando cuadro de ventas…</div>'; }
     else h = VD;
   }
+  if (tab === 'sm') {
+    if (SM == null) { if (!smCargando) cargarSemanal(false); h = '<div class="cargando">Cargando informe semanal… (si es la primera vez tarda ~1 min)</div>'; }
+    else h = SM;
+  }
 
   if (tab === 'ret') {
     const riesgo = socios.filter((s) => s.sinVenir == null || s.sinVenir > 10)
@@ -263,7 +277,7 @@ document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
   document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('on', x === b));
   pintar(); window.scrollTo(0, 0);
 });
-$('#refresh').onclick = () => { if (VD != null || tab === 'vd') { VD = null; cargarVentasDia(true); } cargar(true); if (E || tab === 'eq') { E = null; cargarEquipo(false); } };
+$('#refresh').onclick = () => { if (tab === 'sm') { SM = null; cargarSemanal(true); pintar(); return; } if (VD != null || tab === 'vd') { VD = null; cargarVentasDia(true); } cargar(true); if (E || tab === 'eq') { E = null; cargarEquipo(false); } };
 cargar(false);
 </script>
 </body>

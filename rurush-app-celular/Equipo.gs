@@ -184,6 +184,9 @@ function eq_llamadas() {
   const d = new Date(Date.parse(hoy + 'T12:00:00Z'));
   const lunes = new Date(d.getTime() - ((d.getUTCDay() + 6) % 7) * 86400e3).toISOString().slice(0, 10);
   const mes = hoy.slice(0, 8) + '01';
+  // semana pasada completa (lun-dom), para el informe semanal de los lunes
+  const lunesAnt = new Date(Date.parse(lunes + 'T12:00:00Z') - 7 * 86400e3).toISOString().slice(0, 10);
+  const desdeMin = lunesAnt < mes ? lunesAnt : mes;
   // día hábil anterior (lun-vie), para el cuadro de ventas de las 7 am
   let ay = new Date(d.getTime() - 86400e3);
   while (ay.getUTCDay() === 0 || ay.getUTCDay() === 6) ay = new Date(ay.getTime() - 86400e3);
@@ -222,7 +225,7 @@ function eq_llamadas() {
       for (let i = 0; i < ultima; i++) {
         if (conLlamada[i] || !col[i]) continue;
         const f = eq_iso(col[i][0]);
-        if (f && f >= mes && f <= hoy) conLlamada[i] = true;
+        if (f && f >= desdeMin && f <= hoy) conLlamada[i] = true;
       }
     });
     // 2) Tramos de filas seguidas (se unen si hay menos de 40 filas entre ellas).
@@ -235,7 +238,7 @@ function eq_llamadas() {
   });
   lap('fechas');
 
-  const P = { hoy: {}, ayer: {}, semana: {}, mes: {} };
+  const P = { hoy: {}, ayer: {}, semana: {}, mes: {}, semAnt: {} };
   const minutosHoy = {};
   const nueva = () => ({ n: 0, wa: 0, cont: 0, agend: 0, durSum: 0, durN: 0, timbSum: 0, timbN: 0, manual: 0, bases: {} });
 
@@ -244,12 +247,12 @@ function eq_llamadas() {
       const estado = eq_txt(f[b.estado]).toUpperCase();
       if (!estado) return;
       const fecha = eq_iso(f[b.fecha]);
-      if (!fecha || fecha < mes || fecha > hoy) return;
+      if (!fecha || fecha < desdeMin || fecha > hoy) return;
       const ase = eq_nombre(f[b.asesor]) || 'SIN ASESORA';
       const dur = b.duracion >= 0 ? eq_seg(f[b.duracion]) : null;
       const timb = b.timbrada >= 0 ? Number(eq_txt(f[b.timbrada])) || 0 : 0;
       const wa = b.obs >= 0 && /^📲\s*WA/.test(eq_txt(f[b.obs]));
-      const periodos = ['mes'].concat(fecha >= lunes ? ['semana'] : [], fecha === hoy ? ['hoy'] : [], fecha === ayer ? ['ayer'] : []);
+      const periodos = (fecha >= mes ? ['mes'] : []).concat(fecha < lunes && fecha >= lunesAnt ? ['semAnt'] : [], fecha >= lunes ? ['semana'] : [], fecha === hoy ? ['hoy'] : [], fecha === ayer ? ['ayer'] : []);
       periodos.forEach((p) => {
         const s = P[p][ase] || (P[p][ase] = nueva());
         s.n++;
