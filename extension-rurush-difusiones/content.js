@@ -104,6 +104,12 @@ function diag() {
   };
 }
 
+// Textos que pone WhatsApp en el chat y que NO son respuestas del contacto.
+const SISTEMA = /cambi[oó] (el nombre de usuario|su n[uú]mero|de n[uú]mero|su nombre)|changed (their|the|his|her) (phone|number|username|name)|cifrad[oa]s? de extremo|end-to-end encrypted|es un contacto|is a contact|bloqueaste|desbloqueaste|blocked this contact|unblocked|mensajes temporales|disappearing messages|eliminaste este mensaje|se elimin[oó] este mensaje|this message was deleted|llamada (de voz |de video )?perdida|missed (voice|video) call|mensajes no le[ií]dos|unread messages?/i;
+const FECHA_CHIP = /^(hoy|ayer|today|yesterday|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|\d{1,2}\/\d{1,2}\/\d{2,4})$/i;
+const META = /^(editado|edited|ia)?\s*\d{1,2}:\d{2}\s*(a\.?\s?m\.?|p\.?\s?m\.?)?$/i; // «Editado9:02 a. m.», «IA8:52 a. m.»
+const esSistema = (t) => SISTEMA.test(t) || FECHA_CHIP.test(String(t).trim()) || META.test(String(t).trim());
+
 // ¿El contacto respondió después de nuestro mensaje (el que empieza con `inicio`)?
 // Devuelve { nuestro: hallado, respuestas: [textos], metodo }.
 function respuestas(inicio) {
@@ -113,7 +119,7 @@ function respuestas(inicio) {
     let idx = -1;
     msgs.forEach((m, i) => { if (m.out && normTexto(m.text).startsWith(inicio)) idx = i; });
     if (idx >= 0) {
-      return { nuestro: true, metodo: 'fecha', respuestas: msgs.slice(idx + 1).filter((m) => !m.out && m.text).map((m) => m.text) };
+      return { nuestro: true, metodo: 'fecha', respuestas: msgs.slice(idx + 1).filter((m) => !m.out && m.text && !esSistema(m.text)).map((m) => m.text) };
     }
   }
   // 2) Sin marcas: se ubica nuestra burbuja por su texto y se toman los textos que vienen
@@ -132,7 +138,7 @@ function respuestas(inicio) {
   const out = [];
   for (const n of textos) {
     const t = (n.innerText || '').trim();
-    if (!t || /^\d{1,2}:\d{2}/.test(t)) continue;
+    if (!t || /^\d{1,2}:\d{2}/.test(t) || esSistema(t)) continue;
     let fila = n, propio = false;
     for (let i = 0; i < 6 && fila.parentElement && !fila.parentElement.contains(nuestro); i++) {
       fila = fila.parentElement;

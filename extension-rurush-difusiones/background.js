@@ -469,7 +469,7 @@ async function revisarRespuestas(motivo) {
   const run = await getRun();
   if (run && run.estado === 'corriendo') throw new Error('Se está enviando: revisa al terminar o pausa primero.');
   revisando = true;
-  const res = { revisados: 0, respondieron: [], sinHallar: 0, at: Date.now() };
+  const res = { revisados: 0, respondieron: [], sinHallar: 0, noHallados: [], at: Date.now() };
   try {
     const cfg = await getConfig();
     const { tab, asesora } = await lineaAbierta();
@@ -482,13 +482,18 @@ async function revisarRespuestas(motivo) {
       const chat = await openChat(tab.id, tel);
       if (!chat || chat.invalid) continue;
       await sleep(1500);
-      const r = await ask(tab.id, { type: 'respuestas', inicio });
+      let r = await ask(tab.id, { type: 'respuestas', inicio });
+      // El chat recién abierto tarda en pintar los mensajes: se reintenta hasta ~12 s.
+      for (let intento = 0; intento < 5 && (!r || !r.nuestro); intento++) {
+        await sleep(2500);
+        r = await ask(tab.id, { type: 'respuestas', inicio });
+      }
       res.revisados += 1;
       if (res.revisados === 1) {
         const d = await ask(tab.id, { type: 'diag' });
         if (d) await log('info', `🔎 Revisión, primer chat: ${d.pre} con fecha · ${d.idTrue} propios por id · ${d.textos} textos · ${d.filas} filas · ${d.iconos} íconos · método ${(r && r.metodo) || '—'}.`);
       }
-      if (!r || !r.nuestro) { res.sinHallar += 1; continue; }
+      if (!r || !r.nuestro) { res.sinHallar += 1; res.noHallados.push(it.nombre || tel); continue; }
       if (r.respuestas.length) {
         const texto = r.respuestas.join(' / ');
         const m = await api({ a: 'respuesta', tab: it.tab, fila: it.fila, celular: tel, texto }).catch((e) => ({ error: e.message }));
@@ -503,6 +508,7 @@ async function revisarRespuestas(motivo) {
       + (res.respondieron.length ? `: ${res.respondieron.slice(0, 8).join(', ')}` : '')
       + (res.sinHallar ? ` · ${res.sinHallar} sin encontrar nuestro mensaje` : '');
     await log('ok', resumen);
+    if (res.noHallados.length) await log('info', `💬 Sin encontrar nuestro mensaje (revísalos a mano si quieres): ${res.noHallados.join(', ')}`);
     if (res.respondieron.length) notify('Rurush Difusiones', resumen);
     await chrome.storage.local.set({ ultimaRevision: res });
     await chrome.tabs.update(tab.id, { url: 'https://web.whatsapp.com/' });
