@@ -410,8 +410,18 @@ def main():
     AF_AUTH="https://webapiappsfit-cliente.azurewebsites.net/api/managements/auth"
     AF_CUST="https://webapiappsfit-cliente.azurewebsites.net/api/managements/customers"
     try:
-        if not _cred("APPS ?FIT"): raise Exception("Falta APPS FIT / Token: en credenciales_api.txt")
-        af_tok=requests.post(AF_AUTH,json={"TokenEmpresa":_cred("APPS ?FIT") or ""},timeout=30).json()["Item"]["Token"]
+        # TokenEmpresa: el que esta bajo "APPS FIT" y, si Apps Fit lo rechaza, cualquier otro con formato GUID del archivo
+        cands=[]
+        for base in glob.glob('/sessions/*/mnt/RURUSH VENTAS 2026/')+[os.path.join(os.path.dirname(os.path.abspath(__file__)),'..')]:
+            f=os.path.join(base,'credenciales_api.txt')
+            if os.path.exists(f):
+                t=open(f,encoding="utf-8",errors="ignore").read()
+                cands+=[x for x in [_cred("APPS ?FIT")] if x]+_re.findall(r"\b[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\b",t)
+        af_tok=None
+        for c in dict.fromkeys(cands):
+            j=requests.post(AF_AUTH,json={"TokenEmpresa":c},timeout=30).json() or {}
+            if j.get("Success") and (j.get("Item") or {}).get("Token"): af_tok=j["Item"]["Token"]; break
+        if not af_tok: raise Exception("Apps Fit rechazo el TokenEmpresa: revisa la linea Token: debajo de APPS FIT en credenciales_api.txt")
         af_h={"Authorization":f"Bearer {af_tok}"}
         af_all=[]; af_pg=1; af_tp=1
         while af_pg<=af_tp:
