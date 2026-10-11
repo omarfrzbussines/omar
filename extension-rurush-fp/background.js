@@ -1031,8 +1031,22 @@ async function programar(soloFaltantes = false) {
   }
 }
 
-chrome.runtime.onInstalled.addListener((d) => programar(d.reason !== 'install' && d.reason !== 'update'));
-chrome.runtime.onStartup.addListener(() => programar(true));
+// Videos que vienen cargados con la extensión (videos-precargados.json: huella → opción de Video).
+// Se agregan una sola vez: si alguien borra uno en Opciones, no vuelve.
+async function cargarVideosPrecargados() {
+  const pre = await (await fetch(chrome.runtime.getURL('videos-precargados.json'))).json();
+  const { videosAnuncio = {}, precargadosVistos = [] } = await chrome.storage.local.get(['videosAnuncio', 'precargadosVistos']);
+  const vistos = new Set(precargadosVistos);
+  for (const [h, v] of Object.entries(pre)) {
+    if (vistos.has(h)) continue;
+    if (!videosAnuncio[h]) videosAnuncio[h] = { ...v, at: new Date().toISOString(), precargado: true };
+    vistos.add(h);
+  }
+  await chrome.storage.local.set({ videosAnuncio, precargadosVistos: [...vistos] });
+}
+
+chrome.runtime.onInstalled.addListener((d) => { programar(d.reason !== 'install' && d.reason !== 'update'); cargarVideosPrecargados().catch(() => {}); });
+chrome.runtime.onStartup.addListener(() => { programar(true); cargarVideosPrecargados().catch(() => {}); });
 chrome.alarms.onAlarm.addListener((a) => {
   if (a.name === 'tick') { reintentarVideos().catch(() => {}); return encolar('m1', 'alarm'); }
   if (a.name === 'reporte') return descargarReporte(a.scheduledTime);
