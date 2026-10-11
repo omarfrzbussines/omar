@@ -2,6 +2,7 @@ const DEFAULTS = {
   enabled: true, pipedriveToken: '', expectedNumber: '51926918075',
   modos: {}, mananaHora: 9, mananaDesdeHora: 13, maxEnviosCorrida: 15,
   blocklist: ['51942853538', '51953876647'],
+  fbAdsModo: 'sim', fbAdsEtiqueta: 'FB ADS',
   startHour: 8, endHour: 20, intervalMin: 30, sendWindowH: 4,
 };
 const $ = (id) => document.getElementById(id);
@@ -29,6 +30,8 @@ async function cargar() {
     tabla.appendChild(tr);
   }
   for (const k of ['mananaHora', 'mananaDesdeHora', 'maxEnviosCorrida']) $(k).value = c[k];
+  $('fbAdsModo').value = c.fbAdsModo;
+  $('fbAdsEtiqueta').value = c.fbAdsEtiqueta;
   $('pipedriveToken').value = c.pipedriveToken;
   $('expectedNumber').value = c.expectedNumber;
   $('blocklist').value = c.blocklist.join('\n');
@@ -45,6 +48,8 @@ $('save').onclick = async () => {
     mananaHora: rango($('mananaHora').value, 6, 12, DEFAULTS.mananaHora),
     mananaDesdeHora: rango($('mananaDesdeHora').value, 6, 22, DEFAULTS.mananaDesdeHora),
     maxEnviosCorrida: rango($('maxEnviosCorrida').value, 1, 40, DEFAULTS.maxEnviosCorrida),
+    fbAdsModo: $('fbAdsModo').value,
+    fbAdsEtiqueta: $('fbAdsEtiqueta').value.trim() || DEFAULTS.fbAdsEtiqueta,
     pipedriveToken: $('pipedriveToken').value.trim(),
     expectedNumber: $('expectedNumber').value.replace(/\D/g, ''),
     blocklist: $('blocklist').value.split(/[\n,;]+/).map((x) => x.replace(/\D/g, '')).filter((x) => x.length >= 9),

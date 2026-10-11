@@ -24,6 +24,13 @@
   <p class="hint">🧪 Simulación arma los mensajes y los muestra en el ícono 🔥, pero NO los envía. Pasa a 📤 Envío real cuando lo hayas revisado, y pausa la rutina de Claude que reemplaza.</p>
   <table id="mods" style="width:100%;border-collapse:collapse"></table>
 
+  <h3>Chats de anuncios (Facebook / Instagram)</h3>
+  <p class="hint">Cuando se abre un chat que muestra la tarjeta "Anuncio de facebook · Ver detalles", le pone esta etiqueta de WhatsApp Business. La etiqueta tiene que existir ya en WhatsApp (créala una vez a mano).</p>
+  <div class="grid">
+    <div><label>Modo</label><select id="fbAdsModo"><option value="sim">🧪 Simulación</option><option value="real">📤 Etiquetar</option><option value="off">Apagado</option></select></div>
+    <div style="grid-column: span 2"><label>Etiqueta</label><input type="text" id="fbAdsEtiqueta"></div>
+  </div>
+
   <div class="grid">
     <div><label>Recordatorio mañana: hora</label><input type="number" id="mananaHora" min="6" max="12"></div>
     <div><label>...solo clases desde (hora)</label><input type="number" id="mananaDesdeHora" min="6" max="22"></div>

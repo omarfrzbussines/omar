@@ -347,11 +347,11 @@ async function marcarYGuardar(rxEtiqueta, nombre, rastro, falla) {
   }
   const marcada = estaMarcada(fila);
   if (marcada === true) { cerrarDialogo(); return { ok: true, ya: true }; }
-  if (marcada === null) { const d = falla('no pude saber si ya estaba en FREE PASS: no se tocó'); cerrarDialogo(); return d; }
+  if (marcada === null) { const d = falla(`no pude saber si ya estaba en ${nombre}: no se tocó`); cerrarDialogo(); return d; }
 
   clic(fila.querySelector('[role="checkbox"], input[type="checkbox"]') || fila);
   await esperar(500);
-  if (estaMarcada(fila) !== true) { const d = falla('no se pudo marcar FREE PASS'); cerrarDialogo(); return d; }
+  if (estaMarcada(fila) !== true) { const d = falla(`no se pudo marcar ${nombre}`); cerrarDialogo(); return d; }
 
   const guardar = await buscar(() => {
     const b = [...document.querySelectorAll('[aria-label], [data-icon]')].find((el) => visible(el) && fueraDeZonas(el) && (
@@ -359,12 +359,85 @@ async function marcarYGuardar(rxEtiqueta, nombre, rastro, falla) {
       /^(checkmark|checkmark-medium|checkmark-light|wds-ic-checkmark)/.test(el.getAttribute('data-icon') || '')));
     return b ? (b.closest('button, [role="button"]') || b) : porTexto(/^(ok|guardar|save|listo|done|hecho|aceptar)$/);
   }, 2000);
-  if (!guardar) return falla('marqué FREE PASS pero no encontré el botón OK');
+  if (!guardar) return falla(`marqué ${nombre} pero no encontré el botón OK`);
   rastro.push('guardar: «' + (guardar.innerText || guardar.getAttribute('aria-label') || '').trim() + '»');
   clic(guardar);
   await esperar(800);
   return { ok: true };
 }
+
+// ───────── chats que llegan de anuncios (Facebook / Instagram) ─────────
+// Cuando alguien escribe desde un anuncio "clic a WhatsApp", el chat muestra arriba la tarjeta
+// "Anuncio de facebook · Ver detalles". Si está, el chat se etiqueta solo (por defecto "FB ADS").
+const RX_ANUNCIO = /^(?:anuncio de (facebook|instagram)|(facebook|instagram) ad)$/;
+const RX_DETALLES = /(ver detalles|view details)/;
+
+// 'facebook' | 'instagram' | null — busca la tarjeta en los mensajes cargados del chat abierto
+function anuncioEnChat() {
+  const main = document.querySelector('#main');
+  if (!main) return null;
+  const w = document.createTreeWalker(main, NodeFilter.SHOW_TEXT);
+  for (let n = w.nextNode(); n; n = w.nextNode()) {
+    const t = sinTilde(n.textContent);
+    if (t.length > 25) continue;
+    const m = t.match(RX_ANUNCIO);
+    if (!m || n.parentElement.closest('#main header, #main footer')) continue;
+    // la tarjeta también dice "Ver detalles": así no cuenta un mensaje que solo diga "anuncio de facebook"
+    let c = n.parentElement;
+    for (let i = 0; i < 6 && c && c !== main; i++, c = c.parentElement) {
+      if (RX_DETALLES.test(sinTilde(c.innerText))) return m[1] || m[2];
+    }
+  }
+  return null;
+}
+
+let ocupado = false;      // la extensión está usando el chat (etiquetar / enviar)
+let ultimaTecla = 0;
+const revisados = new Set(); // cabeceras ya revisadas en esta carga de la página
+
+async function revisarAnuncio(forzar = false) {
+  const header = cabecera();
+  if (!header || !compose() || ocupado) return null;
+  if (!forzar && revisados.has(header)) return null;
+  const { config = {}, fbAdsHechos = {} } = await chrome.storage.local.get(['config', 'fbAdsHechos']);
+  const modo = config.fbAdsModo || 'sim';
+  const etiqueta = (config.fbAdsEtiqueta || 'FB ADS').trim();
+  if (!forzar && (modo === 'off' || fbAdsHechos[header])) { revisados.add(header); return null; }
+  const red = anuncioEnChat();
+  if (!red) return forzar ? { ok: false, error: 'este chat no muestra la tarjeta "Anuncio de facebook/instagram"' } : null;
+  revisados.add(header);
+  if (!forzar && modo === 'sim') {
+    chrome.runtime.sendMessage({ type: 'fbAd', header, red, sim: true, etiqueta }).catch(() => {});
+    return null;
+  }
+  // no abrir la ventana de listas mientras la persona está escribiendo
+  for (let i = 0; i < 20 && Date.now() - ultimaTecla < 3000; i++) await esperar(500);
+  if (cabecera() !== header || ocupado) { revisados.delete(header); return null; }
+  ocupado = true;
+  let r;
+  try { r = await etiquetarChat(etiqueta); } catch (e) { r = { ok: false, error: String(e) }; } finally { ocupado = false; }
+  if (r.ok) {
+    fbAdsHechos[header] = new Date().toISOString();
+    const limite = Date.now() - 60 * 864e5;
+    for (const k of Object.keys(fbAdsHechos)) if (Date.parse(fbAdsHechos[k]) < limite) delete fbAdsHechos[k];
+    await chrome.storage.local.set({ fbAdsHechos });
+  }
+  chrome.runtime.sendMessage({ type: 'fbAd', header, red, etiqueta, ok: r.ok, ya: r.ya, error: r.error }).catch(() => {});
+  return { ...r, red };
+}
+
+// Revisa cada chat que se abre (lo abre la asesora; la extensión no abre chats para esto,
+// así no marca como leídos los que nadie ha visto). Solo cuando una persona está usando WhatsApp Web,
+// para no cruzarse con los módulos automáticos.
+let chatVisto = '', desde = 0;
+setInterval(() => {
+  const h = cabecera();
+  if (h !== chatVisto) { chatVisto = h; desde = Date.now(); return; }
+  // espera 2 s a que carguen los mensajes; prueba hasta 15 s (la tarjeta a veces aparece después)
+  if (!h || Date.now() - desde < 2000 || Date.now() - desde > 15000) return;
+  if (Date.now() - ultimaHumana > 120000) return;
+  revisarAnuncio().catch(() => {});
+}, 1500);
 
 async function enviarTexto(text, seguro) {
   const c = compose();
@@ -390,10 +463,17 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     document.documentElement.dataset.rurushNav = '1';
     reply({ ok: true });
   } else if (msg.type === 'etiquetar') {
-    etiquetarChat(msg.nombre || 'FREE PASS', msg.phone).then(reply, (e) => reply({ ok: false, error: String(e) }));
+    ocupado = true;
+    etiquetarChat(msg.nombre || 'FREE PASS', msg.phone).then(reply, (e) => reply({ ok: false, error: String(e) }))
+      .finally(() => { ocupado = false; });
+    return true;
+  } else if (msg.type === 'fbAdAhora') {
+    revisarAnuncio(true).then((r) => reply(r || { ok: false, error: 'no hay un chat abierto' }), (e) => reply({ ok: false, error: String(e) }));
     return true;
   } else if (msg.type === 'sendReminder') {
-    enviarRecordatorio(msg.text, msg.phone, msg.header, msg.conImagen !== false).then(reply, (e) => reply({ ok: false, error: String(e) }));
+    ocupado = true;
+    enviarRecordatorio(msg.text, msg.phone, msg.header, msg.conImagen !== false).then(reply, (e) => reply({ ok: false, error: String(e) }))
+      .finally(() => { ocupado = false; });
     return true;
   }
   return false;
@@ -401,9 +481,12 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
 
 // Si una persona (o Claude) está usando WhatsApp Web, avisar para que la
 // extensión no le cambie el chat en medio. Los clics de la extensión no cuentan.
-let last = 0;
+let last = 0, ultimaHumana = 0;
 function marcarActividad(e) {
-  if (!e.isTrusted || Date.now() - last < 30000) return;
+  if (!e.isTrusted) return;
+  ultimaHumana = Date.now();
+  if (e.type === 'keydown') ultimaTecla = Date.now();
+  if (Date.now() - last < 30000) return;
   last = Date.now();
   chrome.runtime.sendMessage({ type: 'waActivity' }).catch(() => {});
 }

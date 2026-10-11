@@ -873,6 +873,7 @@ async function reporte(dia) {
     `activa: ${config.enabled !== false} · ventana 2h ≤${config.sendWindowH || 4}h · corridas: ${deDia.length}`,
     `módulos: ${Object.entries(MODULOS).map(([k, m]) => `${m.nombre}=${modoDe(config, k)}`).join(' · ')}`,
     `registro de enviados (últimos 14 días): ${Object.keys(sent).length}`,
+    `etiquetar chats de anuncios: ${config.fbAdsModo || 'sim'} (${config.fbAdsEtiqueta || 'FB ADS'})`,
     '',
   ];
   for (const l of deDia) {
@@ -944,6 +945,24 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg.type === 'downloadReport') { descargarReporte().then(() => reply({ ok: true })); return true; }
   if (msg.type === 'reschedule') { programar().then(() => reply({ ok: true })); return true; }
   if (msg.type === 'waActivity') { chrome.storage.local.set({ waActivity: Date.now() }); }
+  // un chat abierto en WhatsApp Web vino de un anuncio (lo detecta content.js)
+  if (msg.type === 'fbAd') {
+    const quien = `${msg.header} (anuncio de ${msg.red})`;
+    const texto = msg.sim ? `🧪 FB ADS: ${quien} → se le pondría la etiqueta ${msg.etiqueta}`
+      : msg.ok ? `🏷️ FB ADS: ${quien} · ${msg.ya ? 'ya tenía' : 'etiquetado'} ${msg.etiqueta}`
+      : `⚠️ FB ADS: ${quien} · no se pudo etiquetar (${msg.error || 'sin respuesta'})`;
+    log({ mod: 'fb', msg: texto });
+    return false;
+  }
+  if (msg.type === 'probarFbAd') {
+    (async () => {
+      const tabs = await chrome.tabs.query({ url: 'https://web.whatsapp.com/*' });
+      if (!tabs.length) return { ok: false, error: 'abre WhatsApp Web y un chat' };
+      await asegurarScript(tabs[0].id);
+      return (await ask(tabs[0].id, { type: 'fbAdAhora' })) || { ok: false, error: 'sin respuesta de WhatsApp Web' };
+    })().then(reply);
+    return true;
+  }
   if (msg.type === 'probarEtiqueta') {
     (async () => {
       const tabs = await chrome.tabs.query({ url: 'https://web.whatsapp.com/*' });

@@ -33,6 +33,20 @@ Etiquetar FREE PASS: abre el chat y le pone la etiqueta de WhatsApp Business "FR
 Máximo 15 por corrida; a cada persona se la etiqueta una sola vez. Para probarlo: abre un
 chat en WhatsApp Web y toca 🏷️ Probar etiqueta en el chat abierto (en el ícono 🔥).
 
+## Etiquetar chats de anuncios (FB / Instagram)
+
+Ya no hace falta abrir la foto para saber si el chat vino de un anuncio: cuando una asesora abre
+un chat que muestra la tarjeta **"Anuncio de facebook · Ver detalles"** (o de Instagram), la
+extensión le pone sola la etiqueta **FB ADS** (configurable en Opciones).
+
+- Antes: crea la etiqueta "FB ADS" una vez a mano en WhatsApp Business.
+- Viene en 🧪 Simulación (solo anota en el ícono 🔥 qué chats etiquetaría). Pásalo a 📤 Etiquetar en Opciones.
+- No abre chats por su cuenta (para no marcar como leídos los que nadie vio): revisa los que abren las asesoras.
+- Si la persona está escribiendo, espera a que pare 3 s antes de abrir la ventana de listas.
+- Cada chat se revisa una sola vez; no quita otras etiquetas.
+- Para probar: abre el chat y toca 📣 ¿Vino de anuncio? en el ícono 🔥 (etiqueta aunque esté en simulación).
+- La tarjeta solo está en el primer mensaje: en chats viejos y largos puede no estar cargada y no se detecta.
+
 La imagen "cómo llegar" (Opciones) va en el recordatorio 2h, el refuerzo de la noche anterior y el del domingo.
 
 Todos los días a las **9:05pm** descarga el reporte del día en
