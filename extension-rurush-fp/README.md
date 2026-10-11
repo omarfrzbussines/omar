@@ -52,7 +52,7 @@ Lo hace la extensión sola, nadie tiene que abrir los chats:
 - 📣 Revisar leads nuevos ahora (ícono 🔥) corre la vuelta al momento.
 - **Videos por aprender** (Opciones): si llega una miniatura que no conoce, queda ahí con la lista de leads; eliges una vez cuál video es y se llena a todos.
 - **Videos aprendidos** (Opciones): si uno quedó mal, se borra.
-- `videos-precargados.json` trae videos ya cargados (miniatura recortada de capturas de WhatsApp Web): S M EDITA, FOTO CANSADA DE ENTRENAR SOLA, NUNCA PISASTE UN GYM (opción 251; hay otra 126 con el mismo nombre que ya no se usa).
+- `videos-precargados.json` trae videos ya cargados (miniatura recortada de capturas de WhatsApp Web): S M EDITA, FOTO CANSADA DE ENTRENAR SOLA, NUNCA PISASTE UN GYM (opción 251; hay otra 126 con el mismo nombre que ya no se usa), VIDEO VIVES CERCA (sacado de la imagen ampliada: si un lead de ese video cae en "Videos por aprender", elegirlo ahí lo corrige). Mismo video = diferencia de huella ≤ 12; entre videos distintos hoy la mínima es 27.
 - Además, cuando una persona abre un chat de anuncio, se procesa al toque (sin subir, para no moverle la pantalla).
 - 📣 ¿Vino de anuncio? (ícono 🔥) procesa el chat abierto aunque esté en simulación.
 

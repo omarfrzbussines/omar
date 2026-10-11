@@ -339,7 +339,7 @@ async function videoDeHuella(hash) {
   let mejor = null;
   for (const [h, v] of Object.entries(videosAnuncio)) {
     const d = distanciaHex(h, hash);
-    if (d <= 8 && (!mejor || d < mejor.d)) mejor = { ...v, d };
+    if (d <= 12 && (!mejor || d < mejor.d)) mejor = { ...v, d };
   }
   return mejor;
 }
