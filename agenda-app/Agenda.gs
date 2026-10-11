@@ -44,9 +44,11 @@ function getData() {
     });
   }
 
+  const hoy = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
   return {
     tareas: tareas,
-    hoy: Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd'),
+    hoy: hoy,
+    eventos: eventosCalendar_(tz, hoy),
     personas: listaValidacion_(hoja, 2, ['Omar', 'Mónica', 'Dana', 'Brian', 'POR ASIGNAR']),
     areas: listaValidacion_(hoja, 3, ['Dirección', 'Ventas', 'Entrenamiento', 'Marketing', 'Administración', 'Rápida', 'Personal'])
   };
@@ -104,6 +106,31 @@ function actualizarTarea(row, titulo, cambios) {
       hoja.moveRows(hoja.getRange(fila, 1), destino);
     }
   });
+}
+
+/**
+ * Eventos del Google Calendar principal desde hoy hasta 7 días después.
+ * Solo se leen: la app nunca crea ni cambia eventos.
+ * Devuelve null si la app todavía no tiene permiso de Calendar.
+ */
+function eventosCalendar_(tz, hoyISO) {
+  try {
+    const inicio = Utilities.parseDate(hoyISO, tz, 'yyyy-MM-dd');
+    const fin = new Date(inicio.getTime() + 8 * 24 * 60 * 60 * 1000);
+    return CalendarApp.getDefaultCalendar().getEvents(inicio, fin).map(function (e) {
+      const todoElDia = e.isAllDayEvent();
+      return {
+        titulo: e.getTitle() || '(Sin título)',
+        fecha: Utilities.formatDate(e.getStartTime(), tz, 'yyyy-MM-dd'),
+        inicio: todoElDia ? '' : Utilities.formatDate(e.getStartTime(), tz, 'HH:mm'),
+        fin: todoElDia ? '' : Utilities.formatDate(e.getEndTime(), tz, 'HH:mm'),
+        todoElDia: todoElDia,
+        lugar: e.getLocation() || ''
+      };
+    });
+  } catch (err) {
+    return null;
+  }
 }
 
 // ---------- Ayudantes ----------

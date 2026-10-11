@@ -82,6 +82,27 @@
   .pill.gold { background: var(--gold-soft); color: var(--gold); }
   .pill.quien { color: var(--text); }
 
+  /* Prioridad: barra a la izquierda de cada tarjeta */
+  .card { position: relative; overflow: hidden; }
+  .card::before { content: ''; position: absolute; left: 0; top: 14px; bottom: 14px; width: 3px; border-radius: 0 3px 3px 0; background: transparent; }
+  .card.alta::before { background: var(--gold); }
+  .card.media::before { background: #3A3940; }
+
+  /* Eventos del Calendar */
+  .seccion.cal h2 { color: var(--gold); }
+  .evento { display: flex; gap: 14px; align-items: stretch; padding: 12px 14px; margin-bottom: 8px; border-radius: var(--radius); background: linear-gradient(135deg, rgba(201, 169, 110, .10), rgba(201, 169, 110, .03)); border: 1px solid rgba(201, 169, 110, .22); }
+  .evento .hora { flex: none; width: 52px; font-weight: 600; font-size: 15px; color: var(--gold); font-variant-numeric: tabular-nums; }
+  .evento .hora small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; margin-top: 2px; }
+  .evento .linea { width: 2px; border-radius: 1px; background: rgba(201, 169, 110, .35); }
+  .ev-cuerpo { flex: 1; min-width: 0; }
+  .ev-titulo { font-weight: 500; }
+  .ev-lugar { color: var(--muted); font-size: 13px; margin-top: 3px; }
+  .ev-dia { color: var(--muted); font-size: 12px; margin-bottom: 2px; }
+  .evento.pasado { opacity: .45; }
+  .evento.ahora { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
+  .evento.ahora .ev-dia { color: var(--gold); }
+  .aviso-cal { color: var(--muted); font-size: 13px; padding: 10px 4px 0; }
+
   .vacio { text-align: center; color: var(--muted); padding: 48px 20px; }
   .vacio b { display: block; color: var(--text); font-size: 18px; margin-bottom: 6px; }
 
@@ -247,11 +268,12 @@ function render() {
   const mias = d.tareas.filter(function (t) { return t.responsable === YO; });
   const venc = mias.filter(function (t) { return t.fecha && t.fecha < hoy(); }).length;
   const deHoy = mias.filter(function (t) { return t.fecha === hoy(); }).length;
-  const semana = mias.filter(function (t) { return t.fecha && t.fecha > hoy() && diasEntre(t.fecha, hoy()) <= 7; }).length;
+  const eventos = d.eventos || [];
+  const eventosHoy = eventos.filter(function (e) { return e.fecha === hoy(); });
   document.getElementById('stats').innerHTML =
     '<div class="stat ' + (venc ? 'red' : '') + '"><b>' + venc + '</b><span>Vencidas</span></div>' +
-    '<div class="stat gold"><b>' + deHoy + '</b><span>Para hoy</span></div>' +
-    '<div class="stat"><b>' + semana + '</b><span>Esta semana</span></div>';
+    '<div class="stat gold"><b>' + deHoy + '</b><span>Tareas hoy</span></div>' +
+    '<div class="stat"><b>' + eventosHoy.length + '</b><span>Eventos hoy</span></div>';
 
   const chips = document.getElementById('chips');
   if (estado.vista === 'equipo') {
@@ -271,16 +293,56 @@ function render() {
   }
   const secciones = agrupar(tareas, completo);
   const lista = document.getElementById('lista');
-  if (!secciones.length) {
-    lista.innerHTML = estado.vista === 'hoy'
+  const conCalendar = estado.vista !== 'equipo';
+  const manana = sumarDias(hoy(), 1);
+  const eventosManana = eventos.filter(function (e) { return e.fecha === manana; });
+  let html = '';
+
+  if (conCalendar && estado.vista === 'hoy') {
+    if (eventosHoy.length) html += '<section class="seccion cal"><h2>Tu día <span class="n">' + eventosHoy.length + '</span></h2>' + eventosHoy.map(function (e) { return tarjetaEvento(e, false); }).join('') + '</section>';
+    if (d.eventos === null && !DEMO) html += '<div class="aviso-cal">Para ver tu Google Calendar aquí, falta darle permiso a la app (mira la guía).</div>';
+  }
+  if (conCalendar && estado.vista === 'todo') {
+    const proximos = eventos.filter(function (e) { return e.fecha >= hoy(); });
+    if (proximos.length) html += '<section class="seccion cal"><h2>Calendar: próximos 7 días <span class="n">' + proximos.length + '</span></h2>' + proximos.map(function (e) { return tarjetaEvento(e, true); }).join('') + '</section>';
+  }
+
+  const verManana = conCalendar && estado.vista === 'hoy' && eventosManana.length;
+  if (verManana && !secciones.some(function (s) { return s[0] === 'man'; })) {
+    const pos = secciones.findIndex(function (s) { return s[0] !== 'venc' && s[0] !== 'hoy'; });
+    secciones.splice(pos === -1 ? secciones.length : pos, 0, ['man', 'Mañana', []]);
+  }
+  html += secciones.map(function (s) {
+    let extra = '';
+    if (verManana && s[0] === 'man') {
+      extra = eventosManana.map(function (e) { return tarjetaEvento(e, false); }).join('');
+    }
+    const n = s[2].length + (s[0] === 'man' && verManana ? eventosManana.length : 0);
+    return '<section class="seccion ' + s[0] + '"><h2>' + s[1] + ' <span class="n">' + n + '</span></h2>' +
+      extra + s[2].map(tarjeta).join('') + '</section>';
+  }).join('');
+
+  if (!html) {
+    html = estado.vista === 'hoy'
       ? '<div class="vacio"><b>Todo al día</b>No tienes nada vencido ni para hoy.</div>'
       : '<div class="vacio"><b>Sin tareas</b>No hay nada aquí por ahora.</div>';
-    return;
   }
-  lista.innerHTML = secciones.map(function (s) {
-    return '<section class="seccion ' + s[0] + '"><h2>' + s[1] + ' <span class="n">' + s[2].length + '</span></h2>' +
-      s[2].map(tarjeta).join('') + '</section>';
-  }).join('');
+  lista.innerHTML = html;
+}
+
+function tarjetaEvento(e, conDia) {
+  let clase = '';
+  if (e.fecha === hoy() && !e.todoElDia) {
+    const ahora = new Date();
+    const hhmm = pad(ahora.getHours()) + ':' + pad(ahora.getMinutes());
+    if (e.fin && e.fin <= hhmm) clase = 'pasado';
+    else if (e.inicio <= hhmm) clase = 'ahora';
+  }
+  const hora = e.todoElDia ? 'Todo<small>el día</small>' : esc(e.inicio) + (e.fin ? '<small>' + esc(e.fin) + '</small>' : '');
+  const dia = conDia ? '<div class="ev-dia">' + esc(etiquetaFecha(e.fecha)) + '</div>' : (clase === 'ahora' ? '<div class="ev-dia">Ahora</div>' : '');
+  return '<div class="evento ' + clase + '"><div class="hora">' + hora + '</div><div class="linea"></div>' +
+    '<div class="ev-cuerpo">' + dia + '<div class="ev-titulo">' + esc(e.titulo) + '</div>' +
+    (e.lugar ? '<div class="ev-lugar">' + esc(e.lugar) + '</div>' : '') + '</div></div>';
 }
 
 function tarjeta(t) {
@@ -294,9 +356,11 @@ function tarjeta(t) {
   if (t.fecha) meta.push('<span class="pill ' + clase + '">' + esc(fechaTxt) + '</span>');
   if (t.estado === 'En proceso') meta.push('<span class="pill gold">En proceso</span>');
   if (t.prioridad === 'Alta') meta.push('<span class="pill gold">Alta</span>');
+  if (t.prioridad === 'Baja') meta.push('<span class="pill">Baja</span>');
   if (t.responsable !== YO) meta.push('<span class="pill quien">' + esc(t.responsable) + '</span>');
   if (t.area) meta.push('<span class="pill">' + esc(t.area) + '</span>');
-  return '<div class="card ' + (t.prioridad === 'Alta' ? 'alta' : '') + '" data-row="' + t.row + '">' +
+  const prio = t.prioridad === 'Alta' ? 'alta' : t.prioridad === 'Media' ? 'media' : '';
+  return '<div class="card ' + prio + '" data-row="' + t.row + '">' +
     '<button class="check" data-check="' + t.row + '" aria-label="Completar"><svg viewBox="0 0 24 24" fill="none" stroke="#17140E" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>' +
     '<div class="cuerpo"><div class="titulo">' + esc(t.titulo) + '</div><div class="meta">' + meta.join('') + '</div></div></div>';
 }
@@ -562,6 +626,12 @@ const demoApi = (function () {
   };
   const datos = {
     hoy: iso(0),
+    eventos: [
+      { titulo: 'Reunión de alineamiento con Mónica y Brian', fecha: iso(0), inicio: '09:00', fin: '10:00', todoElDia: false, lugar: 'Rurush' },
+      { titulo: 'Visita de obra con el maestro', fecha: iso(0), inicio: '16:00', fin: '17:00', todoElDia: false, lugar: 'Nuevo local · Av. Larco 997' },
+      { titulo: 'Llamada con Diego (contador)', fecha: iso(1), inicio: '11:00', fin: '11:30', todoElDia: false, lugar: '' },
+      { titulo: 'Firma del contrato del nuevo local', fecha: iso(3), inicio: '10:00', fin: '11:00', todoElDia: false, lugar: 'Oficina de Peter' }
+    ],
     personas: ['Omar', 'Mónica', 'Dana', 'Brian', 'POR ASIGNAR'],
     areas: ['Dirección', 'Ventas', 'Entrenamiento', 'Marketing', 'Administración', 'Rápida', 'Personal'],
     tareas: [

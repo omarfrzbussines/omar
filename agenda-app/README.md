@@ -12,6 +12,9 @@ Lee y escribe directo en la pestaña **TAREAS**: lo que haces en la app aparece 
 - **Agregar** (botón dorado `+`): escribes o dictas la tarea. Si dices "mañana", "el lunes", "el 15", "15 de noviembre" o "urgente", la app elige sola la fecha y la prioridad.
 - **Cambiar fecha, prioridad o responsable**: tocas la tarea y eliges.
 
+- **Google Calendar**: en **Hoy** ves arriba tus eventos del día ("Tu día") y los de mañana junto a las tareas de mañana. En **Agenda** ves los eventos de los próximos 7 días. La app solo **lee** tu Calendar principal: los eventos se siguen creando y cambiando en Google Calendar.
+- **Prioridad**: cada tarea tiene una barra a la izquierda: dorada si es Alta y gris si es Media. Dentro de cada día, las de prioridad Alta van primero.
+
 La app mantiene el orden del Sheet: cuando agregas o cambias una fecha, la fila se mueve a su lugar.
 
 ## Instalación (una sola vez, unos 5 minutos)
@@ -41,6 +44,16 @@ El botón de micrófono intenta usar el reconocimiento de voz del navegador. Goo
 ## Cuando cambies el código
 
 Después de pegar una versión nueva: **Implementar → Administrar implementaciones → editar (lápiz) → Versión: Nueva → Implementar**. La URL sigue siendo la misma.
+
+## Permiso de Google Calendar
+
+La versión con Calendar necesita un permiso nuevo. Después de pegar el código:
+
+1. En el editor de Apps Script, elige la función `getData` arriba y pulsa **Ejecutar**.
+2. Google pide permisos: **Revisar permisos → tu cuenta → Configuración avanzada → Ir a Agenda (no seguro) → Permitir**.
+3. Publica la versión nueva como se explica arriba.
+
+Si no das el permiso, la app sigue funcionando con tus tareas y te muestra un aviso en lugar de los eventos.
 
 ## Probarla sin Google
 
