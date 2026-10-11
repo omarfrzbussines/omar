@@ -25,7 +25,7 @@ Reglas comunes:
 - Salta a quien escribió hace <3h, dijo que ya asistió, que avisa, o canceló (según el módulo).
 - Avisa ⚠️ para revisar a mano: otra hora en el chat, "no me interesa", "voy el viernes" sin FP nuevo.
 - Nunca escribe antes de las 6:00 ni después de las 21:30; si la PC estuvo apagada >3h a la hora programada, ese módulo se omite.
-- No escribe en Pipedrive.
+- No escribe en Pipedrive (salvo el campo Video de los chats de anuncios).
 - Dirección: Av. Larco 1164, Víctor Larco, al costado de Mass.
 
 Etiquetar FREE PASS: abre el chat y le pone la etiqueta de WhatsApp Business "FREE PASS"
@@ -46,6 +46,16 @@ extensión le pone sola la etiqueta **FB ADS** (configurable en Opciones).
 - Cada chat se revisa una sola vez; no quita otras etiquetas.
 - Para probar: abre el chat y toca 📣 ¿Vino de anuncio? en el ícono 🔥 (etiqueta aunque esté en simulación).
 - La tarjeta solo está en el primer mensaje: en chats viejos y largos puede no estar cargada y no se detecta.
+
+**Video del anuncio → campo "Video" de Pipedrive.** La tarjeta trae la miniatura del video; cada video
+tiene la suya. La primera vez que aparece un video nuevo, sale una ventanita en WhatsApp Web:
+la asesora elige cuál es (las opciones son las del campo de persona **Video** de Pipedrive) y queda
+aprendido. Desde ahí, cada lead de ese video se llena solo:
+- Busca a la persona en Pipedrive por el celular del chat y le pone el Video **solo si está vacío** (nunca cambia uno ya puesto).
+- Si la persona todavía no está en Pipedrive, reintenta cada 30 min durante 3 días.
+- En 🧪 Simulación solo anota qué video pondría; en 📤 Etiquetar escribe en Pipedrive (es lo único que la extensión escribe ahí).
+- Opciones → Videos aprendidos: si uno quedó mal, se borra y se vuelve a preguntar.
+- Si el chat es un contacto guardado y no se ve el número, avisa para llenarlo a mano.
 
 La imagen "cómo llegar" (Opciones) va en el recordatorio 2h, el refuerzo de la noche anterior y el del domingo.
 

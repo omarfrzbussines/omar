@@ -79,5 +79,28 @@ $('img').onchange = () => {
 };
 $('imgDel').onclick = async () => { await chrome.storage.local.remove('gpsImage'); $('img').value = ''; pintarImg(); };
 
+async function pintarVideos() {
+  const { videosAnuncio = {} } = await chrome.storage.local.get('videosAnuncio');
+  const box = $('videos');
+  box.innerHTML = '';
+  const lista = Object.entries(videosAnuncio).sort((a, b) => a[1].label.localeCompare(b[1].label));
+  if (!lista.length) box.textContent = 'Todavía ninguno: se aprenden en WhatsApp Web al abrir un chat de anuncio.';
+  for (const [hash, v] of lista) {
+    const fila = document.createElement('div');
+    fila.style.cssText = 'display:flex;gap:10px;align-items:center;margin:6px 0;color:#1c1c1c';
+    fila.innerHTML = '<img style="width:48px;height:48px;object-fit:cover;border-radius:6px;background:#eee"><span style="flex:1"></span><button type="button" style="margin:0;background:#eee;color:#1c1c1c">Borrar</button>';
+    fila.querySelector('img').src = v.thumb || '';
+    fila.querySelector('span').textContent = v.label;
+    fila.querySelector('button').onclick = async () => {
+      const { videosAnuncio: actual = {} } = await chrome.storage.local.get('videosAnuncio');
+      delete actual[hash];
+      await chrome.storage.local.set({ videosAnuncio: actual });
+      pintarVideos();
+    };
+    box.appendChild(fila);
+  }
+}
+
 cargar();
 pintarImg();
+pintarVideos();

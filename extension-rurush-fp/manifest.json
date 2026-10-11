@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Rurush FP — WhatsApp Free Pass",
-  "version": "2.4.0",
-  "description": "Recordatorios y reagendos automáticos de WhatsApp para los Free Pass y las citas de nutrición. Etiqueta los chats que llegan de anuncios de Facebook/Instagram. Lee Pipedrive, envía por WhatsApp Web. Sin uso de Claude.",
+  "version": "2.5.0",
+  "description": "Recordatorios y reagendos automáticos de WhatsApp para los Free Pass y las citas de nutrición. Etiqueta los chats que llegan de anuncios de Facebook/Instagram y llena el campo Video en Pipedrive. Lee Pipedrive, envía por WhatsApp Web. Sin uso de Claude.",
   "permissions": [
     "alarms",
     "storage",
@@ -15,7 +15,9 @@
   "host_permissions": [
     "https://api.pipedrive.com/*",
     "https://web.whatsapp.com/*",
-    "https://docs.google.com/*"
+    "https://docs.google.com/*",
+    "https://*.whatsapp.net/*",
+    "https://*.fbcdn.net/*"
   ],
   "background": {
     "service_worker": "background.js"

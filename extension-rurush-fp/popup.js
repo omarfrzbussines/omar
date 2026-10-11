@@ -78,7 +78,7 @@ $('fbad').onclick = async () => {
   $('fbad').disabled = true;
   $('fbad').textContent = 'Revisando…';
   const r = await chrome.runtime.sendMessage({ type: 'probarFbAd' });
-  let txt = r && r.ok ? `✓ Anuncio de ${r.red} · ${r.ya ? 'ya tenía la etiqueta' : 'etiquetado'}` : `⚠️ ${(r && r.error) || 'error'}`;
+  let txt = r && r.ok ? `✓ Anuncio de ${r.red} · ${r.ya ? 'ya tenía la etiqueta' : 'etiquetado'} · video: ${r.video}` : `⚠️ ${(r && r.error) || 'error'}`;
   if (r && r.diag) {
     try { await navigator.clipboard.writeText(`ETIQUETA FB ADS · ${txt}\n${r.diag}`); txt += ' · 📋 diagnóstico copiado: pégaselo a Claude'; } catch (e) { /* sin portapapeles */ }
   }

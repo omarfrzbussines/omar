@@ -368,11 +368,14 @@ async function marcarYGuardar(rxEtiqueta, nombre, rastro, falla) {
 
 // ───────── chats que llegan de anuncios (Facebook / Instagram) ─────────
 // Cuando alguien escribe desde un anuncio "clic a WhatsApp", el chat muestra arriba la tarjeta
-// "Anuncio de facebook · Ver detalles". Si está, el chat se etiqueta solo (por defecto "FB ADS").
+// "Anuncio de facebook · Ver detalles" con la miniatura del video. Si está:
+// 1) se reconoce el video por la miniatura y se llena el campo "Video" de la persona en Pipedrive
+//    (la primera vez que aparece un video, la asesora elige cuál es y queda aprendido);
+// 2) el chat se etiqueta en WhatsApp (por defecto "FB ADS").
 const RX_ANUNCIO = /^(?:anuncio de (facebook|instagram)|(facebook|instagram) ad)$/;
 const RX_DETALLES = /(ver detalles|view details)/;
 
-// 'facebook' | 'instagram' | null — busca la tarjeta en los mensajes cargados del chat abierto
+// { red: 'facebook' | 'instagram', tarjeta } o null — busca la tarjeta en los mensajes cargados
 function anuncioEnChat() {
   const main = document.querySelector('#main');
   if (!main) return null;
@@ -385,10 +388,138 @@ function anuncioEnChat() {
     // la tarjeta también dice "Ver detalles": así no cuenta un mensaje que solo diga "anuncio de facebook"
     let c = n.parentElement;
     for (let i = 0; i < 6 && c && c !== main; i++, c = c.parentElement) {
-      if (RX_DETALLES.test(sinTilde(c.innerText))) return m[1] || m[2];
+      if (RX_DETALLES.test(sinTilde(c.innerText))) return { red: m[1] || m[2], tarjeta: c };
     }
   }
   return null;
+}
+
+// Miniatura del anuncio: la imagen más grande dentro de la tarjeta (o un poco más arriba).
+function miniatura(tarjeta) {
+  let c = tarjeta;
+  for (let i = 0; i < 4 && c && c.id !== 'main'; i++, c = c.parentElement) {
+    const imgs = [...c.querySelectorAll('img')].filter((im) => im.complete && im.naturalWidth >= 24 && !im.closest('.emoji, [data-plain-text]'));
+    if (imgs.length) return imgs.sort((a, b) => b.naturalWidth * b.naturalHeight - a.naturalWidth * a.naturalHeight)[0];
+  }
+  return null;
+}
+
+// Huella de la imagen (dHash 64 bits, en hex): igual o casi igual para la misma miniatura,
+// aunque llegue con otro tamaño o calidad.
+function dhash(px) { // px: RGBA de 9×8
+  const g = (x, y) => { const i = (y * 9 + x) * 4; return px[i] * 0.299 + px[i + 1] * 0.587 + px[i + 2] * 0.114; };
+  let hex = '';
+  for (let y = 0; y < 8; y++) {
+    for (let k = 0; k < 8; k += 4) {
+      let v = 0;
+      for (let b = 0; b < 4; b++) v = (v << 1) | (g(k + b, y) > g(k + b + 1, y) ? 1 : 0);
+      hex += v.toString(16);
+    }
+  }
+  return hex;
+}
+async function huella(img) {
+  try {
+    const c = document.createElement('canvas');
+    c.width = 9; c.height = 8;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    x.drawImage(img, 0, 0, 9, 8);
+    const hash = dhash(x.getImageData(0, 0, 9, 8).data);
+    const t = document.createElement('canvas');
+    t.width = t.height = 72;
+    t.getContext('2d').drawImage(img, 0, 0, 72, 72);
+    return { hash, thumb: t.toDataURL('image/jpeg', 0.7) };
+  } catch (e) {
+    // imagen de otro dominio: la lee el background (tiene permiso para ese dominio)
+    if (!/^https:/.test(img.src)) return null;
+    return chrome.runtime.sendMessage({ type: 'huellaUrl', url: img.src }).catch(() => null);
+  }
+}
+
+// Celular del chat: la cabecera (si no es un contacto guardado) o los mensajes de la persona.
+function telefonoChat() {
+  const h = cabecera();
+  if (/^\+?[\d\s()-]+$/.test(h) && h.replace(/\D/g, '').length >= 9) return h.replace(/\D/g, '');
+  for (const el of document.querySelectorAll('#main [data-id*="@c.us"]')) {
+    const m = (el.getAttribute('data-id') || '').match(/_(\d{9,15})@c\.us/);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+const distancia = (a, b) => {
+  let d = 0;
+  for (let i = 0; i < a.length; i++) {
+    let x = parseInt(a[i], 16) ^ parseInt(b[i], 16);
+    while (x) { d += x & 1; x >>= 1; }
+  }
+  return d;
+};
+async function videoConocido(hash) {
+  const { videosAnuncio = {} } = await chrome.storage.local.get('videosAnuncio');
+  let mejor = null;
+  for (const [h, v] of Object.entries(videosAnuncio)) {
+    const d = distancia(h, hash);
+    if (d <= 8 && (!mejor || d < mejor.d)) mejor = { ...v, d };
+  }
+  return mejor;
+}
+
+// Ventanita en WhatsApp Web para enseñarle un video nuevo (shadow DOM: no se mezcla con WhatsApp
+// ni con la búsqueda de botones al etiquetar).
+let panel = null;
+async function preguntarVideo(h, datos) {
+  const opciones = await chrome.runtime.sendMessage({ type: 'videoOpciones' }).catch(() => null);
+  if (!opciones || !opciones.ok) {
+    chrome.runtime.sendMessage({ type: 'fbVideo', ...datos, error: `video nuevo, pero no pude leer las opciones del campo Video de Pipedrive (${(opciones && opciones.error) || 'sin respuesta'})` }).catch(() => {});
+    return;
+  }
+  if (panel) panel.remove();
+  panel = document.createElement('div');
+  const raiz = panel.attachShadow({ mode: 'open' });
+  raiz.innerHTML = `<style>
+    .c { position: fixed; right: 16px; bottom: 80px; z-index: 99999; width: 300px; background: #fff; color: #1c1c1c;
+         font: 13px system-ui, sans-serif; border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.35); padding: 12px; }
+    .f { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
+    img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; background: #eee; }
+    input, select { width: 100%; box-sizing: border-box; padding: 5px; margin-top: 6px; }
+    .b { display: flex; gap: 8px; margin-top: 8px; justify-content: flex-end; }
+    button { padding: 6px 12px; border: 0; border-radius: 6px; cursor: pointer; background: #eee; }
+    button.p { background: #e65100; color: #fff; } .h { color: #666; font-size: 12px; }
+  </style>
+  <div class="c">
+    <div class="f"><img><div><b>📣 Video nuevo de anuncio</b><div class="h"></div></div></div>
+    <div class="h">¿Qué video es? (campo Video de Pipedrive). Se aprende una vez y los siguientes leads de este video se llenan solos.</div>
+    <input type="search" placeholder="Buscar…">
+    <select size="7"></select>
+    <div class="b"><button class="n">Ahora no</button><button class="p">Guardar</button></div>
+  </div>`;
+  raiz.querySelector('img').src = h.thumb || '';
+  raiz.querySelector('.f .h').textContent = datos.header;
+  const sel = raiz.querySelector('select'), bus = raiz.querySelector('input');
+  const pintar = () => {
+    const q = sinTilde(bus.value);
+    sel.innerHTML = '';
+    for (const o of opciones.opciones) {
+      if (q && !sinTilde(o.label).includes(q)) continue;
+      const op = document.createElement('option');
+      op.value = o.id; op.textContent = o.label;
+      sel.appendChild(op);
+    }
+  };
+  bus.oninput = pintar;
+  pintar();
+  raiz.querySelector('.n').onclick = () => { panel.remove(); panel = null; };
+  raiz.querySelector('.p').onclick = async () => {
+    const op = sel.selectedOptions[0];
+    if (!op) { bus.focus(); return; }
+    const { videosAnuncio = {} } = await chrome.storage.local.get('videosAnuncio');
+    videosAnuncio[h.hash] = { id: Number(op.value), label: op.textContent, thumb: h.thumb || '', at: new Date().toISOString() };
+    await chrome.storage.local.set({ videosAnuncio });
+    chrome.runtime.sendMessage({ type: 'fbVideo', ...datos, videoId: Number(op.value), label: op.textContent, nuevo: true }).catch(() => {});
+    panel.remove(); panel = null;
+  };
+  document.body.appendChild(panel);
 }
 
 let ocupado = false;      // la extensión está usando el chat (etiquetar / enviar)
@@ -403,9 +534,25 @@ async function revisarAnuncio(forzar = false) {
   const modo = config.fbAdsModo || 'sim';
   const etiqueta = (config.fbAdsEtiqueta || 'FB ADS').trim();
   if (!forzar && (modo === 'off' || fbAdsHechos[header])) { revisados.add(header); return null; }
-  const red = anuncioEnChat();
-  if (!red) return forzar ? { ok: false, error: 'este chat no muestra la tarjeta "Anuncio de facebook/instagram"' } : null;
+  const anuncio = anuncioEnChat();
+  if (!anuncio) return forzar ? { ok: false, error: 'este chat no muestra la tarjeta "Anuncio de facebook/instagram"' } : null;
+  const { red } = anuncio;
   revisados.add(header);
+
+  // 1) el video, por la miniatura
+  let video = null;
+  const datos = { header, red, phone: telefonoChat(), forzar };
+  const img = miniatura(anuncio.tarjeta);
+  const h = img ? await huella(img) : null;
+  if (!h || !h.hash) {
+    chrome.runtime.sendMessage({ type: 'fbVideo', ...datos, error: 'no pude leer la miniatura del anuncio' }).catch(() => {});
+  } else if ((video = await videoConocido(h.hash))) {
+    chrome.runtime.sendMessage({ type: 'fbVideo', ...datos, videoId: video.id, label: video.label }).catch(() => {});
+  } else {
+    preguntarVideo(h, datos);
+  }
+
+  // 2) la etiqueta de WhatsApp
   if (!forzar && modo === 'sim') {
     chrome.runtime.sendMessage({ type: 'fbAd', header, red, sim: true, etiqueta }).catch(() => {});
     return null;
@@ -423,7 +570,7 @@ async function revisarAnuncio(forzar = false) {
     await chrome.storage.local.set({ fbAdsHechos });
   }
   chrome.runtime.sendMessage({ type: 'fbAd', header, red, etiqueta, ok: r.ok, ya: r.ya, error: r.error }).catch(() => {});
-  return { ...r, red };
+  return { ...r, red, video: video ? video.label : (h ? 'nuevo: elige cuál es en la ventanita' : 'sin miniatura') };
 }
 
 // Revisa cada chat que se abre (lo abre la asesora; la extensión no abre chats para esto,
