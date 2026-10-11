@@ -16,6 +16,7 @@ donde está abierto WhatsApp Web (Pipechat) de las asesoras.
 | No-show de la tarde | lun–sáb 20:10 | FP de hoy 11:30–18:30 | FP 8PM (parte no-shows) |
 | Domingo | dom 9:00 | FP del lunes + no-shows de la semana | DOMINGO REC FP 9 AM |
 | Etiquetar FREE PASS | cada 2h desde 8:40 | todo el que tenga FP en Pipedrive (hoy a 14 días) | (nuevo) |
+| Chats de anuncios | cada 30 min, 8–21h | leads nuevos de Pipedrive (3 días) | etiquetar a mano mirando la foto |
 
 Cada módulo tiene su modo en Opciones: 🧪 Simulación (no envía), 📤 Envío real o Apagado.
 
@@ -33,31 +34,27 @@ Etiquetar FREE PASS: abre el chat y le pone la etiqueta de WhatsApp Business "FR
 Máximo 15 por corrida; a cada persona se la etiqueta una sola vez. Para probarlo: abre un
 chat en WhatsApp Web y toca 🏷️ Probar etiqueta en el chat abierto (en el ícono 🔥).
 
-## Etiquetar chats de anuncios (FB / Instagram)
+## Chats de anuncios (FB / Instagram) → Video en Pipedrive + etiqueta FB ADS
 
-Ya no hace falta abrir la foto para saber si el chat vino de un anuncio: cuando una asesora abre
-un chat que muestra la tarjeta **"Anuncio de facebook · Ver detalles"** (o de Instagram), la
-extensión le pone sola la etiqueta **FB ADS** (configurable en Opciones).
+Lo hace la extensión sola, nadie tiene que abrir los chats:
 
-- Antes: crea la etiqueta "FB ADS" una vez a mano en WhatsApp Business.
-- Viene en 🧪 Simulación (solo anota en el ícono 🔥 qué chats etiquetaría). Pásalo a 📤 Etiquetar en Opciones.
-- No abre chats por su cuenta (para no marcar como leídos los que nadie vio): revisa los que abren las asesoras.
-- Si la persona está escribiendo, espera a que pare 3 s antes de abrir la ventana de listas.
-- Cada chat se revisa una sola vez; no quita otras etiquetas.
-- Para probar: abre el chat y toca 📣 ¿Vino de anuncio? en el ícono 🔥 (etiqueta aunque esté en simulación).
-- La tarjeta solo está en el primer mensaje: en chats viejos y largos puede no estar cargada y no se detecta.
+1. Cada 30 min (8:00–21:00) toma las personas **creadas en Pipedrive en los últimos 3 días** que todavía no revisó (máx. 15 por vuelta).
+2. Abre su chat de WhatsApp: por celular, o por el **@usuario** si en Pipedrive solo tiene eso (lo busca en la lista de chats).
+3. Busca la tarjeta **"Anuncio de facebook · Ver detalles"**; si la conversación es larga, **sube hasta el inicio del chat** (máx. 25 s).
+4. Si vino de anuncio:
+   - reconoce el **video por la miniatura** y llena el campo **Video** de la persona (solo si está vacío; nunca cambia uno ya puesto);
+   - pone la etiqueta de WhatsApp Business **FB ADS** (créala una vez a mano; el nombre se cambia en Opciones).
+5. Si el chat estaba **sin leer**, lo vuelve a dejar sin leer (WhatsApp igual le muestra al lead el doble check azul).
+6. Si no vino de anuncio (llegó al inicio y no hay tarjeta), lo anota y no lo vuelve a abrir.
 
-**Video del anuncio → campo "Video" de Pipedrive.** La tarjeta trae la miniatura del video; cada video
-tiene la suya. La primera vez que aparece un video nuevo, sale una ventanita en WhatsApp Web:
-la asesora elige cuál es (las opciones son las del campo de persona **Video** de Pipedrive) y queda
-aprendido. Desde ahí, cada lead de ese video se llena solo:
-- Busca a la persona en Pipedrive por el celular del chat y le pone el Video **solo si está vacío** (nunca cambia uno ya puesto).
-- Si la persona todavía no está en Pipedrive, reintenta cada 30 min durante 3 días.
-- En 🧪 Simulación solo anota qué video pondría; en 📤 Etiquetar escribe en Pipedrive (es lo único que la extensión escribe ahí).
-- Opciones → Videos aprendidos: si uno quedó mal, se borra y se vuelve a preguntar.
-- `videos-precargados.json` trae videos ya cargados (miniatura recortada de capturas de WhatsApp Web), así las asesoras no eligen nada: S M EDITA, FOTO CANSADA DE ENTRENAR SOLA, NUNCA PISASTE UN GYM (opción 251; hay otra 126 con el mismo nombre que ya no se usa).
-- Si el chat muestra un @usuario en vez del número (p. ej. @ReginaVega139), busca a la persona en Pipedrive por ese nombre.
-- Si el chat es un contacto guardado y no se ve el número, avisa para llenarlo a mano.
+- Si alguien usa WhatsApp Web, no corre (o para a la mitad) y sigue en la próxima vuelta.
+- Viene en 🧪 Simulación: abre los chats y anota qué haría, pero no escribe en Pipedrive ni etiqueta. Pásalo a 📤 Etiquetar en Opciones.
+- 📣 Revisar leads nuevos ahora (ícono 🔥) corre la vuelta al momento.
+- **Videos por aprender** (Opciones): si llega una miniatura que no conoce, queda ahí con la lista de leads; eliges una vez cuál video es y se llena a todos.
+- **Videos aprendidos** (Opciones): si uno quedó mal, se borra.
+- `videos-precargados.json` trae videos ya cargados (miniatura recortada de capturas de WhatsApp Web): S M EDITA, FOTO CANSADA DE ENTRENAR SOLA, NUNCA PISASTE UN GYM (opción 251; hay otra 126 con el mismo nombre que ya no se usa).
+- Además, cuando una persona abre un chat de anuncio, se procesa al toque (sin subir, para no moverle la pantalla).
+- 📣 ¿Vino de anuncio? (ícono 🔥) procesa el chat abierto aunque esté en simulación.
 
 La imagen "cómo llegar" (Opciones) va en el recordatorio 2h, el refuerzo de la noche anterior y el del domingo.
 

@@ -370,8 +370,10 @@ async function marcarYGuardar(rxEtiqueta, nombre, rastro, falla) {
 // Cuando alguien escribe desde un anuncio "clic a WhatsApp", el chat muestra arriba la tarjeta
 // "Anuncio de facebook · Ver detalles" con la miniatura del video. Si está:
 // 1) se reconoce el video por la miniatura y se llena el campo "Video" de la persona en Pipedrive
-//    (la primera vez que aparece un video, la asesora elige cuál es y queda aprendido);
+//    (un video nuevo queda en Opciones → Videos por aprender: se elige una vez y queda aprendido);
 // 2) el chat se etiqueta en WhatsApp (por defecto "FB ADS").
+// El módulo "Chats de anuncios" (background) abre solo los chats de los leads nuevos de Pipedrive;
+// además se revisa al toque cualquier chat que abra una persona.
 const RX_ANUNCIO = /^(?:anuncio de (facebook|instagram)|(facebook|instagram) ad)$/;
 const RX_DETALLES = /(ver detalles|view details)/;
 
@@ -465,77 +467,79 @@ async function videoConocido(hash) {
   return mejor;
 }
 
-// Ventanita en WhatsApp Web para enseñarle un video nuevo (shadow DOM: no se mezcla con WhatsApp
-// ni con la búsqueda de botones al etiquetar).
-let panel = null;
-async function preguntarVideo(h, datos) {
-  const opciones = await chrome.runtime.sendMessage({ type: 'videoOpciones' }).catch(() => null);
-  if (!opciones || !opciones.ok) {
-    chrome.runtime.sendMessage({ type: 'fbVideo', ...datos, error: `video nuevo, pero no pude leer las opciones del campo Video de Pipedrive (${(opciones && opciones.error) || 'sin respuesta'})` }).catch(() => {});
-    return;
+// Video que todavía no conoce: queda en "Videos por aprender" (Opciones). Ahí se elige una vez cuál es
+// y se llena en Pipedrive a todos los leads que llegaron con esa miniatura.
+async function videoPorAprender(h, datos) {
+  const { videosPorAprender = {} } = await chrome.storage.local.get('videosPorAprender');
+  const v = videosPorAprender[h.hash] || { thumb: h.thumb || '', leads: [], desde: new Date().toISOString() };
+  if (!v.leads.some((l) => l.header === datos.header)) v.leads.push({ header: datos.header, phone: datos.phone, red: datos.red });
+  videosPorAprender[h.hash] = v;
+  await chrome.storage.local.set({ videosPorAprender });
+  chrome.runtime.sendMessage({ type: 'videoNuevo', header: datos.header, total: v.leads.length }).catch(() => {});
+}
+
+// ───── subir hasta el inicio del chat (la tarjeta del anuncio está en el primer mensaje) ─────
+function cajaMensajes() {
+  let c = document.querySelector('#main [data-pre-plain-text], #main [data-id]');
+  for (; c && c.id !== 'main'; c = c.parentElement) {
+    if (/(auto|scroll)/.test(getComputedStyle(c).overflowY) && c.scrollHeight > c.clientHeight) return c;
   }
-  if (panel) panel.remove();
-  panel = document.createElement('div');
-  const raiz = panel.attachShadow({ mode: 'open' });
-  raiz.innerHTML = `<style>
-    .c { position: fixed; right: 16px; bottom: 80px; z-index: 99999; width: 300px; background: #fff; color: #1c1c1c;
-         font: 13px system-ui, sans-serif; border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.35); padding: 12px; }
-    .f { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
-    img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; background: #eee; }
-    input, select { width: 100%; box-sizing: border-box; padding: 5px; margin-top: 6px; }
-    .b { display: flex; gap: 8px; margin-top: 8px; justify-content: flex-end; }
-    button { padding: 6px 12px; border: 0; border-radius: 6px; cursor: pointer; background: #eee; }
-    button.p { background: #e65100; color: #fff; } .h { color: #666; font-size: 12px; }
-  </style>
-  <div class="c">
-    <div class="f"><img><div><b>📣 Video nuevo de anuncio</b><div class="h"></div></div></div>
-    <div class="h">¿Qué video es? (campo Video de Pipedrive). Se aprende una vez y los siguientes leads de este video se llenan solos.</div>
-    <input type="search" placeholder="Buscar…">
-    <select size="7"></select>
-    <div class="b"><button class="n">Ahora no</button><button class="p">Guardar</button></div>
-  </div>`;
-  raiz.querySelector('img').src = h.thumb || '';
-  raiz.querySelector('.f .h').textContent = datos.header;
-  const sel = raiz.querySelector('select'), bus = raiz.querySelector('input');
-  const pintar = () => {
-    const q = sinTilde(bus.value);
-    sel.innerHTML = '';
-    for (const o of opciones.opciones) {
-      if (q && !sinTilde(o.label).includes(q)) continue;
-      const op = document.createElement('option');
-      op.value = o.id; op.textContent = o.label;
-      sel.appendChild(op);
-    }
-  };
-  bus.oninput = pintar;
-  pintar();
-  raiz.querySelector('.n').onclick = () => { panel.remove(); panel = null; };
-  raiz.querySelector('.p').onclick = async () => {
-    const op = sel.selectedOptions[0];
-    if (!op) { bus.focus(); return; }
-    const { videosAnuncio = {} } = await chrome.storage.local.get('videosAnuncio');
-    videosAnuncio[h.hash] = { id: Number(op.value), label: op.textContent, thumb: h.thumb || '', at: new Date().toISOString() };
-    await chrome.storage.local.set({ videosAnuncio });
-    chrome.runtime.sendMessage({ type: 'fbVideo', ...datos, videoId: Number(op.value), label: op.textContent, nuevo: true }).catch(() => {});
-    panel.remove(); panel = null;
-  };
-  document.body.appendChild(panel);
+  return null;
+}
+const enElInicio = () => /(cifrados de extremo a extremo|end-to-end encrypted)/i.test(document.querySelector('#main').innerText || '');
+
+// { anuncio, arriba }: arriba = llegó al primer mensaje (si no hay tarjeta, el chat no vino de un anuncio)
+async function subirHastaAnuncio(ms = 25000) {
+  const box = cajaMensajes();
+  if (!box) return { anuncio: anuncioEnChat(), arriba: enElInicio() };
+  const t0 = Date.now();
+  let alto = box.scrollHeight, quietas = 0, r = null;
+  while (Date.now() - t0 < ms) {
+    const a = anuncioEnChat();
+    if (a) { r = { anuncio: a, arriba: false }; break; }
+    if (enElInicio() && quietas >= 1) { r = { anuncio: null, arriba: true }; break; }
+    box.scrollTop = 0;
+    await esperar(900);
+    if (box.scrollHeight === alto) { if (++quietas >= 5) { r = { anuncio: anuncioEnChat(), arriba: true }; break; } } else { quietas = 0; alto = box.scrollHeight; }
+  }
+  if (!r) r = { anuncio: anuncioEnChat(), arriba: false };
+  if (r.anuncio) r.anuncio.tarjeta.scrollIntoView({ block: 'center' }); // para que cargue la miniatura
+  await esperar(800);
+  if (r.anuncio) r.anuncio = anuncioEnChat() || r.anuncio;
+  return r;
 }
 
 let ocupado = false;      // la extensión está usando el chat (etiquetar / enviar)
 let ultimaTecla = 0;
 const revisados = new Set(); // cabeceras ya revisadas en esta carga de la página
 
-async function revisarAnuncio(forzar = false) {
+// chatsRevisados[cabecera] = { at, anuncio: true|false, sim }: cada chat se revisa una sola vez
+async function anotarRevisado(header, datos) {
+  const { chatsRevisados = {} } = await chrome.storage.local.get('chatsRevisados');
+  chatsRevisados[header] = { at: new Date().toISOString(), ...datos };
+  const limite = Date.now() - 120 * 864e5;
+  for (const k of Object.keys(chatsRevisados)) if (Date.parse(chatsRevisados[k].at) < limite) delete chatsRevisados[k];
+  await chrome.storage.local.set({ chatsRevisados });
+}
+const yaRevisado = (x, modo) => !!x && !(x.sim && modo === 'real');
+
+// Revisa el chat abierto. subir = si no ve la tarjeta, sube hasta el inicio a buscarla.
+async function revisarAnuncio(forzar = false, subir = false) {
   const header = cabecera();
   if (!header || !compose() || ocupado) return null;
   if (!forzar && revisados.has(header)) return null;
-  const { config = {}, fbAdsHechos = {} } = await chrome.storage.local.get(['config', 'fbAdsHechos']);
+  const { config = {}, chatsRevisados = {} } = await chrome.storage.local.get(['config', 'chatsRevisados']);
   const modo = config.fbAdsModo || 'sim';
+  const sim = modo !== 'real' && !forzar;
   const etiqueta = (config.fbAdsEtiqueta || 'FB ADS').trim();
-  if (!forzar && (modo === 'off' || fbAdsHechos[header])) { revisados.add(header); return null; }
-  const anuncio = anuncioEnChat();
-  if (!anuncio) return forzar ? { ok: false, error: 'este chat no muestra la tarjeta "Anuncio de facebook/instagram"' } : null;
+  if (!forzar && (modo === 'off' || yaRevisado(chatsRevisados[header], modo))) { revisados.add(header); return null; }
+  let anuncio = anuncioEnChat(), arriba = false;
+  if (!anuncio && subir) ({ anuncio, arriba } = await subirHastaAnuncio());
+  if (!anuncio) {
+    // solo se anota "no vino de anuncio" si se llegó al primer mensaje
+    if (arriba) { revisados.add(header); await anotarRevisado(header, { anuncio: false }); }
+    return { ok: false, sinAnuncio: true, arriba, error: arriba ? 'el chat no vino de un anuncio' : 'no se vio la tarjeta del anuncio (no se llegó al inicio del chat)' };
+  }
   const { red } = anuncio;
   revisados.add(header);
 
@@ -549,13 +553,14 @@ async function revisarAnuncio(forzar = false) {
   } else if ((video = await videoConocido(h.hash))) {
     chrome.runtime.sendMessage({ type: 'fbVideo', ...datos, videoId: video.id, label: video.label }).catch(() => {});
   } else {
-    preguntarVideo(h, datos);
+    await videoPorAprender(h, datos);
   }
 
   // 2) la etiqueta de WhatsApp
-  if (!forzar && modo === 'sim') {
+  if (sim) {
     chrome.runtime.sendMessage({ type: 'fbAd', header, red, sim: true, etiqueta }).catch(() => {});
-    return null;
+    await anotarRevisado(header, { anuncio: true, red, sim: true });
+    return { ok: true, sim: true, red, video: video ? video.label : 'nuevo' };
   }
   // no abrir la ventana de listas mientras la persona está escribiendo
   for (let i = 0; i < 20 && Date.now() - ultimaTecla < 3000; i++) await esperar(500);
@@ -563,25 +568,89 @@ async function revisarAnuncio(forzar = false) {
   ocupado = true;
   let r;
   try { r = await etiquetarChat(etiqueta); } catch (e) { r = { ok: false, error: String(e) }; } finally { ocupado = false; }
-  if (r.ok) {
-    fbAdsHechos[header] = new Date().toISOString();
-    const limite = Date.now() - 60 * 864e5;
-    for (const k of Object.keys(fbAdsHechos)) if (Date.parse(fbAdsHechos[k]) < limite) delete fbAdsHechos[k];
-    await chrome.storage.local.set({ fbAdsHechos });
-  }
+  if (r.ok) await anotarRevisado(header, { anuncio: true, red });
   chrome.runtime.sendMessage({ type: 'fbAd', header, red, etiqueta, ok: r.ok, ya: r.ya, error: r.error }).catch(() => {});
-  return { ...r, red, video: video ? video.label : (h ? 'nuevo: elige cuál es en la ventanita' : 'sin miniatura') };
+  return { ...r, red, video: video ? video.label : (h ? 'nuevo: elígelo en Opciones → Videos por aprender' : 'sin miniatura') };
 }
 
-// Revisa cada chat que se abre (lo abre la asesora; la extensión no abre chats para esto,
-// así no marca como leídos los que nadie ha visto). Solo cuando una persona está usando WhatsApp Web,
-// para no cruzarse con los módulos automáticos.
+// ───── lista de chats ─────
+function filasChats() {
+  const pane = document.querySelector('#pane-side');
+  if (!pane) return [];
+  return [...pane.querySelectorAll('[role="listitem"], [role="row"]')].map((el) => {
+    const t = el.querySelector('span[title]');
+    const titulo = t ? t.getAttribute('title').trim() : '';
+    const noLeido = !!el.querySelector('[aria-label*="no leído" i], [aria-label*="no leidos" i], [aria-label*="no leídos" i], [aria-label*="unread" i]');
+    return { el, titulo, noLeido };
+  }).filter((f) => f.titulo);
+}
+
+async function marcarNoLeido(titulo) {
+  const f = filasChats().find((x) => x.titulo === titulo);
+  if (!f) return false;
+  const r = f.el.getBoundingClientRect();
+  f.el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, view: window, button: 2, clientX: r.left + 40, clientY: r.top + 20 }));
+  const item = await buscar(() => porTexto(/^(marcar como no leido|mark as unread)$/), 2500);
+  if (!item) return false;
+  clic(item.closest('li, [role="menuitem"], [role="button"]') || item);
+  await esperar(500);
+  return true;
+}
+
+const digitos9 = (t) => String(t || '').replace(/\D/g, '').slice(-9);
+
+// ¿La fila de este chat (por título o por celular) está como no leída? null = no está a la vista
+function noLeidoDe({ titulo, phone }) {
+  const f = filasChats().find((x) => (titulo && x.titulo === titulo) || (phone && digitos9(x.titulo).length === 9 && digitos9(x.titulo) === digitos9(phone)));
+  return f ? f.noLeido : null;
+}
+
+// Abre un chat buscándolo por su título en la lista (para leads que solo tienen @usuario, sin número).
+async function abrirPorTitulo(titulo) {
+  const pane = document.querySelector('#pane-side');
+  if (!pane) return { ok: false, error: 'WhatsApp Web no muestra la lista de chats' };
+  pane.scrollTop = 0;
+  await esperar(800);
+  for (let i = 0; i < 30; i++) {
+    const f = filasChats().find((x) => x.titulo.toLowerCase() === titulo.toLowerCase());
+    if (f) {
+      const noLeido = f.noLeido;
+      clic(f.el.querySelector('span[title]') || f.el);
+      if (!(await buscar(() => cabecera().toLowerCase() === titulo.toLowerCase() && compose(), 6000))) return { ok: false, error: 'el chat no abrió' };
+      await esperar(1500);
+      return { ok: true, noLeido };
+    }
+    const antes = pane.scrollTop;
+    pane.scrollTop += pane.clientHeight * 0.8;
+    await esperar(700);
+    if (pane.scrollTop === antes) break;
+  }
+  return { ok: false, error: 'no está en la lista de chats' };
+}
+
+// Lee la tarjeta del anuncio del chat abierto (sube hasta el inicio si hace falta). No toca nada.
+async function leerAnuncio(phone) {
+  if (!compose()) return { ok: false, error: 'no hay un chat abierto' };
+  if (phone && !chatEsDe(phone)) return { ok: false, error: 'el chat abierto no es el de este número' };
+  const header = cabecera();
+  let anuncio = anuncioEnChat(), arriba = false;
+  if (!anuncio) ({ anuncio, arriba } = await subirHastaAnuncio());
+  const box = cajaMensajes();
+  if (!anuncio) { if (box) box.scrollTop = box.scrollHeight; return { ok: true, header, anuncio: false, arriba }; }
+  const img = miniatura(anuncio.tarjeta);
+  const h = img ? await huella(img) : null;
+  if (box) box.scrollTop = box.scrollHeight;
+  revisados.add(header); // que el revisor de chats abiertos no lo repita
+  return { ok: true, header, anuncio: true, red: anuncio.red, hash: h && h.hash, thumb: h && h.thumb };
+}
+
+// Además, cuando una persona abre un chat, se revisa al toque (sin subir: no le mueve la pantalla).
 let chatVisto = '', desde = 0;
 setInterval(() => {
   const h = cabecera();
   if (h !== chatVisto) { chatVisto = h; desde = Date.now(); return; }
   // espera 2 s a que carguen los mensajes; prueba hasta 15 s (la tarjeta a veces aparece después)
-  if (!h || Date.now() - desde < 2000 || Date.now() - desde > 15000) return;
+  if (!h || ocupado || Date.now() - desde < 2000 || Date.now() - desde > 15000) return;
   if (Date.now() - ultimaHumana > 120000) return;
   revisarAnuncio().catch(() => {});
 }, 1500);
@@ -614,8 +683,20 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     etiquetarChat(msg.nombre || 'FREE PASS', msg.phone).then(reply, (e) => reply({ ok: false, error: String(e) }))
       .finally(() => { ocupado = false; });
     return true;
+  } else if (msg.type === 'leerAnuncio') {
+    ocupado = true;
+    leerAnuncio(msg.phone).then(reply, (e) => reply({ ok: false, error: String(e) })).finally(() => { ocupado = false; });
+    return true;
+  } else if (msg.type === 'abrirPorTitulo') {
+    abrirPorTitulo(msg.titulo).then(reply, (e) => reply({ ok: false, error: String(e) }));
+    return true;
+  } else if (msg.type === 'noLeidoDe') {
+    reply({ noLeido: noLeidoDe(msg) });
+  } else if (msg.type === 'marcarNoLeido') {
+    marcarNoLeido(msg.titulo).then((ok) => reply({ ok }), () => reply({ ok: false }));
+    return true;
   } else if (msg.type === 'fbAdAhora') {
-    revisarAnuncio(true).then((r) => reply(r || { ok: false, error: 'no hay un chat abierto' }), (e) => reply({ ok: false, error: String(e) }));
+    revisarAnuncio(true, true).then((r) => reply(r || { ok: false, error: 'no hay un chat abierto' }), (e) => reply({ ok: false, error: String(e) }));
     return true;
   } else if (msg.type === 'sendReminder') {
     ocupado = true;

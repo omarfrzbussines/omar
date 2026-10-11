@@ -85,6 +85,15 @@ $('fbad').onclick = async () => {
   $('fbad').textContent = txt;
   setTimeout(() => { $('fbad').textContent = '📣 ¿Vino de anuncio? (chat abierto)'; $('fbad').disabled = false; }, 12000);
 };
+// corre ya el módulo "Chats de anuncios" (leads nuevos de Pipedrive → su chat)
+$('fbrun').onclick = async () => {
+  $('fbrun').disabled = true;
+  $('fbrun').textContent = 'Revisando leads…';
+  await chrome.runtime.sendMessage({ type: 'correrAnuncios' });
+  $('fbrun').textContent = '📣 Revisar leads nuevos ahora';
+  $('fbrun').disabled = false;
+  pintar();
+};
 chrome.runtime.sendMessage({ type: 'modulos' }, (m) => {
   MODS = m || {};
   for (const [k, nombre] of Object.entries(MODS)) {

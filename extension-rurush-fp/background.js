@@ -322,6 +322,197 @@ async function openChat(tabId, phone) {
   return prev;
 }
 
+// ─────────────── módulo "Chats de anuncios": leads nuevos de Pipedrive ───────────────
+// Cada 30 min (8:00–21:00): toma las personas creadas en Pipedrive en los últimos 3 días que todavía
+// no revisó, abre su chat de WhatsApp (por celular, o por @usuario si no tiene), y si el chat vino de
+// un anuncio: llena "Video" (por la miniatura) y pone la etiqueta FB ADS. Si el chat estaba sin leer,
+// lo deja otra vez sin leer. Si alguien empieza a usar WhatsApp Web, para y sigue en la próxima vuelta.
+const MAX_ANUNCIOS_CORRIDA = 15;
+
+const distanciaHex = (a, b) => {
+  let d = 0;
+  for (let i = 0; i < a.length; i++) { let x = parseInt(a[i], 16) ^ parseInt(b[i], 16); while (x) { d += x & 1; x >>= 1; } }
+  return d;
+};
+async function videoDeHuella(hash) {
+  const { videosAnuncio = {} } = await chrome.storage.local.get('videosAnuncio');
+  let mejor = null;
+  for (const [h, v] of Object.entries(videosAnuncio)) {
+    const d = distanciaHex(h, hash);
+    if (d <= 8 && (!mejor || d < mejor.d)) mejor = { ...v, d };
+  }
+  return mejor;
+}
+
+// Llena Video de una persona ya conocida (solo si está vacío). Devuelve el texto para el resumen.
+async function videoAPersona(personId, videoId, token) {
+  const campo = await campoVideo(token);
+  const per = (await pd(`persons/${personId}`, token)).data || {};
+  const actual = per[campo.key];
+  if (actual && String(actual) !== String(videoId)) {
+    const o = campo.opciones.find((x) => String(x.id) === String(actual));
+    return `ya tenía «${o ? o.label : actual}», no se cambió`;
+  }
+  if (actual) return 'ya lo tenía';
+  await pdPut(`persons/${personId}`, token, { [campo.key]: videoId });
+  return 'llenado';
+}
+
+async function guardarPorAprender(hash, thumb, lead) {
+  const { videosPorAprender = {} } = await chrome.storage.local.get('videosPorAprender');
+  const v = videosPorAprender[hash] || { thumb: thumb || '', leads: [], desde: new Date().toISOString() };
+  if (!v.leads.some((l) => (lead.personId && l.personId === lead.personId) || (lead.header && l.header === lead.header))) v.leads.push(lead);
+  videosPorAprender[hash] = v;
+  await chrome.storage.local.set({ videosPorAprender });
+}
+
+async function correrAnuncios(reason) {
+  const cfg = await getConfig();
+  const manual = reason === 'manual';
+  const modo = cfg.fbAdsModo || 'sim';
+  const real = modo === 'real';
+  const now = limaNow();
+  if (!manual && (!cfg.enabled || modo === 'off' || now.hour < 8 || now.hour >= 21)) return;
+  if (!cfg.pipedriveToken) { await log({ level: 'error', mod: 'fb', msg: 'Chats de anuncios: falta el token de Pipedrive (Opciones).' }); return; }
+  const { waActivity = 0 } = await chrome.storage.local.get('waActivity');
+  if (!manual && Date.now() - waActivity < 4 * 60e3) return; // alguien usa WhatsApp Web: la próxima vuelta
+
+  const resumen = { anuncios: [], sinAnuncio: [], alertas: [], videosNuevos: [] };
+  const inicio = Date.now();
+  await chrome.storage.local.set({ lock: Date.now() });
+  const latido = setInterval(() => { chrome.runtime.getPlatformInfo(() => {}); chrome.storage.local.set({ lock: Date.now() }); }, 20000);
+  try {
+    // personas nuevas (últimos 3 días) que todavía no se revisaron
+    const { personasRevisadas = {} } = await chrome.storage.local.get('personasRevisadas');
+    const desde = Date.now() - 3 * 864e5;
+    const res = await pd('persons', cfg.pipedriveToken, { limit: 200, sort: 'add_time DESC' });
+    const campo = await campoVideo(cfg.pipedriveToken);
+    const nuevas = (res.data || []).filter((p) => Date.parse(p.add_time.replace(' ', 'T') + 'Z') >= desde)
+      .filter((p) => { const r = personasRevisadas[p.id]; return !r || (r.sim && real) || (r.reintentar && r.intentos < 3); });
+    if (!nuevas.length) return;
+
+    const tab = await waTab();
+    await sleep(1000);
+    await asegurarScript(tab.id);
+    const status = await waitFor(tab.id, { type: 'ping' }, (r) => r.loggedIn, 90000);
+    if (!status) throw new Error('WhatsApp Web no cargó o no tiene sesión iniciada.');
+    if (cfg.expectedNumber && status.wid !== String(cfg.expectedNumber).replace(/\D/g, '')) throw new Error(`Número de WhatsApp Web incorrecto (${status.wid}).`);
+    const bloqueados = new Set(cfg.blocklist.map(ultimos9).filter((x) => x.length === 9));
+
+    const anotar = async (id, dato) => {
+      const { personasRevisadas: pr = {} } = await chrome.storage.local.get('personasRevisadas');
+      const previo = pr[id] || {};
+      pr[id] = { at: new Date().toISOString(), ...dato, intentos: (previo.intentos || 0) + (dato.reintentar ? 1 : 0) };
+      for (const k of Object.keys(pr)) if (Date.parse(pr[k].at) < Date.now() - 30 * 864e5) delete pr[k];
+      await chrome.storage.local.set({ personasRevisadas: pr });
+    };
+
+    let hechos = 0;
+    for (const p of nuevas) {
+      if (hechos >= MAX_ANUNCIOS_CORRIDA) break;
+      const { waActivity: act = 0 } = await chrome.storage.local.get('waActivity');
+      if (!manual && act > inicio) { resumen.alertas.push('alguien empezó a usar WhatsApp Web: sigue en la próxima vuelta'); break; }
+      const nombre = String(p.name || '').trim();
+      if (p[campo.key]) { await anotar(p.id, { listo: 'ya tenía Video' }); continue; }
+      const phone = (p.phone || []).map((x) => normPhone(x.value)).find(Boolean) || null;
+      const usuario = !phone && /^@\S+$/.test(nombre) ? nombre : null;
+      if (!phone && !usuario) { await anotar(p.id, { listo: 'sin celular' }); resumen.alertas.push(`${nombre}: sin celular ni @usuario en Pipedrive`); continue; }
+      if (phone && bloqueados.has(ultimos9(phone))) { await anotar(p.id, { listo: 'bloqueado' }); continue; }
+      hechos++;
+      const quien = `${nombre}${phone ? ' · ' + phone : ''}`;
+      try {
+        // ¿estaba sin leer? (para dejarlo igual al terminar)
+        const antes = await ask(tab.id, { type: 'noLeidoDe', phone, titulo: usuario });
+        let header;
+        if (phone) {
+          const chat = await openChat(tab.id, phone);
+          if (!chat) { await anotar(p.id, { reintentar: true }); resumen.alertas.push(`${quien}: el chat no abrió`); continue; }
+          if (chat.invalid) { await anotar(p.id, { listo: 'sin WhatsApp' }); resumen.alertas.push(`${quien}: número sin WhatsApp`); continue; }
+          if (!chat.ready) { await anotar(p.id, { reintentar: true }); resumen.alertas.push(`${quien}: no se pudo confirmar que el chat abierto sea el suyo`); continue; }
+          header = chat.header;
+        } else {
+          const r = await ask(tab.id, { type: 'abrirPorTitulo', titulo: usuario });
+          if (!r || !r.ok) { await anotar(p.id, { reintentar: true }); resumen.alertas.push(`${quien}: ${(r && r.error) || 'el chat no abrió'}`); continue; }
+          header = usuario;
+        }
+        const a = await ask(tab.id, { type: 'leerAnuncio', phone });
+        if (!a || !a.ok) { await anotar(p.id, { reintentar: true }); resumen.alertas.push(`${quien}: ${(a && a.error) || 'sin respuesta de WhatsApp Web'}`); continue; }
+        if (!a.anuncio) {
+          if (a.arriba) { await anotar(p.id, { listo: 'no vino de anuncio' }); resumen.sinAnuncio.push(quien); }
+          else { await anotar(p.id, { reintentar: true }); resumen.alertas.push(`${quien}: no se llegó al inicio del chat para ver si vino de anuncio`); }
+        } else {
+          // 1) Video
+          let textoVideo;
+          const video = a.hash ? await videoDeHuella(a.hash) : null;
+          if (!a.hash) textoVideo = '⚠️ no pude leer la miniatura';
+          else if (!video) {
+            await guardarPorAprender(a.hash, a.thumb, { personId: p.id, header: nombre, phone, red: a.red });
+            textoVideo = '🆕 video nuevo (Opciones → Videos por aprender)';
+            resumen.videosNuevos.push(quien);
+          } else if (!real) textoVideo = `🧪 Video «${video.label}»`;
+          else textoVideo = `Video «${video.label}» ${await videoAPersona(p.id, video.id, cfg.pipedriveToken)}`;
+          // 2) etiqueta de WhatsApp
+          let textoEtiqueta = `🧪 se pondría ${cfg.fbAdsEtiqueta || 'FB ADS'}`;
+          if (real) {
+            const r = await ask(tab.id, { type: 'etiquetar', nombre: cfg.fbAdsEtiqueta || 'FB ADS', phone });
+            textoEtiqueta = r && r.ok ? `🏷️ ${cfg.fbAdsEtiqueta || 'FB ADS'}${r.ya ? ' (ya la tenía)' : ''}` : `⚠️ etiqueta: ${(r && r.error) || 'sin respuesta'}`;
+          }
+          await anotar(p.id, { listo: 'anuncio', sim: !real });
+          resumen.anuncios.push(`${quien} · anuncio de ${a.red} · ${textoVideo} · ${textoEtiqueta}`);
+        }
+        if (antes && antes.noLeido) {
+          const r = await ask(tab.id, { type: 'marcarNoLeido', titulo: header });
+          if (!r || !r.ok) resumen.alertas.push(`${quien}: no pude volver a marcarlo como no leído`);
+        }
+        await sleep(2000 + Math.random() * 3000);
+      } catch (e) {
+        await anotar(p.id, { reintentar: true });
+        resumen.alertas.push(`${quien}: ${e.message || e}`);
+      }
+    }
+  } catch (e) {
+    resumen.alertas.push(String(e.message || e));
+  } finally {
+    clearInterval(latido);
+    await chrome.storage.local.set({ lock: 0 });
+    const linea = [
+      resumen.anuncios.length && `📣 ${resumen.anuncios.length} de anuncio`,
+      resumen.sinAnuncio.length && `💬 ${resumen.sinAnuncio.length} no vinieron de anuncio`,
+      resumen.videosNuevos.length && `🆕 ${resumen.videosNuevos.length} con video nuevo por aprender`,
+      resumen.alertas.length && `⚠️ ${resumen.alertas.length} para revisar: ${resumen.alertas[0]}`,
+    ].filter(Boolean).join(' · ');
+    if (linea) {
+      await log({ level: resumen.alertas.length ? 'warn' : 'ok', mod: 'fb', msg: `Chats de anuncios${real ? '' : ' (simulación)'}: ${linea}`, detalle: resumen });
+      if (resumen.videosNuevos.length || manual) notify('Rurush FP · Chats de anuncios', linea);
+    }
+  }
+}
+
+// Desde Opciones: se eligió cuál es un video nuevo → queda aprendido y se llena a los leads que esperaban.
+async function aprenderVideo(hash, id, label) {
+  const { videosPorAprender = {}, videosAnuncio = {} } = await chrome.storage.local.get(['videosPorAprender', 'videosAnuncio']);
+  const v = videosPorAprender[hash];
+  if (!v) return { ok: false, error: 'ya no está en la lista' };
+  videosAnuncio[hash] = { id, label, thumb: v.thumb, at: new Date().toISOString() };
+  delete videosPorAprender[hash];
+  await chrome.storage.local.set({ videosAnuncio, videosPorAprender });
+  const cfg = await getConfig();
+  const hechos = [];
+  for (const l of v.leads) {
+    try {
+      if (l.personId) {
+        if ((cfg.fbAdsModo || 'sim') !== 'real') { hechos.push(`${l.header}: 🧪 se llenaría`); continue; }
+        hechos.push(`${l.header}: ${await videoAPersona(l.personId, id, cfg.pipedriveToken)}`);
+      } else {
+        await recibirVideo({ ...l, videoId: id, label });
+        hechos.push(`${l.header}: ver registro`);
+      }
+    } catch (e) { hechos.push(`${l.header}: ⚠️ ${e.message || e}`); }
+  }
+  await log({ mod: 'fb', msg: `🎬 Video aprendido «${label}» · ${v.leads.length} lead(s)`, detalle: { leads: hechos } });
+  return { ok: true, leads: v.leads.length };
+}
+
 // ───────────────────────── lectura del chat ─────────────────────────
 const RX_CONFIRMA = /\b(confirmo|confirmado|s[ií] voy|voy|ah[ií] estar[eé]|all[aá] estar[eé]|ok\b|listo)/i;
 const RX_CANCELA = /(no puedo|cancel|reagend|otro d[ií]a|no voy|no podr[eé]|ma[ñn]ana mejor|ya no|no llego|no llegar[eé]|complic|lo dejamos|lo pasamos|otra fecha|otra hora|posterg|mejor el (lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado))/i;
@@ -1036,6 +1227,7 @@ async function programar(soloFaltantes = false) {
   }
   crear('tick', { delayInMinutes: 1, periodInMinutes: cfg.intervalMin });
   crear('reporte', { when: proximaLima(21, 5), periodInMinutes: 1440 });
+  crear('anuncios', { delayInMinutes: 3, periodInMinutes: 30 });
   for (const [key, mod] of Object.entries(MODULOS)) {
     const hora = key === 'manana' ? [cfg.mananaHora, 0] : mod.hora;
     if (hora) crear(`mod:${key}`, { when: proximaLima(hora[0], hora[1]), periodInMinutes: mod.cadaMin || 1440 });
@@ -1061,6 +1253,7 @@ chrome.runtime.onStartup.addListener(() => { programar(true); cargarVideosPrecar
 chrome.alarms.onAlarm.addListener((a) => {
   if (a.name === 'tick') { reintentarVideos().catch(() => {}); return encolar('m1', 'alarm'); }
   if (a.name === 'reporte') return descargarReporte(a.scheduledTime);
+  if (a.name === 'anuncios') { cola = cola.then(() => correrAnuncios('alarm')).catch((e) => log({ level: 'error', mod: 'fb', msg: `Chats de anuncios: ${e.message || e}` })); return; }
   const [tipo, key, prog] = a.name.split(':');
   if (tipo === 'mod' && MODULOS[key]) {
     // la alarma diaria se dispara todos los días: aquí se filtra por día de la semana (Lima)
@@ -1087,6 +1280,9 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     return false;
   }
   if (msg.type === 'fbVideo') { recibirVideo(msg); return false; }
+  if (msg.type === 'videoNuevo') { log({ mod: 'fb', msg: `🆕 Video nuevo de anuncio (${msg.header}): elígelo en Opciones → Videos por aprender` }); return false; }
+  if (msg.type === 'aprenderVideo') { aprenderVideo(msg.hash, msg.id, msg.label).then(reply, (e) => reply({ ok: false, error: e.message || String(e) })); return true; }
+  if (msg.type === 'correrAnuncios') { cola = cola.then(() => correrAnuncios('manual')); cola.then(() => reply({ ok: true }), () => reply({ ok: false })); return true; }
   if (msg.type === 'huellaUrl') { huellaUrl(msg.url).then(reply, () => reply(null)); return true; }
   if (msg.type === 'videoOpciones') {
     getConfig().then((cfg) => cfg.pipedriveToken ? campoVideo(cfg.pipedriveToken) : Promise.reject(new Error('falta el token de Pipedrive en Opciones')))

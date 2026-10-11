@@ -101,6 +101,32 @@ async function pintarVideos() {
   }
 }
 
+async function pintarPorAprender() {
+  const { videosPorAprender = {} } = await chrome.storage.local.get('videosPorAprender');
+  const box = $('porAprender');
+  box.innerHTML = '';
+  const lista = Object.entries(videosPorAprender);
+  if (!lista.length) { box.textContent = 'Ninguno.'; return; }
+  const op = await chrome.runtime.sendMessage({ type: 'videoOpciones' });
+  for (const [hash, v] of lista) {
+    const fila = document.createElement('div');
+    fila.style.cssText = 'display:flex;gap:10px;align-items:center;margin:8px 0;color:#1c1c1c';
+    fila.innerHTML = '<img style="width:64px;height:64px;object-fit:cover;border-radius:6px;background:#eee"><div style="flex:1"><div class="hint"></div><select style="width:100%;padding:5px;margin-top:4px"><option value="">— ¿qué video es? —</option></select></div><button type="button" style="margin:0">Guardar</button>';
+    fila.querySelector('img').src = v.thumb || '';
+    fila.querySelector('.hint').textContent = `${v.leads.length} lead(s): ${v.leads.map((l) => l.header).slice(0, 4).join(', ')}${v.leads.length > 4 ? '…' : ''}`;
+    const sel = fila.querySelector('select');
+    for (const o of (op && op.opciones) || []) { const x = document.createElement('option'); x.value = o.id; x.textContent = o.label; sel.appendChild(x); }
+    fila.querySelector('button').onclick = async () => {
+      if (!sel.value) return sel.focus();
+      await chrome.runtime.sendMessage({ type: 'aprenderVideo', hash, id: Number(sel.value), label: sel.selectedOptions[0].textContent });
+      pintarPorAprender();
+      pintarVideos();
+    };
+    box.appendChild(fila);
+  }
+}
+
 cargar();
 pintarImg();
 pintarVideos();
+pintarPorAprender();
