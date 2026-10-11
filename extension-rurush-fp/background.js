@@ -182,13 +182,23 @@ async function campoVideo(token) {
 async function aplicarVideo(p, reintento = false) {
   const cfg = await getConfig();
   const quien = `${p.header}${p.phone ? ' · ' + p.phone : ''} → Video «${p.label}»`;
+  // (sin celular: p.usuario = el @usuario de la cabecera)
   if ((cfg.fbAdsModo || 'sim') !== 'real' && !p.forzar) { await log({ mod: 'fb', msg: `🧪 Video: ${quien} (se llenaría en Pipedrive)` }); return 'sim'; }
   if (!cfg.pipedriveToken) { await log({ mod: 'fb', msg: `⚠️ Video: ${quien} · falta el token de Pipedrive` }); return 'ok'; }
   const campo = await campoVideo(cfg.pipedriveToken);
-  const tel = ultimos9(p.phone);
-  const res = await pd('persons/search', cfg.pipedriveToken, { term: tel, fields: 'phone', limit: 10 });
-  const ids = ((res.data && res.data.items) || []).map((i) => i.item)
-    .filter((it) => (it.phones || []).some((x) => ultimos9(x) === tel)).map((it) => it.id);
+  // por celular; si el chat solo muestra un @usuario (sin número), por nombre: así lo guardan en Pipedrive
+  let ids;
+  if (p.phone) {
+    const tel = ultimos9(p.phone);
+    const res = await pd('persons/search', cfg.pipedriveToken, { term: tel, fields: 'phone', limit: 10 });
+    ids = ((res.data && res.data.items) || []).map((i) => i.item)
+      .filter((it) => (it.phones || []).some((x) => ultimos9(x) === tel)).map((it) => it.id);
+  } else {
+    const u = p.usuario.toLowerCase();
+    const res = await pd('persons/search', cfg.pipedriveToken, { term: u.replace(/^@/, ''), fields: 'name', limit: 10 });
+    ids = ((res.data && res.data.items) || []).map((i) => i.item)
+      .filter((it) => String(it.name || '').trim().toLowerCase().replace(/^@?/, '@') === u).map((it) => it.id);
+  }
   if (!ids.length) {
     if (!reintento) await log({ mod: 'fb', msg: `⏳ Video: ${quien} · aún no está en Pipedrive, se reintenta cada ${cfg.intervalMin} min (3 días)` });
     return 'pendiente';
@@ -211,10 +221,11 @@ async function aplicarVideo(p, reintento = false) {
 
 async function recibirVideo(p) {
   if (p.error) return log({ mod: 'fb', msg: `⚠️ Video: ${p.header} · ${p.error}` });
-  if (!p.phone) return log({ mod: 'fb', msg: `⚠️ Video: ${p.header} → «${p.label}» · no pude leer el celular del chat (¿contacto guardado?): llénalo a mano` });
+  if (!p.phone && /^@\S+$/.test(String(p.header).trim())) p.usuario = String(p.header).trim();
+  if (!p.phone && !p.usuario) return log({ mod: 'fb', msg: `⚠️ Video: ${p.header} → «${p.label}» · no pude leer el celular del chat (¿contacto guardado?): llénalo a mano` });
   // cada celular una sola vez (el chat se puede abrir muchas veces)
   const { videosAplicados = {} } = await chrome.storage.local.get('videosAplicados');
-  const k = ultimos9(p.phone);
+  const k = p.phone ? ultimos9(p.phone) : p.usuario.toLowerCase();
   if (!p.forzar && videosAplicados[k] === p.videoId) return;
   let r;
   try { r = await aplicarVideo(p); } catch (e) { return log({ mod: 'fb', msg: `⚠️ Video: ${p.header} · ${e.message || e}` }); }
@@ -226,7 +237,7 @@ async function recibirVideo(p) {
   await chrome.storage.local.set({ videosAplicados });
   if (r === 'pendiente') {
     const { videosPendientes = [] } = await chrome.storage.local.get('videosPendientes');
-    await chrome.storage.local.set({ videosPendientes: [...videosPendientes.filter((x) => ultimos9(x.phone) !== k), { ...p, desde: Date.now() }] });
+    await chrome.storage.local.set({ videosPendientes: [...videosPendientes.filter((x) => (x.phone ? ultimos9(x.phone) : String(x.usuario).toLowerCase()) !== k), { ...p, desde: Date.now() }] });
   }
 }
 
@@ -235,7 +246,7 @@ async function reintentarVideos() {
   if (!videosPendientes.length) return;
   const quedan = [];
   for (const p of videosPendientes) {
-    if (Date.now() - p.desde > 3 * 864e5) { await log({ mod: 'fb', msg: `⚠️ Video: ${p.header} · ${p.phone} no apareció en Pipedrive en 3 días: «${p.label}» llénalo a mano` }); continue; }
+    if (Date.now() - p.desde > 3 * 864e5) { await log({ mod: 'fb', msg: `⚠️ Video: ${p.header} · ${p.phone || p.usuario} no apareció en Pipedrive en 3 días: «${p.label}» llénalo a mano` }); continue; }
     try { if ((await aplicarVideo(p, true)) === 'pendiente') quedan.push(p); } catch { quedan.push(p); }
   }
   await chrome.storage.local.set({ videosPendientes: quedan });
