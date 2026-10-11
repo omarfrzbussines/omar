@@ -567,8 +567,11 @@ async function hijos(d) {
 }
 let BASE_FOTOS = null;
 const MES_CACHE = {};
+// Link de la carpeta de la contadora guardado en ESTE celular (para la cuenta del equipo,
+// que no la ve por ruta); si no hay, la ruta/link de los ajustes compartidos.
+const fotosConf = () => ls.get('fotosLink', '') || CFG.fotos;
 async function baseFotos() {
-  const conf = CFG.fotos;
+  const conf = fotosConf();
   if (BASE_FOTOS && BASE_FOTOS.conf === conf) return BASE_FOTOS;
   let d;
   if (/^https?:\/\//i.test(conf)) {
@@ -584,7 +587,7 @@ async function baseFotos() {
       if (!it && i === 0) {
         try { it = ((await gj('GET', '/me/drive/sharedWithMe')).value || []).find((x) => sinTildes(x.name) === sinTildes(partes[0])); } catch (e) { /* no disponible */ }
       }
-      if (!it) throw new Error(`La cuenta ${yo()} no ve la carpeta "${partes[i]}": pídele a la contadora que se la comparta (con permiso de edición). Se sube sola cuando lo haga.`);
+      if (!it) throw new Error(`La cuenta ${yo()} no ve la carpeta "${partes[i]}": pídele a la contadora que se la comparta (con permiso de edición) y pega el link de su carpeta en ⚙️ Ajustes de este celular. Se sube sola cuando lo hagas.`);
       d = destinoDe(it, d.driveId);
     }
   }
@@ -605,7 +608,7 @@ async function carpetaPropia(fechaIso) {
 }
 // Copia para la contadora: <CFG.fotos>/AAAA/MM MES.
 async function carpetaFotos(fechaIso) {
-  const clave = CFG.fotos + '|' + fechaIso.slice(0, 7);
+  const clave = fotosConf() + '|' + fechaIso.slice(0, 7);
   if (MES_CACHE[clave]) return MES_CACHE[clave];
   const base = await baseFotos();
   const anio = fechaIso.slice(0, 4), m = Number(fechaIso.slice(5, 7));
@@ -613,7 +616,7 @@ async function carpetaFotos(fechaIso) {
   const espera = (c) => `La contadora todavía no creó la carpeta ${c}. La foto se sube sola cuando exista.`;
   const dA = await buscar(base, (n) => n === anio, espera(anio));
   const dM = await buscar(dA, (n) => new RegExp('^0?' + m + '(\\D|$)').test(n) || alias.some((a) => n.includes(a)), espera(anio + ' / ' + pad(m) + ' ' + mes));
-  MES_CACHE[clave] = Object.assign(dM, { ruta: CFG.fotos.split('/').pop() + ' / ' + anio + ' / ' + dM.nombre });
+  MES_CACHE[clave] = Object.assign(dM, { ruta: (base.nombre || '') + ' / ' + anio + ' / ' + dM.nombre });
   return MES_CACHE[clave];
 }
 
@@ -858,7 +861,13 @@ function pintarConf() {
     <div class="ayuda">Sesión: <b>${esc(yo() || '—')}</b>${esAdmin() ? ' · <span class="tag ok">administrador</span>' : ''}<br>
       Código: <b>${esc(codigoCelular())}</b> · Carpeta: <b>${esc((R && R.nombre) || carpetaConf())}</b></div>`;
   const salir = `<button class="btn" id="cSalir" style="width:100%;margin-top:18px">Cerrar sesión de Microsoft</button>`;
-  if (!esAdmin()) return propio + `<div class="ayuda" style="margin-top:12px">Los ajustes los cambia el administrador.</div>` + salir;
+  if (!esAdmin()) return propio + (CFG.fotos ? `
+    <label>📷 Link de la carpeta de la contadora (COMPRAS)</label>
+    <input id="cFotosLink" value="${esc(ls.get('fotosLink', ''))}" placeholder="https://1drv.ms/f/…" autocomplete="off">
+    <div class="ayuda">Solo si este celular no la encuentra solo. Las fotos van a <code>COMPRAS / 2026 / 10 OCTUBRE</code>.</div>
+    <div class="dos"><button class="btn" id="cGuardarFotosLink" style="margin-top:8px">💾 Guardar link</button>
+      <button class="btn" id="cProbarFotos" style="margin-top:8px">🔍 Probar</button></div>` : '')
+    + `<div class="ayuda" style="margin-top:12px">Los demás ajustes los cambia el administrador.</div>` + salir;
   const cel = Object.keys(CFG.celulares).map((k) => {
     const x = CFG.celulares[k] || {};
     const este = k === codigoCelular();
@@ -1040,16 +1049,24 @@ document.addEventListener('click', async (ev) => {
     } catch (e) { t.disabled = false; toast('❌ ' + e.message, 5000); }
     return;
   }
+  if (t.id === 'cGuardarFotosLink') {
+    const url = (($('#cFotosLink').value || '').match(/https?:\/\/\S+/) || [''])[0];
+    ls.set('fotosLink', url); BASE_FOTOS = null; Object.keys(MES_CACHE).forEach((k) => delete MES_CACHE[k]);
+    toast(url ? '💾 Link guardado. Las fotos pendientes se suben ahora.' : 'Link borrado.', 4000);
+    procesarCola();
+    return;
+  }
   if (t.id === 'cProbarFotos') {
-    const antes = CFG.fotos;
-    CFG.fotos = $('#cFotos').value.trim();
+    const antes = CFG.fotos, antesLink = ls.get('fotosLink', '');
+    if ($('#cFotos')) CFG.fotos = $('#cFotos').value.trim();
+    if ($('#cFotosLink')) ls.set('fotosLink', (($('#cFotosLink').value || '').match(/https?:\/\/\S+/) || [''])[0]);
     t.disabled = true; t.textContent = 'Buscando…';
     try {
       const d = await carpetaFotos(isoLocal(new Date()));
       toast('✅ Las fotos de hoy irán a: ' + d.ruta, 5000);
     } catch (e) { toast('❌ ' + e.message, 7000); }
-    CFG.fotos = antes;
-    t.disabled = false; t.textContent = '🔍 Probar carpeta de fotos';
+    CFG.fotos = antes; ls.set('fotosLink', antesLink);
+    t.disabled = false; t.textContent = $('#cFotos') ? '🔍 Probar carpeta de fotos' : '🔍 Probar';
     return;
   }
   if (t.dataset.aprobar || t.dataset.rechazar || t.dataset.quitarcel || t.dataset.admincel) {
