@@ -284,6 +284,8 @@ const MODULOS = {
   m5:     { nombre: 'Domingo',                     reemplaza: 'DOMINGO REC FP 9 AM', hora: [9, 0], dias: [0] },
   // pone la etiqueta de WhatsApp Business a todo el que tenga FP agendado (de hoy a 14 días)
   et:     { nombre: 'Etiquetar FREE PASS',         reemplaza: '(nuevo)', hora: [8, 40], cadaMin: 120, dias: [0, 1, 2, 3, 4, 5, 6] },
+  // citas de nutrición con Diego (martes y miércoles): recordatorio la noche anterior
+  n1:     { nombre: 'Nutrición: recordatorio 7pm',  reemplaza: 'Recordatorio nutricion 7pm', hora: [19, 0], dias: [1, 2] },
 };
 const ETIQUETA_FP = 'FREE PASS';
 const MAX_ETIQUETAS_CORRIDA = 15;
@@ -601,9 +603,11 @@ async function correrModulo(key, reason, programado) {
     let fallosEtiqueta = 0;
     for (const parte of partes) {
      try {
-      const plan = parte === 'm5a' ? await planDomingoLunes(cfg, now)
+      const plan = parte === 'n1' ? await planNutricion(cfg, now)
+        : parte === 'm5a' ? await planDomingoLunes(cfg, now)
         : parte === 'm5b' ? await planDomingoNoShows(cfg, now)
         : await candidatosDe(parte, cfg, now);
+      if (plan.alerta) resumen.alertas.push(plan.alerta);
       if (!plan.lista.length) {
         if (key === 'm1') {
           const fps = await fpsEntre(cfg.pipedriveToken, now.date, now.date);
@@ -644,6 +648,7 @@ async function correrModulo(key, reason, programado) {
           }
 
           const phone = await phoneOf(fp.personId, cfg.pipedriveToken);
+          fp.phone = phone;
           if (!phone) { resumen.alertas.push(`${etiqueta}: sin celular válido en Pipedrive (${ultimoTelCrudo ? 'tiene «' + ultimoTelCrudo + '»' : 'campo teléfono vacío'})`); continue; }
           if (bloqueados.has(ultimos9(phone))) { resumen.saltados.push(`${etiqueta} (bloqueado)`); continue; }
           if (tocados.has(ultimos9(phone))) { resumen.saltados.push(`${etiqueta} (ya se le escribió en esta corrida)`); continue; }
@@ -691,6 +696,7 @@ async function correrModulo(key, reason, programado) {
             enviadosCorrida++;
             resumen.enviados.push(`${etiqueta} · ${phone}${r.imagen ? ' · 🖼️' : ''} · «${d.enviar.replace(/\n+/g, ' ')}»`);
             if (r.aviso) resumen.alertas.push(`${etiqueta}: ${r.aviso}`);
+            if (d.aviso) resumen.alertas.push(`${etiqueta}: ${d.aviso}`);
           } else if (r && r.noEnviado) {
             await desmarcarSent(clave);
             resumen.alertas.push(`${etiqueta}: no se envió (${r.error})`);
@@ -752,6 +758,109 @@ async function planDomingoNoShows(cfg, now) {
   return { lista, fpsPorPersona, decidir: (fp, msgs, ctx) => decidirNoShow(fp, msgs, now, ctx, 'domingo') };
 }
 
+
+// ── nutrición ──
+// Citas con Diego: actividades tipo "deadline" (plazo) cuyo asunto dice nutri/evaluación o que son del usuario de Diego.
+const DIEGO_USER_ID = 17073823;
+const PAUSAS_SHEET = '1j6Js9ToQUJ96yCUmMKh5jmEAebfNSzlpYs5ItSEDuUI';
+const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+async function citasNutricion(token, desde, hasta) {
+  const out = [];
+  let start = 0;
+  for (;;) {
+    const res = await pd('activities', token, {
+      type: 'deadline', done: 0, user_id: 0, limit: 500, start,
+      start_date: sumarDias(desde, -1), end_date: sumarDias(hasta, 2),
+    });
+    for (const a of res.data || []) {
+      const subj = String(a.subject || '').trim();
+      const uid = a.user_id && typeof a.user_id === 'object' ? a.user_id.id : a.user_id;
+      if (!/nutri|evaluaci/i.test(subj) && uid !== DIEGO_USER_ID) continue;
+      if (!a.due_date || !a.due_time || !a.person_id) continue;
+      const classMs = Date.parse(`${a.due_date}T${a.due_time.slice(0, 5)}:00Z`);
+      const lima = utcToLima(classMs);
+      if (lima.date < desde || lima.date > hasta) continue;
+      out.push({ id: a.id, subject: subj, personId: a.person_id, personName: a.person_name, classMs, date: lima.date, hour: lima.hour, min: lima.min });
+    }
+    const pg = res.additional_data && res.additional_data.pagination;
+    if (!pg || !pg.more_items_in_collection) break;
+    start = pg.next_start;
+  }
+  return out.sort((x, y) => x.classMs - y.classMs);
+}
+
+// CSV simple (con comillas) → filas
+function parseCsv(t) {
+  const filas = []; let fila = [], campo = '', q = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (q) { if (c === '"') { if (t[i + 1] === '"') { campo += '"'; i++; } else q = false; } else campo += c; }
+    else if (c === '"') q = true;
+    else if (c === ',') { fila.push(campo); campo = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && t[i + 1] === '\n') i++; fila.push(campo); filas.push(fila); fila = []; campo = ''; }
+    else campo += c;
+  }
+  if (campo || fila.length) { fila.push(campo); filas.push(fila); }
+  return filas;
+}
+// Pestaña PAUSAS (B nombre, C celular, D motivo, E fecha de retorno DD/MM/AAAA, F estado). Se lee con la sesión de
+// Google de este Chrome; si no se puede, devuelve null y el módulo avisa en el reporte.
+async function pausasActivas() {
+  try {
+    const r = await fetch(`https://docs.google.com/spreadsheets/d/${PAUSAS_SHEET}/gviz/tq?tqx=out:csv&sheet=PAUSAS`, { credentials: 'include' });
+    if (!r.ok) return null;
+    const txt = await r.text();
+    if (/<html/i.test(txt.slice(0, 200))) return null;   // pidió iniciar sesión
+    const mapa = new Map();
+    for (const f of parseCsv(txt).slice(1)) {
+      if (String(f[5] || '').trim().toLowerCase() !== 'activa') continue;
+      const tel = ultimos9(f[2]);
+      const m = String(f[4] || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if (tel.length !== 9 || !m) continue;
+      const vuelve = `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+      if (!mapa.has(tel) || vuelve > mapa.get(tel)) mapa.set(tel, vuelve);
+    }
+    return mapa;
+  } catch { return null; }
+}
+// primer martes y primer miércoles después de la fecha de retorno
+function opcionesNutricion(vuelve) {
+  const out = [];
+  for (let d = sumarDias(vuelve, 1); out.length < 2; d = sumarDias(d, 1)) {
+    const w = diaSemana(d);
+    if (w === 2 || w === 3) out.push(`${DIAS[w]} ${Number(d.slice(8))} ${MESES_CORTOS[Number(d.slice(5, 7)) - 1]}`);
+  }
+  return out;
+}
+function msgNutriRecordatorio(fp) {
+  const n = firstName(fp.personName);
+  return `Hola${n ? ' ' + n : ''}! 🥗 Te recordamos tu evaluación nutricional con Diego mañana ${DIAS[diaSemana(fp.date)]} ${aLas(fp.hour, fp.min)} en Rurush (${DIR}). ¡Te esperamos!`;
+}
+function msgNutriPausa(fp, vuelve) {
+  const n = firstName(fp.personName);
+  const [a, b] = opcionesNutricion(vuelve);
+  return `Hola${n ? ' ' + n : ''}! 🥗 Vi que tienes una pausa activa — sin problema, reagendaremos tu evaluación con Diego para cuando regreses 💪 Te propongo:\n`
+    + `• ${a} — ¿mañana (8-11am) o tarde (5-8pm)?\n• ${b} — ¿mañana (8-11am) o tarde (5-8pm)?\n¿Cuál te queda mejor? 😊`;
+}
+async function planNutricion(cfg, now) {
+  const manana = sumarDias(now.date, 1);
+  const citas = await citasNutricion(cfg.pipedriveToken, manana, manana);
+  const pausas = citas.length ? await pausasActivas() : new Map();
+  const lista = [...new Map(citas.map((c) => [c.personId, c])).values()];   // una cita por persona (la más temprana)
+  return {
+    lista,
+    alerta: lista.length && !pausas ? 'Nutrición: no pude leer la pestaña PAUSAS (inicia sesión en Google en este Chrome con una cuenta que vea la hoja). Se envía el recordatorio normal a todos.' : null,
+    decidir: (fp, msgs) => {
+      const vuelve = pausas && fp.phone ? pausas.get(ultimos9(fp.phone)) : null;
+      if (vuelve && vuelve > fp.date) return { enviar: msgNutriPausa(fp, vuelve), imagen: false, aviso: `en pausa hasta ${vuelve}: Mónica debe mover la cita en Pipedrive` };
+      if (entrantesDesde(msgs, now.ms - 48 * 3600e3).some((m) => RX_CANCELA.test(m.text))) return { alerta: 'el chat dice que no puede / reagenda — revisar la cita con Mónica' };
+      const otra = otraHoraDesde(fp, msgs, now.ms - 48 * 3600e3);
+      if (otra) return { alerta: `el chat menciona otra hora → «${otra}» — revisar a mano` };
+      return { enviar: msgNutriRecordatorio(fp), imagen: false };
+    },
+  };
+}
 
 // ───────────────────────── reporte del día ─────────────────────────
 const diaLima = (iso) => new Date(Date.parse(iso) + LIMA_OFFSET_H * 3600e3).toISOString().slice(0, 10);
@@ -851,5 +960,6 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
 if (typeof module !== 'undefined') {
   module.exports = { analizar, mensaje, horasMencionadas, normPhone, fmtHora, utcToLima, limpiarSent, ultimos9,
     opciones, sumarDias, diaSemana, decidirNoShow, aLas, decidirManana, decidirRefuerzo, msgReagendo, msgManana,
-    msgRefuerzo, msgSabado, msgDomingoLunes, msgDomingoNoShow, MODULOS };
+    msgRefuerzo, msgSabado, msgDomingoLunes, msgDomingoNoShow, MODULOS,
+    parseCsv, opcionesNutricion, msgNutriRecordatorio, msgNutriPausa };
 }
