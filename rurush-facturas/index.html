@@ -257,7 +257,8 @@ async function raiz() {
   let item, compartida = false;
   if (/^https?:\/\//i.test(conf)) {
     compartida = true;
-    item = await gj('GET', `/shares/${shareId(conf)}/driveItem`);
+    // Prefer: redeemSharingLink = la cuenta acepta el vínculo de "personas específicas" (sin esto OneDrive da 403).
+    item = await gj('GET', `/shares/${shareId(conf)}/driveItem`, null, { Prefer: 'redeemSharingLink' });
     if (!item.folder) throw new Error('El link de la carpeta no es de una carpeta.');
     if (!item.parentReference || !item.parentReference.driveId) throw new Error('No pude abrir la carpeta compartida: comparte una subcarpeta, no todo el OneDrive.');
   } else {
@@ -571,7 +572,7 @@ async function baseFotos() {
   if (BASE_FOTOS && BASE_FOTOS.conf === conf) return BASE_FOTOS;
   let d;
   if (/^https?:\/\//i.test(conf)) {
-    const it = await gj('GET', `/shares/${shareId(conf)}/driveItem`);
+    const it = await gj('GET', `/shares/${shareId(conf)}/driveItem`, null, { Prefer: 'redeemSharingLink' });
     d = destinoDe(it);
   } else {
     const partes = conf.split('/').map((x) => x.trim()).filter(Boolean);
