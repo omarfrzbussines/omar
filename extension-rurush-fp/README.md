@@ -55,7 +55,7 @@ aprendido. Desde ahí, cada lead de ese video se llena solo:
 - Si la persona todavía no está en Pipedrive, reintenta cada 30 min durante 3 días.
 - En 🧪 Simulación solo anota qué video pondría; en 📤 Etiquetar escribe en Pipedrive (es lo único que la extensión escribe ahí).
 - Opciones → Videos aprendidos: si uno quedó mal, se borra y se vuelve a preguntar.
-- `videos-precargados.json` trae videos ya cargados (miniatura recortada de capturas de WhatsApp Web), así las asesoras no eligen nada: S M EDITA.
+- `videos-precargados.json` trae videos ya cargados (miniatura recortada de capturas de WhatsApp Web), así las asesoras no eligen nada: S M EDITA, FOTO CANSADA DE ENTRENAR SOLA.
 - Si el chat es un contacto guardado y no se ve el número, avisa para llenarlo a mano.
 
 La imagen "cómo llegar" (Opciones) va en el recordatorio 2h, el refuerzo de la noche anterior y el del domingo.
