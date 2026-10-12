@@ -42,6 +42,12 @@ Listo: queda como un ícono más.
 - **Hoy:** socios activos, % que vino (hoy, ayer, 7 y 30 días), en riesgo, inscritos y venta del día.
 - **Free Pass:** FP de hoy (✅ si asistió), no-shows de ayer y FP de mañana.
 - **Retención:** fríos que vencen en 7 días, en riesgo (vigentes con +10 días sin venir) y los que vencen esta semana.
+- **💰 Cobros:** lo cobrado vs. lo proyectado del mes (selector de mes), falta cobrar, lo atrasado
+  de todos los meses, el resumen por asesora y las listas de atrasados / por cobrar / cobrados. Lee la
+  pestaña "2. COLA RENOVAR" de VENTAS RETENCIÓN 2026 V2 (los mismos cobros que las asesoras marcan en
+  RURUSH Llamadas) y da los mismos números que el cuadro DASHBOARD POR ASESOR. Solo lectura.
+  Instalar: **＋ → Secuencia de comandos** → **Cobros** → pega **Cobros.gs**, pega el **Index.html**
+  nuevo y publica una **nueva versión**.
 - Arriba filtras por asesora. 💬 abre el WhatsApp de esa persona.
 - Los datos se guardan 5 minutos; 🔄 trae lo último al momento.
 

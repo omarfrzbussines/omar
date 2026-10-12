@@ -27,3 +27,9 @@ RENOVADOS 7 (26.9 %). Coincide con la suma fila por fila hecha aparte.
 
 Ojo: las fechas escritas como texto en S no cuentan (ej. fila 267 `f30/10/26`, S/750 de MONICA;
 y varias `dd/mm/aaaa` de junio-agosto). Corregirlas a fecha para que entren.
+
+## Limpieza de fechas en S (12-oct-2026)
+Texto convertido a fecha: S32 14/08/2026 · S114 20/06/2026 · S133-S134 04/06/2026 · S142 2026-05-28 ·
+S152 30/06/2026 · S267 `f30/10/26` → 2026-10-30. Año mal tipeado: S26 0206-08-30 → 2026-08-30.
+Pendiente: S15 dice `j` (Sebastián Muñoz, cód. 797, S/200, RENOVADO SÍ) — falta la fecha real.
+Cuadro oct-2026 TODOS después de limpiar: 18,438 / 5,066 / 13,372 · 27 clientes · 7 renovados.
