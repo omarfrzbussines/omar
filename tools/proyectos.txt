@@ -2,18 +2,18 @@
 # Formato:  carpeta | ID del script | cuenta | ID de implementación (opcional) | renombrar (opcional)
 #  - cuenta: nombre corto de la cuenta de Google (se conecta una vez con CONECTAR_CUENTA.bat):
 #        omar   = omarfrz@gmail.com
-#        rurush = cuenta RURUSH FITNESS CLUB
+#        rurush = rurushfitclub@gmail.com (RURUSH FITNESS CLUB)
 #  - ID de implementación: la app web queda actualizada en el MISMO link (nueva versión).
 #  - renombrar: archivo del repo = nombre en Google, separados por ;  (ej. Code.gs=Código.gs)
 # Una línea sin ID del script se salta.
 
 # ── cuenta omarfrz@gmail.com ──
-rurush-app-celular  | 1CvThcipLfFKhCZv-glv6O3YTnkPUhrETIt6fjrQtiVRYlN2GeDxiFGqU | omar | AKfycbxQ43YCw8-Jrgqncz1QiW0lIA4mmNW5_-QGYhKGS68aomEJUaZ5P2t01WqESRlCXfbZ |
+rurush-app-celular  | 1CvThcipLfFKhCZv-glv6O3YTnkPUhrETIt6fjrQtiVRYlN2GeDxiFGqU | omar | AKfycbxQ43YCw8-Jrgqncz1QiW0lIA4mmNW5_-QGYhKGS68aomEJUaZ5P2t01WqESRlCXfbZ | Code.gs=Code.gs.gs
 apps-script         | 1bzKzi9etDIiuGxsI-uCpftWYT-VQmrlnAoTKduXNOItZ22IHlJrC8fBt | omar | AKfycby3nPU8Umpu8dZFtHy4XKmfbRPsZygCYkcWeyQsRX3WBrYcGSK5qG4_5e-M_QCJvsNG4Q |
 agenda-app          | 1cJvTtF0MYnxKqDHU3qvwxLpxw2GpVi4wWhCig1vviFX73LDEPAUKC2kY | omar | AKfycbw9GyRUQTcgXmx8ansbtVGGFEoivHzPkr87CyBx0VvQV4mssZsLIrgAx61LvZbaZWoE |
 rurush-historias-ig | 1rxsGt4u6ujEzZzmzYwrH2BjOyeI6nHcDm5MKwf7Y_6THar5fuFsTbwkL | omar |  | Code.gs=Código.gs
 
-# ── cuenta RURUSH FITNESS CLUB (faltan los ID) ──
-rurush-sheet-scripts   |  | rurush |  |
-rurush-nutricion       |  | rurush |  |
-rurush-app-entrevistas |  | rurush |  |
+# ── cuenta rurushfitclub@gmail.com (RURUSH FITNESS CLUB) ──
+rurush-sheet-scripts   | 15SzIHXeJBqGJta1DpWjDlUjanSQTSc8W5P8YaEEKslwM_duaGlzXfYki | rurush | AKfycbzsvzWanclhKavutDs3l1N-7MEbdY4hojdnS3Pm8WkMffgSPihvwQxPuppMgCNwKG95 | AGENDAMIENTO_AUTOMATICO.gs=AGENDAMIENTO AUTOMÁTICO.gs
+rurush-nutricion       | 14B_C9jrN_tcme_i88_eVvq2Lug_Z_KmUG9ixjW9EacUwpA9UbJu4Uo2g | rurush | AKfycbzobT-hVbcpJ4-MzOpmFD_ia10vmn4WDu7c2RdNm1jnD6GAof5FwXlJtJcuzH2SmfW6 |
+rurush-app-entrevistas | 1ntdT6E34C92lYp0iUl1hamWPk_wlzMnfgOEEiDs13Jnr4QHbQcz7pQ_d | rurush | AKfycbxuN417G71tf5WhRe1ozFgv1T7tjNk0Kra9u_jfk0lSKeuhorqTQGLyTcVZ2LDTQH1k1g | Code.gs=Código.gs
