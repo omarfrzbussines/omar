@@ -73,6 +73,27 @@ $('etq').onclick = async () => {
   $('etq').textContent = txt;
   setTimeout(() => { $('etq').textContent = '🏷️ Probar etiqueta en el chat abierto'; $('etq').disabled = false; }, 12000);
 };
+// revisa si el chat abierto vino de un anuncio y, si vino, le pone la etiqueta (aunque esté en simulación)
+$('fbad').onclick = async () => {
+  $('fbad').disabled = true;
+  $('fbad').textContent = 'Revisando…';
+  const r = await chrome.runtime.sendMessage({ type: 'probarFbAd' });
+  let txt = r && r.ok ? `✓ Anuncio de ${r.red} · ${r.ya ? 'ya tenía la etiqueta' : 'etiquetado'} · video: ${r.video}` : `⚠️ ${(r && r.error) || 'error'}`;
+  if (r && r.diag) {
+    try { await navigator.clipboard.writeText(`ETIQUETA FB ADS · ${txt}\n${r.diag}`); txt += ' · 📋 diagnóstico copiado: pégaselo a Claude'; } catch (e) { /* sin portapapeles */ }
+  }
+  $('fbad').textContent = txt;
+  setTimeout(() => { $('fbad').textContent = '📣 ¿Vino de anuncio? (chat abierto)'; $('fbad').disabled = false; }, 12000);
+};
+// corre ya el módulo "Chats de anuncios" (leads nuevos de Pipedrive → su chat)
+$('fbrun').onclick = async () => {
+  $('fbrun').disabled = true;
+  $('fbrun').textContent = 'Revisando leads…';
+  await chrome.runtime.sendMessage({ type: 'correrAnuncios' });
+  $('fbrun').textContent = '📣 Revisar leads nuevos ahora';
+  $('fbrun').disabled = false;
+  pintar();
+};
 chrome.runtime.sendMessage({ type: 'modulos' }, (m) => {
   MODS = m || {};
   for (const [k, nombre] of Object.entries(MODS)) {

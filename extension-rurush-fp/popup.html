@@ -5,7 +5,7 @@
 <style>
   body { font: 13px system-ui, sans-serif; width: 420px; margin: 0; padding: 12px; color: #1c1c1c; }
   h1 { font-size: 15px; margin: 0 0 8px; }
-  .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
   button { padding: 6px 10px; border: 0; border-radius: 6px; background: #e65100; color: #fff; cursor: pointer; }
   button.sec { background: #eee; color: #1c1c1c; }
   .badge { padding: 2px 8px; border-radius: 10px; font-size: 12px; }
@@ -32,6 +32,8 @@
     <button id="opts" class="sec">Opciones</button>
     <button id="rep" class="sec">📋 Copiar reporte de hoy</button>
     <button id="etq" class="sec">🏷️ Probar etiqueta en el chat abierto</button>
+    <button id="fbad" class="sec">📣 ¿Vino de anuncio? (chat abierto)</button>
+    <button id="fbrun" class="sec">📣 Revisar leads nuevos ahora</button>
   </div>
   <ul id="logs"></ul>
   <script src="popup.js"></script>
