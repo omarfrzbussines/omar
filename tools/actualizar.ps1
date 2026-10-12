@@ -29,7 +29,7 @@ $estado = @{}
 if (Test-Path $estadoF) { (Get-Content $estadoF -Raw | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $estado[$_.Name] = $_.Value } }
 $tmp = Join-Path $env:TEMP "rurush-clasp"
 Linea "`n☁️  Apps Script:" Cyan
-foreach ($l in Get-Content (Join-Path $tools "proyectos.txt")) {
+foreach ($l in Get-Content (Join-Path $tools "proyectos.txt") -Encoding UTF8) {
   if ($l.Trim() -eq "" -or $l.Trim().StartsWith("#")) { continue }
   $p = $l.Split("|") | ForEach-Object { $_.Trim() }
   $carpeta, $id, $cuenta = $p[0], $p[1], $p[2]
