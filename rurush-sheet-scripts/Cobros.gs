@@ -14,8 +14,9 @@ const COB_SOCIOS = "3. BASE DE SOCIOS";
 const COB_FILA_HEADER = 7;          // títulos de COLA RENOVAR; los datos empiezan en la 8
 const COB_SOCIOS_INI = 6;           // primera fila de datos de BASE DE SOCIOS
 const COB_SOCIOS_FIN = 501;         // hasta donde buscan las fórmulas de COLA RENOVAR
-// Columnas leídas de COLA RENOVAR, desde B (índice 0) hasta U (índice 19).
-const COB = { cod: 0, nombre: 1, cel: 2, plan: 3, asesor: 9, monto: 12, renovado: 13, montoPact: 15, fecha: 17, notas: 18, contacto: 19 };
+// Columnas leídas de COLA RENOVAR, desde B (índice 0) hasta V (índice 20).
+const COB = { cod: 0, nombre: 1, cel: 2, plan: 3, asesor: 9, monto: 12, renovado: 13, montoPact: 15, fecha: 17, notas: 18, contacto: 19, diasSA: 20 };
+const COB_ANCHO = 21;
 // false: K queda con su fórmula (asesor del socio en BASE DE SOCIOS).
 // true:  K se llena con la asesora que registra el cobro.
 const COB_ASESOR_ES_QUIEN_REGISTRA = false;
@@ -47,22 +48,28 @@ function cob_monto(v) {
   const n = Number(String(v || "").replace(/^[^\d]+/, "").replace(/[^\d.]/g, ""));   // "S/.1,145" → 1145
   return isFinite(n) ? n : 0;
 }
+// Días sin asistir (columna V / DÍAS S/A de BASE DE SOCIOS): número o null si no hay dato.
+function cob_diasSA(v) {
+  if (v === "" || v == null) return null;
+  const n = Number(v);
+  return isFinite(n) && n >= 0 ? Math.round(n) : null;
+}
 function cob_hoy() { return Utilities.formatDate(new Date(), "America/Lima", "yyyy-MM-dd"); }
 function cob_dias(iso) { return Math.round((Date.parse(iso) - Date.parse(cob_hoy())) / 86400000); }
 
-/* Filas B..U de COLA RENOVAR desde la 8. Con el servicio Sheets (el mismo de la lectura rápida
+/* Filas B..V de COLA RENOVAR desde la 8. Con el servicio Sheets (el mismo de la lectura rápida
    de la cola) no espera a que el Sheet recalcule; sin él, lee con SpreadsheetApp. */
 function cob_leerCola() {
   if (app_conApi()) {
-    const r = Sheets.Spreadsheets.Values.get(COB_ID, "'" + COB_HOJA + "'!B" + COB_FILA_HEADER + ":U",
+    const r = Sheets.Spreadsheets.Values.get(COB_ID, "'" + COB_HOJA + "'!B" + COB_FILA_HEADER + ":V",
       { valueRenderOption: "UNFORMATTED_VALUE", dateTimeRenderOption: "SERIAL_NUMBER" });
     const v = r.values || [];
     cob_verificarTitulos(v[0] || []);
-    return v.slice(1).map(function (f) { while (f.length < 20) f.push(""); return f; });
+    return v.slice(1).map(function (f) { while (f.length < COB_ANCHO) f.push(""); return f; });
   }
   const hoja = cob_libro().getSheetByName(COB_HOJA);
   const n = hoja.getLastRow() - COB_FILA_HEADER + 1;
-  const v = hoja.getRange(COB_FILA_HEADER, 2, n, 20).getValues();
+  const v = hoja.getRange(COB_FILA_HEADER, 2, n, COB_ANCHO).getValues();
   cob_verificarTitulos(v[0]);
   return v.slice(1);
 }
@@ -86,7 +93,7 @@ function cob_pendientesDe(filas, asesora, codigo) {
       fila: COB_FILA_HEADER + 1 + i, codigo: cod, nombre: String(f[COB.nombre] || "").trim(),
       celular: ll_limpiarTel(f[COB.cel]), plan: String(f[COB.plan] || "").trim(),
       asesor: String(f[COB.asesor] || "").trim(), monto: monto, fecha: fecha, dias: cob_dias(fecha),
-      notas: String(f[COB.notas] || "").trim()
+      notas: String(f[COB.notas] || "").trim(), diasSA: cob_diasSA(f[COB.diasSA])
     });
   });
   out.sort(function (a, b) { return a.fecha.localeCompare(b.fecha) || a.fila - b.fila; });
@@ -101,17 +108,18 @@ function cob_lista(llave) {
   return { asesora: asesora, lista: lista, hoy: cob_hoy(), ms: Date.now() - t0 };
 }
 
-/* Socio por código en BASE DE SOCIOS (B..M): lo mismo que traen las fórmulas de COLA RENOVAR. */
+/* Socio por código en BASE DE SOCIOS (B..S): lo mismo que traen las fórmulas de COLA RENOVAR. */
 function cob_socio(codigo) {
   const hoja = cob_libro().getSheetByName(COB_SOCIOS);
-  const v = hoja.getRange(COB_SOCIOS_INI, 2, COB_SOCIOS_FIN - COB_SOCIOS_INI + 1, 12).getValues();
+  const v = hoja.getRange(COB_SOCIOS_INI, 2, COB_SOCIOS_FIN - COB_SOCIOS_INI + 1, 18).getValues();
   const c = cob_norm(codigo);
   for (let i = 0; i < v.length; i++) {
     if (cob_norm(v[i][0]) !== c) continue;
     return {
       codigo: String(v[i][0]).trim(), nombre: String(v[i][1] || "").trim(), celular: ll_limpiarTel(v[i][2]),
       plan: String(v[i][5] || "").trim(), vence: cob_iso(v[i][7]), estado: String(v[i][9] || "").trim(),
-      asesor: String(v[i][10] || "").trim()   // ASESOR ORIG. = lo que muestra la columna K
+      asesor: String(v[i][10] || "").trim(),  // ASESOR ORIG. = lo que muestra la columna K
+      diasSA: cob_diasSA(v[i][17])            // DÍAS S/A
     };
   }
   return null;

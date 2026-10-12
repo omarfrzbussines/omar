@@ -64,7 +64,8 @@ La app tiene dos pestañas arriba: **📞 Llamadas** y **💰 Cobros**. Cobros l
   el celular recuerda el último mes elegido). Sale de la lista cuando RENOVADO? (O) = SÍ.
 - **Agregar:** pone el **código** del socio (columna B) → la app muestra nombre, celular, plan, vence y
   asesor → pone **monto** y **fecha** → se escribe en la primera fila libre (B, N, S y una nota en T
-  "📱 app ASESORA fecha"). Las fórmulas de la fila traen el resto, como cuando se escribe a mano.
+  "📱 app ASESORA fecha"). También muestra los **días sin asistir** del socio (columna V / DÍAS S/A):
+  gris hasta 7, amarillo 8-14, rojo 15 o más. Las fórmulas de la fila traen el resto, como cuando se escribe a mano.
 
 Instalar:
 1. **＋ → Secuencia de comandos** → nombre **Cobros** → pega **Cobros.gs** → Ctrl+S.
