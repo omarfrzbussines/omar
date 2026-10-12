@@ -272,6 +272,10 @@ function pendientes_(tab, asesora, diasAntiDup) {
 
   var dias = diasHoy_();
   var idx = indiceGlobal_();
+  // Socios en pausa (PAUSAS del Sheet de socios): se revisa también al enviar, por si la asesora
+  // lo anotó después de que se armó la lista de la mañana.
+  var pausas = esInasistencias_(tab) && typeof pausas_ === 'function'
+    ? pausas_(Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd')) : {};
   var items = [], excluidos = [];
   var vistos = {};
 
@@ -291,6 +295,8 @@ function pendientes_(tab, asesora, diasAntiDup) {
     if (vistos[tel]) return excluir('Celular repetido en esta pestaña (fila ' + vistos[tel] + ')');
     vistos[tel] = f.fila;
 
+    var cod = h.cod >= 0 ? String(v[h.cod]).trim() : '';
+    if (pausas[tel] || (cod && pausas['COD:' + cod])) return excluir('En PAUSAS (viaje, lesión o descanso)');
     var g = idx[tel];
     if (g && (g.bloqueado || (g.socioActivo && !esInasistencias_(tab)))) return excluir('NO CONTACTAR en alguna pestaña');
     if (g && g.ultimo && (Date.now() - g.ultimo) / 86400000 < diasAntiDup) {

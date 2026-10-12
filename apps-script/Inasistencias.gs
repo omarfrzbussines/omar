@@ -111,7 +111,7 @@ function generarInasistencias(manual) {
   Object.keys(socios).forEach(function (tel) {
     var s = socios[tel];
     if (!s.activo || s.dias === null || s.dias < 4) return;
-    if (pausas[tel] || (idx[tel] && idx[tel].bloqueado)) return;
+    if (pausas[tel] || pausas['COD:' + String(s.cod || '').trim()] || (idx[tel] && idx[tel].bloqueado)) return;
     if (!s.asesora) { sinAsesora++; return; }
     var h = hist[tel], grupo;
     var desde = h ? diasEntreIso_(h.fecha, hoyIso) : 999;
@@ -267,23 +267,64 @@ function hojaInasistencias_() {
 }
 
 /** Celulares en pausa: hoja ⏸️ PAUSAS (CELULAR · NOMBRE · VUELVE EL · MOTIVO). Sin fecha = pausa indefinida. */
+/**
+ * Socios en pausa (viaje, lesión, descanso…). Se leen DOS lugares:
+ *  1. La pestaña «PAUSAS» del Sheet de socios (el que usan las asesoras): COD · NOMBRE · TELEFONO ·
+ *     MOTIVO · FECHA_RETORNO · ESTADO · ASESOR. Se reconoce por código de socio o por teléfono.
+ *  2. La pestaña ⏸️ PAUSAS de este Sheet (respaldo).
+ * Mientras no llegue la fecha de retorno, el socio no recibe mensajes. Sin fecha = pausa abierta.
+ * Devuelve { '51987…': true, 'COD:765': true }.
+ */
+var PAUSAS_SOCIOS_HOJA = 'PAUSAS';
+
 function pausas_(hoyIso) {
+  var out = {};
+  var marcar = function (cod, tel, fecha, estado) {
+    var vuelve = fechaFlexible_(fecha);
+    var activa = vuelve ? isoLima_(vuelve) >= hoyIso : !/VENCID/i.test(String(estado || ''));
+    if (!activa) return;
+    var t = normPhone_(tel);
+    if (t) out[t] = true;
+    var c = String(cod || '').trim();
+    if (c) out['COD:' + c] = true;
+  };
+
+  // 1. Sheet de socios (el de las asesoras)
+  try {
+    var ext = SpreadsheetApp.openById(SOCIOS_ID).getSheetByName(PAUSAS_SOCIOS_HOJA);
+    if (ext && ext.getLastRow() > 1) {
+      var v = ext.getRange(1, 1, ext.getLastRow(), Math.min(ext.getLastColumn(), 10)).getValues();
+      var cab = v[0].map(function (x) { return sinTildes_(x); });
+      var col = function (rx, def) { for (var i = 0; i < cab.length; i++) if (rx.test(cab[i])) return i; return def; };
+      var cCod = col(/^COD/, 0), cTel = col(/^TELEF|^CELULAR/, 2), cFec = col(/RETORNO|VUELVE/, 4), cEst = col(/^ESTADO/, 5);
+      v.slice(1).forEach(function (r) {
+        if (!String(r[cCod]).trim() && !String(r[cTel]).trim()) return;
+        marcar(r[cCod], r[cTel], r[cFec], r[cEst]);
+      });
+    }
+  } catch (e) {
+    Logger.log('No pude leer PAUSAS del Sheet de socios: ' + e.message);
+  }
+
+  // 2. ⏸️ PAUSAS de este Sheet
   var ss = SpreadsheetApp.getActive();
   var sh = ss.getSheetByName(PAUSAS_HOJA);
-  if (!sh) {
-    sh = ss.insertSheet(PAUSAS_HOJA);
-    sh.getRange(1, 1, 1, 4).setValues([['CELULAR', 'NOMBRE', 'VUELVE EL (dd/mm/aaaa)', 'MOTIVO']]).setFontWeight('bold');
-    sh.setFrozenRows(1);
-    return {};
+  if (sh && sh.getLastRow() > 1) {
+    sh.getRange(2, 1, sh.getLastRow() - 1, 3).getValues().forEach(function (r) {
+      if (normPhone_(r[0])) marcar('', r[0], r[2], '');
+    });
   }
-  var out = {}, n = sh.getLastRow() - 1;
-  if (n < 1) return out;
-  sh.getRange(2, 1, n, 3).getValues().forEach(function (r) {
-    var tel = normPhone_(r[0]);
-    var vuelve = parseFecha_(r[2]);
-    if (tel && (!vuelve || isoLima_(vuelve) >= hoyIso)) out[tel] = true;
-  });
   return out;
+}
+
+/** dd/mm/aaaa, d/m/aaaa, dd/mm/aa o fecha de la hoja → Date (mediodía); si no se entiende, null. */
+function fechaFlexible_(v) {
+  if (v instanceof Date && !isNaN(v)) return new Date(v.getFullYear(), v.getMonth(), v.getDate(), 12);
+  var m = String(v || '').trim().match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2}|\d{4})$/);
+  if (!m) return null;
+  var y = Number(m[3]); if (y < 100) y += 2000;
+  var d = new Date(y, Number(m[2]) - 1, Number(m[1]), 12);
+  return isNaN(d) ? null : d;
 }
 
 // ───────────────────────── utilidades ─────────────────────────
