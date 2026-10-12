@@ -67,6 +67,12 @@ La app tiene dos pestañas arriba: **📞 Llamadas** y **💰 Cobros**. Cobros l
   "📱 app ASESORA fecha"). También muestra los **días sin asistir** del socio (columna V / DÍAS S/A):
   gris hasta 7, amarillo 8-14, rojo 15 o más. Las fórmulas de la fila traen el resto, como cuando se escribe a mano.
 
+- **✓ Cobrado:** confirma monto y fecha en que pagó (hoy por defecto) → escribe O = SÍ, N = monto,
+  S = fecha de pago y agrega "✓ cobrado app ASESORA fecha" en T. Así entra en YA COBRADO del cuadro.
+  Antes de escribir verifica que la fila siga siendo ese código y que el cobro sea de esa asesora.
+
+El cuadro DASHBOARD POR ASESOR de esa pestaña se corrigió el 12-oct (ver DASHBOARD_COLA_RENOVAR.md).
+
 Instalar:
 1. **＋ → Secuencia de comandos** → nombre **Cobros** → pega **Cobros.gs** → Ctrl+S.
 2. Pega la versión nueva de **Llamadas.html** → Ctrl+S.

@@ -52,11 +52,14 @@
   .totales { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
   .tot { background:var(--card); border-radius:14px; padding:12px; } .tot b { display:block; font-size:22px; margin-top:2px; } .tot span { color:var(--mut); font-size:12px; }
   .tot.atr b { color:var(--red); }
-  .cobro { background:var(--card); border-radius:14px; padding:12px 14px; margin-bottom:8px; display:flex; gap:10px; align-items:center; }
+  .cobro { background:var(--card); border-radius:14px; padding:12px 14px; margin-bottom:8px; }
+  .cobro .arriba { display:flex; gap:10px; align-items:flex-start; }
+  .cobro .btns { display:grid; grid-template-columns:1.15fr 1fr 1.15fr; gap:6px; margin-top:10px; }
+  .cobro .btns a, .cobro .btns button { display:flex; white-space:nowrap; align-items:center; justify-content:center; gap:4px; border-radius:10px; padding:9px 4px; font-size:14px; font-weight:600; text-decoration:none; border:0; background:var(--line); color:var(--tx); }
   .cobro .d { flex:1; min-width:0; } .cobro .n { font-weight:700; word-break:break-word; } .cobro .s { color:var(--mut); font-size:13px; margin-top:2px; }
   .cobro .mt { font-weight:700; font-size:17px; text-align:right; white-space:nowrap; }
   .cobro .f { font-size:12px; color:var(--mut); text-align:right; margin-top:2px; } .cobro .f.atr { color:var(--red); font-weight:600; } .cobro .f.hoy { color:#ffcc00; font-weight:600; }
-  .cobro a { text-decoration:none; font-size:20px; padding:6px; }
+  .cobro .btns .ok { background:#1f3d2b; color:var(--grn); font-weight:700; }
   .nuevo { width:100%; background:var(--red); color:#fff; border:0; border-radius:14px; padding:14px; font-size:16px; font-weight:700; margin-bottom:6px; }
   .buscar { display:grid; grid-template-columns:1fr auto; gap:8px; } .buscar button { background:var(--ice); color:#04121f; border:0; border-radius:12px; padding:0 16px; font-weight:700; font-size:15px; }
   .sa { display:inline-block; white-space:nowrap; margin-top:4px; font-size:12px; padding:1px 7px; border-radius:7px; background:var(--line); color:var(--mut); }
@@ -274,10 +277,11 @@ function traerCobros() {
 function filaCobro(c) {
   const f = c.dias < 0 ? `<div class="f atr">atrasado ${-c.dias} d · ${fechaCorta(c.fecha)}</div>`
     : c.dias === 0 ? '<div class="f hoy">HOY</div>' : `<div class="f">${fechaCorta(c.fecha)} · en ${c.dias} d</div>`;
-  const tel = c.celular ? `<a href="https://wa.me/51${c.celular}" target="_blank">💬</a><a href="tel:+51${c.celular}">📞</a>` : '';
-  return `<div class="cobro"><div class="d"><div class="n">${esc(c.nombre || 'Cód. ' + c.codigo)}</div>
+  const tel = c.celular ? `<a href="https://wa.me/51${c.celular}" target="_blank">💬 WhatsApp</a><a href="tel:+51${c.celular}">📞 Llamar</a>` : '<span></span><span></span>';
+  const ok = `<button class="ok" data-f="${c.fila}">✓ Cobrado</button>`;
+  return `<div class="cobro"><div class="arriba"><div class="d"><div class="n">${esc(c.nombre || 'Cód. ' + c.codigo)}</div>
     <div class="s">Cód. ${esc(c.codigo)}${c.plan ? ' · ' + esc(c.plan) : ''}${c.notas ? ' · ' + esc(c.notas) : ''}</div>${diasSA(c.diasSA)}</div>
-    <div><div class="mt">${soles(c.monto)}</div>${f}</div>${tel}</div>`;
+    <div><div class="mt">${soles(c.monto)}</div>${f}</div></div><div class="btns">${tel}${ok}</div></div>`;
 }
 function pintarCobros() {
   const hoyMes = cobros.hoy.slice(0, 7);
@@ -292,9 +296,34 @@ function pintarCobros() {
     <div class="totales"><div class="tot"><span>Pendiente ${MES_COBRO ? 'del mes' : 'total'} (${l.length})</span><b>${soles(suma(l))}</b></div>
       <div class="tot atr"><span>Atrasado (${atr.length})</span><b>${soles(suma(atr))}</b></div></div>
     ${l.length ? seccion('⚠️ Atrasados', atr) + seccion('📅 Hoy', hoyL) + seccion('Próximos', prox) : `<div class="vacio">No tienes cobros pendientes${MES_COBRO ? ' en ' + nombreMes(MES_COBRO) : ''} 🎉</div>`}
-    <div class="tip" style="text-align:center;margin-top:14px">Cuando cobres, márcalo RENOVADO = SÍ en el Sheet y sale de esta lista.</div>`;
+    <div class="tip" style="text-align:center;margin-top:14px">Cuando te paguen, toca ✓ Cobrado: queda RENOVADO = SÍ en el Sheet y sale de esta lista.</div>`;
   $('#nuevoCobro').onclick = formCobro;
+  document.querySelectorAll('.cobro .ok').forEach((b) => b.onclick = () => formCobrado(cobros.lista.find((c) => c.fila === Number(b.dataset.f))));
   $('#mesCobro').onchange = () => { MES_COBRO = $('#mesCobro').value; try { localStorage.setItem('rr_mescobro', MES_COBRO); } catch (e) {} pintarCobros(); };
+}
+// ✓ Cobrado: confirma monto y fecha real (hoy por defecto) → RENOVADO = SÍ en el Sheet.
+function formCobrado(c) {
+  if (!c) return;
+  const hoyIso = cobros.hoy;
+  $('#main').innerHTML = `
+    <h2 style="margin-top:4px">Marcar como cobrado</h2>
+    <div class="card"><div class="nombre">${esc(c.nombre || 'Cód. ' + c.codigo)}</div>
+      <div class="num">Cód. ${esc(c.codigo)} · pactado ${soles(c.monto)} para el ${fechaCorta(c.fecha)}</div></div>
+    <div class="fila2" style="margin-top:12px;color:var(--mut);font-size:12px"><span>Monto cobrado</span><span>Fecha en que pagó</span></div>
+    <div class="fila2" style="margin-top:4px"><input id="montoOk" type="number" inputmode="decimal" min="1" value="${c.monto}"><input id="fechaOk" type="date" value="${hoyIso}"></div>
+    <button class="guardar" id="guardarOk" style="background:#2e9d4f">✓ Confirmar cobro</button>
+    <button class="saltar" id="volverOk">← Volver a mis cobros</button>`;
+  $('#volverOk').onclick = pintarCobros;
+  $('#guardarOk').onclick = () => {
+    const monto = Number($('#montoOk').value), f = $('#fechaOk').value;
+    if (!(monto > 0)) return toast('Pon el monto', true);
+    if (!f) return toast('Pon la fecha', true);
+    $('#guardarOk').disabled = true;
+    google.script.run
+      .withSuccessHandler(() => { toast(`✓ ${c.nombre || c.codigo}: cobrado ${soles(monto)}`); cobros.lista = cobros.lista.filter((x) => x.fila !== c.fila); pintarCobros(); traerCobros(); })
+      .withFailureHandler((e) => { $('#guardarOk').disabled = false; toast(e.message || String(e), true); })
+      .cob_marcarCobrado(LLAVE, c.fila, c.codigo, monto, f);
+  };
 }
 function formCobro() {
   $('#main').innerHTML = `

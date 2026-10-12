@@ -167,6 +167,35 @@ function cob_agregar(llave, codigo, monto, fechaIso) {
   } finally { lock.releaseLock(); }
 }
 
+/** Marca un cobro como hecho: O = "SÍ", N = monto cobrado, S = fecha en que se cobró
+ *  (así entra en YA COBRADO del cuadro con esa fecha) y deja constancia en T. */
+function cob_marcarCobrado(llave, fila, codigo, monto, fechaIso) {
+  const asesora = app_asesora(llave);
+  fila = Number(fila); monto = Number(monto);
+  if (!(fila > COB_FILA_HEADER)) throw new Error("Fila no válida.");
+  if (!(monto > 0) || monto > 100000) throw new Error("Monto no válido.");
+  const m = String(fechaIso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) throw new Error("Pon la fecha en que se cobró.");
+
+  const lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    const hoja = cob_libro().getSheetByName(COB_HOJA);
+    cob_verificarTitulos(hoja.getRange(COB_FILA_HEADER, 2, 1, COB_ANCHO).getValues()[0]);
+    const f = hoja.getRange(fila, 2, 1, COB_ANCHO).getValues()[0];
+    // la fila tiene que seguir siendo el mismo cobro (por si alguien ordenó o borró filas)
+    if (cob_norm(f[COB.cod]) !== cob_norm(codigo)) throw new Error("La fila " + fila + " cambió en el Sheet. Toca 🔄 y vuelve a intentar.");
+    if (cob_norm(f[COB.asesor]) !== cob_norm(asesora)) throw new Error("Este cobro es de " + f[COB.asesor] + ".");
+    if (cob_norm(f[COB.renovado]) === "SI") throw new Error("Ya estaba marcado como cobrado.");
+    hoja.getRange(fila, 15).setValue("SÍ");                                         // O
+    hoja.getRange(fila, 14).setValue(monto);                                        // N
+    hoja.getRange(fila, 19).setValue(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12)); // S
+    const nota = String(f[COB.notas] || "").trim();
+    hoja.getRange(fila, 20).setValue((nota ? nota + " · " : "") + "✓ cobrado app " + asesora + " " + Utilities.formatDate(new Date(), "America/Lima", "dd/MM HH:mm")); // T
+    SpreadsheetApp.flush();
+    return { ok: true };
+  } finally { lock.releaseLock(); }
+}
+
 /* Prueba desde el editor: muestra los pendientes de cada asesora (no escribe nada). */
 function cob_probar() {
   const filas = cob_leerCola();
