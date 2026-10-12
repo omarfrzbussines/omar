@@ -223,6 +223,11 @@ function lienzo916_(archivo) {
     sl.getPageElements().forEach((e) => e.remove());
     sl.getBackground().setSolidFill('#000000');
     const im = sl.insertImage(img);
+    // Si el diseño ya es (casi) 9:16 no hace falta lienzo: se manda la imagen original a 1080 de ancho,
+    // más nítida que la miniatura de Slides (máx. 1600 px por el lado largo → 900×1600).
+    if (Math.abs(im.getWidth() / im.getHeight() - 9 / 16) < 0.02) {
+      return UrlFetchApp.fetch('https://lh3.googleusercontent.com/d/' + archivo.getId() + '=w1080-rj').getBlob().getAs('image/jpeg');
+    }
     const r = Math.min(W / im.getWidth(), H / im.getHeight());
     im.setWidth(im.getWidth() * r).setHeight(im.getHeight() * r);
     im.setLeft((W - im.getWidth()) / 2).setTop((H - im.getHeight()) / 2);
