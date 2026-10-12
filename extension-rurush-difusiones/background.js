@@ -111,8 +111,11 @@ async function waTab() {
   return chrome.tabs.create({ url: 'https://web.whatsapp.com/', active: false, pinned: true });
 }
 
-async function ask(tabId, msg) {
-  try { return await chrome.tabs.sendMessage(tabId, msg); } catch { return null; }
+// Si la pestaña está congelada o recargando, Chrome puede no contestar nunca: se corta a los 20 s.
+async function ask(tabId, msg, ms = 20000) {
+  try {
+    return await Promise.race([chrome.tabs.sendMessage(tabId, msg), sleep(ms).then(() => null)]);
+  } catch { return null; }
 }
 
 async function waitFor(tabId, msg, ok, timeoutMs = 60000) {
@@ -240,6 +243,25 @@ async function detener() {
 // ───────────────────────── envío ─────────────────────────
 let procesando = false;
 
+// Si WhatsApp no deja escribir en 3 chats seguidos (p. ej. limitó las conversaciones nuevas),
+// no tiene sentido seguir recorriendo la lista: se pausa la línea hasta el día siguiente.
+const FALLAS_PARA_PAUSAR = 3;
+async function falloDeCarga(run, msg, aviso) {
+  run.res.alertas += 1;
+  run.fallasSeguidas = (run.fallasSeguidas || 0) + 1;
+  await siguiente(run, { level: 'warn', msg: msg + (aviso ? ` WhatsApp dice: «${aviso}»` : '') });
+  if (run.fallasSeguidas >= FALLAS_PARA_PAUSAR) {
+    run.idx -= FALLAS_PARA_PAUSAR; // esos contactos no se tocaron: quedan para la próxima vez
+    if (run.idx < 0) run.idx = 0;
+    await setRun(run);
+    const motivo = `WhatsApp no deja escribir en ${FALLAS_PARA_PAUSAR} chats seguidos`
+      + (aviso ? ` («${aviso.slice(0, 120)}»)` : '') + '. Parece el límite de conversaciones nuevas: pausé esta línea por hoy.';
+    await pausar(motivo);
+    notify('Rurush Difusiones', `⛔ ${run.asesora}: ${motivo}`);
+  }
+  return true;
+}
+
 async function siguiente(run, nota) {
   run.idx += 1;
   await setRun(run);
@@ -257,8 +279,11 @@ async function procesar() {
     await reintentarMarcas();
     // Hasta 25 contactos por despertar: los saltados no esperan pausa larga;
     // tras un envío real se agenda el siguiente con una pausa al azar.
+    // Chrome corta al service worker si un evento dura más de 5 min: se trabaja como mucho 3 min
+    // por despertar y se agenda el resto con una alarma.
     let seguir = false;
-    for (let vuelta = 0; vuelta < 25; vuelta++) {
+    const inicio = Date.now();
+    for (let vuelta = 0; vuelta < 25 && Date.now() - inicio < 180000; vuelta++) {
       seguir = await unPaso();
       if (!seguir) break;
       await sleep(2000 + Math.random() * 2000);
@@ -360,9 +385,8 @@ async function unPaso() {
   //    (en simulación, sin mensaje), para no recargar WhatsApp Web dos veces por contacto.
   const chat = await openChat(tab.id, tel, run.simulacion ? null : it.mensaje);
   if (!chat) {
-    run.res.alertas += 1;
-    await siguiente(run, { level: 'warn', msg: `⚠️ ${etiqueta}: el chat no abrió, lo salto (sin marcar).` });
-    return true;
+    const st = await ask(tab.id, { type: 'chatState' });
+    return falloDeCarga(run, `⚠️ ${etiqueta}: el chat no abrió o no cargó el mensaje, lo salto (sin marcar).`, st && st.aviso);
   }
   if (chat.invalid) {
     run.res.saltados += 1;
@@ -393,9 +417,7 @@ async function unPaso() {
   // Envío real: comprobar que el borrador es exactamente el mensaje
   const draft = estadoChat;
   if (!draft || !String(draft.draft || '').trim()) {
-    run.res.alertas += 1;
-    await siguiente(run, { level: 'warn', msg: `⚠️ ${etiqueta}: no se pudo cargar el mensaje (sin marcar).` });
-    return true;
+    return falloDeCarga(run, `⚠️ ${etiqueta}: no se pudo cargar el mensaje (sin marcar).`, draft && draft.aviso);
   }
   if (normTexto(draft.draft) !== normTexto(it.mensaje)) {
     await ask(tab.id, { type: 'clearDraft' });
@@ -428,6 +450,7 @@ async function unPaso() {
   await contador(run.linea, 1);
   await chrome.storage.local.set({ ultimoEnvio: Date.now() });
   run.res.enviados += 1;
+  run.fallasSeguidas = 0;
   await marcar({ tab: run.tab, fila: it.fila, celular: tel, estado: 'ENVIADO' });
   await siguiente(run, { level: 'ok', msg: `✅ ${etiqueta}` });
 
@@ -549,7 +572,15 @@ async function autoCheck() {
     const cfg = await getConfig();
     const now = limaNow();
     const run = await getRun();
-    if (run && run.estado === 'corriendo') return;
+    if (run && run.estado === 'corriendo') {
+      // Vigilante: si la corrida quedó «Enviando…» sin alarma agendada (Chrome cerró el proceso
+      // a mitad de camino), se retoma sola en vez de quedarse congelada.
+      if (!procesando && !(await chrome.alarms.get('next'))) {
+        await log('info', '🔁 La corrida se había quedado quieta: la retomo.');
+        await programar(5);
+      }
+      return;
+    }
 
     // Revisión de respuestas (funciona aunque el envío automático esté apagado)
     if (now.hour >= 7 && now.hour < 22) {

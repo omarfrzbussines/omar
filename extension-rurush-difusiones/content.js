@@ -13,6 +13,16 @@ function compose() {
   return document.querySelector('#main footer div[contenteditable="true"]');
 }
 
+// Texto de un aviso de WhatsApp (ventana emergente o barra en lugar del cuadro de texto),
+// p. ej. cuando limita las conversaciones nuevas. Sirve para decir el motivo en el registro.
+function avisoPantalla() {
+  const partes = [...document.querySelectorAll('[role="dialog"], [data-animate-modal-popup="true"]')]
+    .map((n) => (n.innerText || '').trim()).filter(Boolean);
+  const footer = document.querySelector('#main footer');
+  if (footer && !compose()) partes.push((footer.innerText || '').trim());
+  return partes.join(' | ').replace(/\s+/g, ' ').slice(0, 220);
+}
+
 function invalidPopup() {
   const nodes = document.querySelectorAll('[role="dialog"], [data-animate-modal-popup="true"]');
   return [...nodes].some((n) => /(no es v[aá]lido|isn.t valid|is invalid|not on whatsapp|no est[aá] en whatsapp)/i.test(n.innerText || ''));
@@ -201,6 +211,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       draft: c ? c.innerText : '',
       invalid: invalidPopup(),
       messages: c ? readMessages() : [],
+      aviso: avisoPantalla(),
     });
   } else if (msg.type === 'lastOutgoing') {
     reply(lastOutgoing(msg.inicio));
