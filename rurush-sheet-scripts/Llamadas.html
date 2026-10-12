@@ -46,6 +46,20 @@
   .toast { position:fixed; left:16px; right:16px; bottom:16px; background:#2c2c2e; color:#fff; padding:12px 14px; border-radius:12px; font-size:14px; display:none; z-index:20; }
   .toast.err { background:#5c1f1f; }
   .vacio { text-align:center; color:var(--mut); padding:60px 10px; }
+  .tabs { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:10px; }
+  .tab { background:var(--card); color:var(--mut); border:1px solid var(--line); border-radius:10px; padding:9px; font-size:15px; font-weight:600; }
+  .tab.on { background:#2a1414; border-color:var(--red); color:#fff; }
+  .totales { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .tot { background:var(--card); border-radius:14px; padding:12px; } .tot b { display:block; font-size:22px; margin-top:2px; } .tot span { color:var(--mut); font-size:12px; }
+  .tot.atr b { color:var(--red); }
+  .cobro { background:var(--card); border-radius:14px; padding:12px 14px; margin-bottom:8px; display:flex; gap:10px; align-items:center; }
+  .cobro .d { flex:1; min-width:0; } .cobro .n { font-weight:700; word-break:break-word; } .cobro .s { color:var(--mut); font-size:13px; margin-top:2px; }
+  .cobro .mt { font-weight:700; font-size:17px; text-align:right; white-space:nowrap; }
+  .cobro .f { font-size:12px; color:var(--mut); text-align:right; margin-top:2px; } .cobro .f.atr { color:var(--red); font-weight:600; } .cobro .f.hoy { color:#ffcc00; font-weight:600; }
+  .cobro a { text-decoration:none; font-size:20px; padding:6px; }
+  .nuevo { width:100%; background:var(--red); color:#fff; border:0; border-radius:14px; padding:14px; font-size:16px; font-weight:700; margin-bottom:6px; }
+  .buscar { display:grid; grid-template-columns:1fr auto; gap:8px; } .buscar button { background:var(--ice); color:#04121f; border:0; border-radius:12px; padding:0 16px; font-weight:700; font-size:15px; }
+  .aviso { background:#3a2e10; color:#ffd666; border-radius:10px; padding:10px; font-size:13px; margin-top:10px; }
 </style>
 </head>
 <body>
@@ -54,8 +68,9 @@
     <div><h1><b>RURUSH</b> Llamadas</h1><div class="sub" id="sub">Hola <?= asesora ?></div></div>
     <button class="btn-s" id="recargar">🔄</button>
   </div>
-  <select class="bases" id="base"></select>
-  <div class="marcador" id="marcador"></div>
+  <div class="tabs"><button class="tab on" data-v="llamadas">📞 Llamadas</button><button class="tab" data-v="cobros">💰 Cobros</button></div>
+  <div id="vistaLlamadas"><select class="bases" id="base"></select>
+  <div class="marcador" id="marcador"></div></div>
 </header>
 <main id="main"><div class="vacio">Cargando tu cola…</div></main>
 <div class="toast" id="toast"></div>
@@ -107,9 +122,9 @@ function traer(reset) {
       guardarLocal();
       $('#sub').textContent = `Hola ${ASESORA} · cargó en ${((Date.now() - t0) / 1000).toFixed(1)} s`;
       pintarMarcador();
-      if (!mostrando || !actual()) { mostrando = true; pintar(); }
+      if (VISTA === 'llamadas' && (!mostrando || !actual())) { mostrando = true; pintar(); }
     })
-    .withFailureHandler((e) => { trayendo = false; if (/CELULAR_NO_AUTORIZADO/.test(e.message || e)) return google.script.run.withSuccessHandler(pantallaPin).app_estadoCelular(LLAVE); toast(e.message || String(e), true); if (!cola.length) $('#main').innerHTML = `<div class="vacio">${esc(e.message || e)}</div>`; })
+    .withFailureHandler((e) => { trayendo = false; if (/CELULAR_NO_AUTORIZADO/.test(e.message || e)) return google.script.run.withSuccessHandler(pantallaPin).app_estadoCelular(LLAVE); toast(e.message || String(e), true); if (!cola.length && VISTA === 'llamadas') $('#main').innerHTML = `<div class="vacio">${esc(e.message || e)}</div>`; })
     .app_getCola(LLAVE, BASE, excluir);
 }
 
@@ -228,7 +243,92 @@ function guardar() {
 
 function revisarCola() { if (cola.length - idx <= 5) traer(false); }
 
-$('#recargar').onclick = () => { mostrando = false; cola = []; idx = 0; $('#main').innerHTML = '<div class="vacio">Cargando…</div>'; traer(true); };
+/* ---------- 💰 Cobros pendientes (pestaña "2. COLA RENOVAR" de VENTAS RETENCIÓN) ---------- */
+let VISTA = 'llamadas', cobros = null, cargandoCobros = false;
+const soles = (n) => 'S/' + Math.round(n).toLocaleString('en-US');
+const fechaCorta = (iso) => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : '';
+function cambiarVista(v) {
+  VISTA = v;
+  document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.dataset.v === v));
+  $('#vistaLlamadas').style.display = v === 'llamadas' ? '' : 'none';
+  if (v === 'llamadas') { if (mostrando) pintar(); else $('#main').innerHTML = '<div class="vacio">Cargando tu cola…</div>'; return; }
+  if (cobros) pintarCobros(); else $('#main').innerHTML = '<div class="vacio">Cargando tus cobros…</div>';
+  traerCobros();
+}
+document.querySelectorAll('.tab').forEach((t) => t.onclick = () => cambiarVista(t.dataset.v));
+function traerCobros() {
+  if (cargandoCobros) return; cargandoCobros = true;
+  google.script.run
+    .withSuccessHandler((r) => { cargandoCobros = false; cobros = r; if (VISTA === 'cobros' && !$('#codigo')) pintarCobros(); })
+    .withFailureHandler((e) => { cargandoCobros = false; toast(e.message || String(e), true); if (VISTA === 'cobros' && !cobros) $('#main').innerHTML = `<div class="vacio">⚠️ ${esc(e.message || e)}</div>`; })
+    .cob_lista(LLAVE);
+}
+function filaCobro(c) {
+  const f = c.dias < 0 ? `<div class="f atr">atrasado ${-c.dias} d · ${fechaCorta(c.fecha)}</div>`
+    : c.dias === 0 ? '<div class="f hoy">HOY</div>' : `<div class="f">${fechaCorta(c.fecha)} · en ${c.dias} d</div>`;
+  const tel = c.celular ? `<a href="https://wa.me/51${c.celular}" target="_blank">💬</a><a href="tel:+51${c.celular}">📞</a>` : '';
+  return `<div class="cobro"><div class="d"><div class="n">${esc(c.nombre || 'Cód. ' + c.codigo)}</div>
+    <div class="s">Cód. ${esc(c.codigo)}${c.plan ? ' · ' + esc(c.plan) : ''}${c.notas ? ' · ' + esc(c.notas) : ''}</div></div>
+    <div><div class="mt">${soles(c.monto)}</div>${f}</div>${tel}</div>`;
+}
+function pintarCobros() {
+  const l = cobros.lista, atr = l.filter((c) => c.dias < 0), hoyL = l.filter((c) => c.dias === 0), prox = l.filter((c) => c.dias > 0);
+  const suma = (a) => a.reduce((t, c) => t + c.monto, 0);
+  const seccion = (t, a) => a.length ? `<h2>${t} · ${soles(suma(a))}</h2>${a.map(filaCobro).join('')}` : '';
+  $('#main').innerHTML = `
+    <button class="nuevo" id="nuevoCobro">＋ Agregar cobro</button>
+    <div class="totales"><div class="tot"><span>Pendiente total (${l.length})</span><b>${soles(suma(l))}</b></div>
+      <div class="tot atr"><span>Atrasado (${atr.length})</span><b>${soles(suma(atr))}</b></div></div>
+    ${l.length ? seccion('⚠️ Atrasados', atr) + seccion('📅 Hoy', hoyL) + seccion('Próximos', prox) : '<div class="vacio">No tienes cobros pendientes 🎉</div>'}
+    <div class="tip" style="text-align:center;margin-top:14px">Cuando cobres, márcalo RENOVADO = SÍ en el Sheet y sale de esta lista.</div>`;
+  $('#nuevoCobro').onclick = formCobro;
+}
+function formCobro() {
+  $('#main').innerHTML = `
+    <h2 style="margin-top:4px">Nuevo cobro</h2>
+    <div class="buscar"><input id="codigo" inputmode="text" autocomplete="off" placeholder="Código del socio"><button id="buscar">Buscar</button></div>
+    <div id="socio"></div>
+    <button class="saltar" id="volver">← Volver a mis cobros</button>`;
+  $('#codigo').focus();
+  $('#volver').onclick = () => (cobros ? pintarCobros() : traerCobros());
+  const buscar = () => {
+    const cod = $('#codigo').value.trim(); if (!cod) return;
+    $('#socio').innerHTML = '<div class="vacio" style="padding:24px">Buscando…</div>';
+    google.script.run
+      .withSuccessHandler((s) => pintarSocio(s))
+      .withFailureHandler((e) => { $('#socio').innerHTML = `<div class="aviso">⚠️ ${esc(e.message || e)}</div>`; })
+      .cob_buscar(LLAVE, cod);
+  };
+  $('#buscar').onclick = buscar;
+  $('#codigo').onkeydown = (e) => { if (e.key === 'Enter') buscar(); };
+}
+function pintarSocio(s) {
+  const otra = s.quedaA && s.quedaA.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') !== ASESORA;
+  $('#socio').innerHTML = `
+    <div class="card" style="margin-top:12px">
+      <div class="nombre">${esc(s.nombre || 'Sin nombre')}</div>
+      <div class="num">${s.celular ? '+51 ' + esc(s.celular.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3')) : 'Sin celular'}</div>
+      <div class="meta"><span class="tag">Cód. ${esc(s.codigo)}</span>${s.plan ? `<span class="tag">${esc(s.plan)}</span>` : ''}${s.vence ? `<span class="tag">vence ${fechaCorta(s.vence)}</span>` : ''}${s.estado ? `<span class="tag">${esc(s.estado)}</span>` : ''}<span class="tag">asesor: ${esc(s.quedaA || '—')}</span></div>
+    </div>
+    ${otra ? `<div class="aviso">Este cobro queda a nombre de <b>${esc(s.quedaA || 'nadie')}</b> (asesor del socio) y no te va a salir en tu lista.</div>` : ''}
+    ${s.pendientes.length ? `<div class="aviso">Ya tiene ${s.pendientes.length} cobro(s) pendiente(s): ${s.pendientes.map((c) => soles(c.monto) + ' el ' + fechaCorta(c.fecha)).join(', ')}.</div>` : ''}
+    <div class="fila2" style="margin-top:12px;color:var(--mut);font-size:12px"><span>Monto</span><span>Fecha de cobro</span></div>
+    <div class="fila2" style="margin-top:4px"><input id="monto" type="number" inputmode="decimal" min="1" placeholder="Monto S/"><input id="fcobro" type="date"></div>
+    <button class="guardar" id="guardarCobro">Guardar cobro</button>`;
+  $('#monto').focus();
+  $('#guardarCobro').onclick = () => {
+    const monto = Number($('#monto').value), f = $('#fcobro').value;
+    if (!(monto > 0)) return toast('Pon el monto', true);
+    if (!f) return toast('Pon la fecha de cobro', true);
+    $('#guardarCobro').disabled = true;
+    google.script.run
+      .withSuccessHandler((r) => { toast(`✓ Cobro de ${soles(monto)} guardado (fila ${r.fila})`); cobros = null; $('#main').innerHTML = '<div class="vacio">Actualizando…</div>'; traerCobros(); })
+      .withFailureHandler((e) => { $('#guardarCobro').disabled = false; toast(e.message || String(e), true); })
+      .cob_agregar(LLAVE, s.codigo, monto, f);
+  };
+}
+
+$('#recargar').onclick = () => { if (VISTA === 'cobros') return traerCobros(); mostrando = false; cola = []; idx = 0; $('#main').innerHTML = '<div class="vacio">Cargando…</div>'; traer(true); };
 // Selector de base: cada base tiene su propia cola
 $('#base').innerHTML = BASES.map((b) => `<option ${b === BASE ? 'selected' : ''}>${esc(b)}</option>`).join('');
 $('#base').onchange = () => {
