@@ -78,5 +78,17 @@ $('img').onchange = () => {
 };
 $('imgDel').onclick = async () => { await chrome.storage.local.remove('gpsImage'); $('img').value = ''; pintarImg(); };
 
+// Modos rápidos: un Chrome solo para Free Pass (cel de leads) y otro solo para Nutrición (cel de la administración)
+const NUTRI = ['n1', 'n2'];
+function modo(soloNutri) {
+  for (const sel of document.querySelectorAll('#mods select')) {
+    const esNutri = NUTRI.includes(sel.dataset.k);
+    if (esNutri === soloNutri) { if (sel.value === 'off') sel.value = 'sim'; } else sel.value = 'off';
+  }
+  $('modoHint').textContent = (soloNutri ? '🥗 Solo Nutrición' : '🔥 Solo Free Pass') + ': revisa el número de WhatsApp de abajo y dale Guardar.';
+}
+$('modoFP').onclick = () => modo(false);
+$('modoNU').onclick = () => modo(true);
+
 cargar();
 pintarImg();

@@ -22,6 +22,11 @@
 
   <h3>Módulos</h3>
   <p class="hint">🧪 Simulación arma los mensajes y los muestra en el ícono 🔥, pero NO los envía. Pasa a 📤 Envío real cuando lo hayas revisado, y pausa la rutina de Claude que reemplaza.</p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0">
+    <button type="button" id="modoFP" style="margin:0;background:#c62828">🔥 Modo: solo Free Pass</button>
+    <button type="button" id="modoNU" style="margin:0;background:#2e7d32">🥗 Modo: solo Nutrición</button>
+  </div>
+  <p class="hint" id="modoHint">Apaga los módulos del otro tipo. Los que quedan encendidos mantienen su modo (si estaban apagados pasan a 🧪 Simulación). Luego dale Guardar.</p>
   <table id="mods" style="width:100%;border-collapse:collapse"></table>
 
   <div class="grid">
