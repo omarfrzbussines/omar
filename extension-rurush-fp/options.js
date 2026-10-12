@@ -31,6 +31,8 @@ async function cargar() {
   for (const k of ['mananaHora', 'mananaDesdeHora', 'maxEnviosCorrida']) $(k).value = c[k];
   $('pipedriveToken').value = c.pipedriveToken;
   $('expectedNumber').value = c.expectedNumber;
+  $('nutriUrl').value = c.nutriUrl || '';
+  $('nutriLlave').value = c.nutriLlave || '';
   $('blocklist').value = c.blocklist.join('\n');
   for (const k of ['startHour', 'endHour', 'intervalMin', 'sendWindowH']) $(k).value = c[k];
   $('save').disabled = false;
@@ -47,6 +49,8 @@ $('save').onclick = async () => {
     maxEnviosCorrida: rango($('maxEnviosCorrida').value, 1, 40, DEFAULTS.maxEnviosCorrida),
     pipedriveToken: $('pipedriveToken').value.trim(),
     expectedNumber: $('expectedNumber').value.replace(/\D/g, ''),
+    nutriUrl: $('nutriUrl').value.trim().replace(/\?.*$/, ''),
+    nutriLlave: $('nutriLlave').value.trim(),
     blocklist: $('blocklist').value.split(/[\n,;]+/).map((x) => x.replace(/\D/g, '')).filter((x) => x.length >= 9),
     startHour: rango($('startHour').value, 0, 23, DEFAULTS.startHour),
     endHour: rango($('endHour').value, 0, 23, DEFAULTS.endHour),

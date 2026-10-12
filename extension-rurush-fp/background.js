@@ -21,6 +21,8 @@ const DEFAULTS = {
   mananaHora: 9,           // hora del recordatorio de la mañana
   mananaDesdeHora: 13,     // ...solo para clases desde esta hora
   maxEnviosCorrida: 15,
+  nutriUrl: '',            // link de la app web del Apps Script de la hoja NUTRICIÓN (termina en /exec)
+  nutriLlave: '',          // llave que muestra nu_instalar en ese Apps Script
 };
 
 // ───────────────────────── utilidades ─────────────────────────
@@ -286,6 +288,8 @@ const MODULOS = {
   et:     { nombre: 'Etiquetar FREE PASS',         reemplaza: '(nuevo)', hora: [8, 40], cadaMin: 120, dias: [0, 1, 2, 3, 4, 5, 6] },
   // citas de nutrición con Diego (martes y miércoles): recordatorio la noche anterior
   n1:     { nombre: 'Nutrición: recordatorio 7pm',  reemplaza: 'Recordatorio nutricion 7pm', hora: [19, 0], dias: [1, 2] },
+  // invita, reagenda no-shows y lee respuestas; el "cerebro" (Apps Script de la hoja NUTRICIÓN) arma la lista y agenda en Pipedrive
+  n2:     { nombre: 'Nutrición: seguimiento 11:30', reemplaza: 'Seguimiento nutricion wa 1130', hora: [11, 30], dias: [1, 2, 3, 4, 5] },
 };
 const ETIQUETA_FP = 'FREE PASS';
 const MAX_ETIQUETAS_CORRIDA = 15;
@@ -597,7 +601,8 @@ async function correrModulo(key, reason, programado) {
   const real = modo === 'real';
   try {
     // domingo: el módulo tiene dos partes
-    const partes = key === 'm5' ? ['m5a', 'm5b'] : [key];
+    const partes = key === 'm5' ? ['m5a', 'm5b'] : key === 'n2' ? [] : [key];
+    if (key === 'n2') await correrNutriSeguimiento(cfg, now, real, manual, inicio, resumen);
     let enviadosCorrida = 0;
     const tocados = new Set(); // un solo mensaje por teléfono por corrida
     let fallosEtiqueta = 0;
@@ -862,6 +867,176 @@ async function planNutricion(cfg, now) {
   };
 }
 
+// ── nutrición: seguimiento 11:30 ──
+async function nutriApi(cfg, accion, cuerpo, extra = '') {
+  if (!cfg.nutriUrl || !cfg.nutriLlave) throw new Error('Falta el link o la llave del Apps Script de NUTRICIÓN (Opciones).');
+  const url = `${cfg.nutriUrl}?k=${encodeURIComponent(cfg.nutriLlave)}&accion=${accion}${extra}`;
+  const r = await fetch(url, cuerpo ? { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(cuerpo), redirect: 'follow' } : { redirect: 'follow' });
+  const t = await r.text();
+  let j; try { j = JSON.parse(t); } catch { throw new Error(`NUTRICIÓN respondió algo raro (HTTP ${r.status}). ¿El link es el /exec y el acceso es "Cualquier usuario"?`); }
+  if (j.ok === false && j.error) throw new Error(`NUTRICIÓN: ${j.error}`);
+  return j;
+}
+const NU_DIA = { martes: 2, mar: 2, miercoles: 3, mie: 3 };
+const NU_HORAS_OK = ['08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30'];
+const sinTildes = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const nuLab = (iso) => `${DIAS[diaSemana(iso)]} ${Number(iso.slice(8))} ${MESES_CORTOS[Number(iso.slice(5, 7)) - 1]}`;
+const nuHoraTxt = (hhmm) => fmtHora(Number(hhmm.slice(0, 2)), Number(hhmm.slice(3)));
+function nuProximo(hoy, dow) { let d = sumarDias(hoy, 1); while (diaSemana(d) !== dow) d = sumarDias(d, 1); return d; }
+
+// Lee la respuesta del socio: { dia: 'AAAA-MM-DD'|null, hora: 'HH:MM'|null, franja: 'am'|'pm'|null, tipo }
+function nuEntender(texto, hoy) {
+  const t = sinTildes(texto);
+  if (/ya (me )?(hice|pase|tuve|tengo|hize)|ya (fui|estoy) evaluad|ya me evalu|ya pase (mi|la) evalu/.test(t)) return { tipo: 'ya evaluado' };
+  if (/no (me )?interesa|no gracias|no deseo|no quiero|no estoy interesad/.test(t)) return { tipo: 'no interesado' };
+  if (/no puedo|otra semana|mas adelante|despues|luego te (aviso|escribo)|te aviso|no podre|estoy de viaje|otro dia/.test(t) && !/\b(martes|miercoles)\b/.test(t)) return { tipo: 'otra fecha' };
+  let dia = null;
+  const dm = t.match(/\b(martes|miercoles|mar|mie)\b/);
+  if (dm) dia = nuProximo(hoy, NU_DIA[dm[1]]);
+  const fm = t.match(/\b(\d{1,2})\s*(?:\/|de\s+)(\d{1,2}|ene|feb|mar|abr|may|jun|jul|ago|set|sep|oct|nov|dic)/);
+  if (fm) {
+    const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const mes = /^\d+$/.test(fm[2]) ? Number(fm[2]) : (fm[2] === 'set' ? 9 : meses.indexOf(fm[2]) + 1);
+    if (mes >= 1 && mes <= 12) {
+      let y = Number(hoy.slice(0, 4)); const iso = `${y}-${String(mes).padStart(2, '0')}-${String(fm[1]).padStart(2, '0')}`;
+      const f = iso < hoy ? `${y + 1}${iso.slice(4)}` : iso;
+      if (!Number.isNaN(Date.parse(f + 'T12:00:00Z'))) dia = f;
+    }
+  }
+  let franja = /\b(tarde|noche|pm|p\.m)\b/.test(t) ? 'pm' : /\b(temprano|am|a\.m)\b|en la manana|por la manana|de la manana/.test(t) ? 'am' : null;
+  let hora = null;
+  const hm = t.match(/(?:a las?|las|tipo|como a las)\s*(\d{1,2})(?:[:.](\d{2}))?|\b(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm|a\.m|p\.m|hrs?|h)\b/);
+  if (hm) {
+    let h = Number(hm[1] || hm[3]); const m = Number(hm[2] || hm[4] || 0);
+    const suf = hm[5] || '';
+    if (/p/.test(suf) || franja === 'pm') { if (h < 12) h += 12; } else if (!/a/.test(suf) && franja !== 'am' && h >= 1 && h <= 7) h += 12;   // "a las 5" = 5 pm
+    const hhmm = `${String(h).padStart(2, '0')}:${m >= 30 ? '30' : '00'}`;
+    if (NU_HORAS_OK.includes(hhmm)) { hora = hhmm; franja = h >= 12 ? 'pm' : 'am'; }
+  }
+  if (dia && diaSemana(dia) !== 2 && diaSemana(dia) !== 3) return { tipo: 'dia no valido', dia };
+  return { tipo: dia || hora || franja ? 'propuesta' : 'otro', dia, hora, franja };
+}
+
+async function correrNutriSeguimiento(cfg, now, real, manual, inicio, resumen) {
+  const plan = await nutriApi(cfg, 'plan');
+  if (plan.sync) resumen.saltados.push(`Hoja al día: ${plan.sync.actualizados} socios · ${plan.sync.agregados} nuevos agregados`);
+  for (const x of plan.fueraHoja || []) resumen.alertas.push(`No-show de nutrición que no está en la hoja (para Mónica): ${x}`);
+  const envios = [...plan.noshows, ...plan.pausas, ...plan.nuevos];
+  if (!envios.length && !plan.revisar.length) { resumen.saltados.push('Nutrición: nada que enviar ni revisar hoy'); return; }
+
+  const tab = await waTab();
+  await sleep(1000);
+  await asegurarScript(tab.id);
+  const status = await waitFor(tab.id, { type: 'ping' }, (r) => r.loggedIn, 90000);
+  if (!status) throw new Error('WhatsApp Web no cargó o no tiene sesión iniciada.');
+  if (cfg.expectedNumber && status.wid !== String(cfg.expectedNumber).replace(/\D/g, '')) throw new Error(`Número de WhatsApp Web incorrecto (${status.wid}). No se envió nada.`);
+  const bloqueados = new Set(cfg.blocklist.map(ultimos9));
+  const guardar = [];
+  let enviados = 0;
+  const TOPE = 40;
+
+  const enviar = async (chat, phone, texto, etiqueta) => {
+    if (!real) { resumen.simulados.push(`${etiqueta} · ${phone} → ${texto.replace(/\n+/g, ' ')}`); return 'sim'; }
+    const r = await ask(tab.id, { type: 'sendReminder', text: texto, phone, header: chat.header, conImagen: false });
+    if (r && r.ok) { enviados++; resumen.enviados.push(`${etiqueta} · ${phone} · «${texto.replace(/\n+/g, ' ')}»`); await sleep(3000 + Math.random() * 4000); return 'ok'; }
+    if (r && r.noEnviado) { resumen.alertas.push(`${etiqueta}: no se envió (${r.error})`); return 'no'; }
+    resumen.alertas.push(`${etiqueta}: dudoso — se tocó Enviar pero no se confirmó. Revisar el chat.`);
+    return 'ok';
+  };
+  const abrir = async (item, etiqueta) => {
+    const phone = normPhone(item.tel);
+    if (!phone) { guardar.push({ fila: item.fila, estado: 'revisar telefono' }); resumen.alertas.push(`${etiqueta}: teléfono inválido`); return null; }
+    if (bloqueados.has(ultimos9(phone))) { resumen.saltados.push(`${etiqueta} (bloqueado)`); return null; }
+    const { waActivity: act = 0 } = await chrome.storage.local.get('waActivity');
+    if (!manual && act > inicio) throw new Error('WhatsApp Web empezó a usarse durante la corrida: se detiene (lo que falta queda para mañana).');
+    const chat = await openChat(tab.id, phone);
+    if (!chat) { resumen.alertas.push(`${etiqueta}: el chat no abrió`); return null; }
+    if (chat.invalid) { guardar.push({ fila: item.fila, estado: 'sin whatsapp' }); resumen.alertas.push(`${etiqueta}: número sin WhatsApp`); return null; }
+    if (!chat.ready) { guardar.push({ fila: item.fila, estado: 'revisar telefono' }); resumen.alertas.push(`${etiqueta}: el chat abierto no coincide con ${phone}`); return null; }
+    if (chat.hasDraft) { resumen.alertas.push(`${etiqueta}: el chat tiene un borrador, no se tocó`); return null; }
+    return { chat, phone };
+  };
+
+  try {
+    // 1) envíos del día (no-shows, en pausa, invitaciones nuevas)
+    for (const j of envios) {
+      if (enviados >= TOPE) { resumen.saltados.push(`${j.nombre} (tope de ${TOPE} por corrida)`); continue; }
+      const etiqueta = `${j.tipo === 'noshow' ? '🚨' : j.tipo === 'pausa' ? '⏸️' : '📤'} ${j.nombre}`;
+      try {
+        const a = await abrir(j, etiqueta); if (!a) continue;
+        const r = await enviar(a.chat, a.phone, j.texto, etiqueta);
+        if (r !== 'ok') continue;
+        guardar.push({ fila: j.fila, contacto: true, resp: j.resp, opA: j.opA, opB: j.opB,
+          estado: j.tipo === 'noshow' ? 'por confirmar' : j.tipo === 'pausa' ? 'en pausa' : 'enviado', intentos: j.tipo === 'nuevo' ? 1 : undefined });
+      } catch (e) { resumen.alertas.push(`${etiqueta}: ${e.message || e}`); if (/empezó a usarse/.test(e.message)) throw e; }
+    }
+    // 2) leer respuestas
+    for (const s of plan.revisar) {
+      if (enviados >= TOPE) break;
+      const etiqueta = `💬 ${s.nombre}`;
+      try {
+        const a = await abrir(s, etiqueta); if (!a) continue;
+        const msgs = a.chat.messages || [];
+        let ultSale = -1; msgs.forEach((m, i) => { if (m.out) ultSale = i; });
+        const resp = msgs.slice(ultSale + 1).filter((m) => !m.out && m.text);
+        const n = firstName(s.nombre);
+        if (!resp.length) {
+          const dias = s.ult ? Math.round((Date.parse(now.date) - Date.parse(s.ult)) / 86400e3) : 99;
+          if (s.intentos >= 2 || dias >= 4) { guardar.push({ fila: s.fila, estado: 'no responde' }); resumen.saltados.push(`${etiqueta} (no responde → marcado)`); continue; }
+          if (dias < 2) { resumen.saltados.push(`${etiqueta} (esperando respuesta)`); continue; }
+          const [oa, ob] = plan.opciones;
+          const texto = `Hola${n ? ' ' + n : ''}! 😊 ¿Pudiste ver mi mensaje? Diego tiene espacios el ${nuLab(oa)} y el ${nuLab(ob)} para tu evaluación nutricional 🥗 ¿Cuál te acomoda, mañana o tarde?`;
+          if (await enviar(a.chat, a.phone, texto, `${etiqueta} (recordatorio)`) === 'ok') guardar.push({ fila: s.fila, intentos: s.intentos + 1, contacto: true });
+          continue;
+        }
+        const texto = resp.map((m) => m.text).join(' · ');
+        const q = nuEntender(texto, now.date);
+        const corto = texto.slice(0, 120);
+        if (q.tipo === 'ya evaluado' || q.tipo === 'no interesado') { guardar.push({ fila: s.fila, estado: q.tipo, resp: corto }); resumen.saltados.push(`${etiqueta} (${q.tipo})`); continue; }
+        if (q.tipo === 'otra fecha') {
+          const [oa, ob] = [nuProximo(sumarDias(now.date, 6), 2), nuProximo(sumarDias(now.date, 6), 3)];
+          const t2 = `¡Sin problema${n ? ' ' + n : ''}! 😊 ¿Te acomoda más adelante: ${nuLab(oa)} o ${nuLab(ob)}? Mañana (8-11am) o tarde (5-8pm) 🥗`;
+          if (await enviar(a.chat, a.phone, t2, `${etiqueta} (otra fecha)`) === 'ok') guardar.push({ fila: s.fila, estado: 'por confirmar', resp: 'Pide otra fecha: ' + corto, contacto: true });
+          continue;
+        }
+        if (q.tipo === 'propuesta' && q.dia && q.hora) {
+          if (!real) { resumen.simulados.push(`${etiqueta} → se agendaría ${nuLab(q.dia)} ${nuHoraTxt(q.hora)} con Diego («${corto}»)`); continue; }
+          const r = await nutriApi(cfg, 'agendar', { fila: s.fila, pid: s.pid, fecha: q.dia, hora: q.hora });
+          if (r.ok) {
+            const cita = `${nuLab(r.fecha)} ${nuHoraTxt(r.hora)}`;
+            const t2 = `¡Listo${n ? ' ' + n : ''}! ✅ Tu evaluación nutricional con Diego quedó para el ${cita} en Rurush (${DIR}). Solo toma 30 min. ¡Te esperamos! 🥗`;
+            await enviar(a.chat, a.phone, t2, `${etiqueta} (agendado ${cita})`);
+            guardar.push({ fila: s.fila, estado: 'agendado', cita, resp: `${r.yaTenia ? 'Ya tenía cita' : 'Agendado'} ${cita} (confirmó: «${corto}»)`, contacto: true });
+            continue;
+          }
+          if (r.motivo === 'sin person_id') { guardar.push({ fila: s.fila, estado: 'respondio', resp: 'Quiere ' + nuLab(q.dia) + ' ' + nuHoraTxt(q.hora) + ' pero no tiene person_id — agendar a mano' }); resumen.alertas.push(`${etiqueta}: quiere ${nuLab(q.dia)} ${nuHoraTxt(q.hora)} pero no tiene ficha en Pipedrive — agendar a mano`); continue; }
+          q.hora = null; q.libres = r.libres;
+        }
+        if (q.tipo === 'propuesta' && q.dia) {
+          const libres = (q.libres || (await nutriApi(cfg, 'libres', null, `&fecha=${q.dia}`)).libres || []).filter((h) => !q.franja || (q.franja === 'am') === (h < '12:00'));
+          const t2 = libres.length
+            ? `¡Genial${n ? ' ' + n : ''}! 🙌 Para el ${nuLab(q.dia)} Diego tiene libre: ${libres.map(nuHoraTxt).join(', ')}. ¿Cuál prefieres? 🥗`
+            : `Uy${n ? ' ' + n : ''}, ese día Diego ya no tiene espacios 😅 ¿Te sirve otro martes o miércoles?`;
+          if (await enviar(a.chat, a.phone, t2, `${etiqueta} (pide hora)`) === 'ok') guardar.push({ fila: s.fila, estado: 'por confirmar', resp: 'Eligió ' + nuLab(q.dia) + ', falta hora', contacto: true });
+          continue;
+        }
+        if (q.tipo === 'propuesta' || q.tipo === 'dia no valido') {
+          const [oa, ob] = plan.opciones;
+          const t2 = `¡Perfecto${n ? ' ' + n : ''}! 😊 Diego atiende martes y miércoles. ¿Te queda mejor el ${nuLab(oa)} o el ${nuLab(ob)}?${q.franja ? ` (${q.franja === 'am' ? 'en la mañana, 8-11am' : 'en la tarde, 5-8pm'})` : ''}`;
+          if (await enviar(a.chat, a.phone, t2, `${etiqueta} (pide día)`) === 'ok') guardar.push({ fila: s.fila, estado: 'por confirmar', resp: 'Respondió sin día: ' + corto, contacto: true });
+          continue;
+        }
+        guardar.push({ fila: s.fila, estado: 'respondio', resp: corto });
+        resumen.alertas.push(`${etiqueta}: respondió «${corto}» — que lo vea Mónica`);
+      } catch (e) { resumen.alertas.push(`${etiqueta}: ${e.message || e}`); if (/empezó a usarse/.test(e.message)) throw e; }
+    }
+  } finally {
+    if (real && guardar.length) {
+      try { await nutriApi(cfg, 'guardar', { lista: guardar }); } catch (e) { resumen.alertas.push(`No se pudo guardar en la hoja NUTRICIÓN: ${e.message || e}`); }
+    } else if (!real && guardar.length) resumen.simulados.push(`(simulación: no se guardó nada en la hoja · ${guardar.length} cambios)`);
+  }
+}
+
 // ───────────────────────── reporte del día ─────────────────────────
 const diaLima = (iso) => new Date(Date.parse(iso) + LIMA_OFFSET_H * 3600e3).toISOString().slice(0, 10);
 
@@ -961,5 +1136,5 @@ if (typeof module !== 'undefined') {
   module.exports = { analizar, mensaje, horasMencionadas, normPhone, fmtHora, utcToLima, limpiarSent, ultimos9,
     opciones, sumarDias, diaSemana, decidirNoShow, aLas, decidirManana, decidirRefuerzo, msgReagendo, msgManana,
     msgRefuerzo, msgSabado, msgDomingoLunes, msgDomingoNoShow, MODULOS,
-    parseCsv, opcionesNutricion, msgNutriRecordatorio, msgNutriPausa };
+    parseCsv, opcionesNutricion, msgNutriRecordatorio, msgNutriPausa, nuEntender };
 }
