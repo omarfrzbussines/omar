@@ -105,13 +105,20 @@ function generarInasistencias(manual) {
     if (!hist[tel] || iso >= hist[tel].fecha) hist[tel] = { fecha: iso, grupo: String(r[4]), resultado: String(r[10] || '') };
   });
 
+  // Números que la extensión ya comprobó que no sirven: no se vuelven a poner en la lista.
+  var malos = {};
+  quedan.forEach(function (r) {
+    var tel = normPhone_(r[2]);
+    if (tel && /SIN WHATSAPP|NUMERO MALO/i.test(String(r[10] || ''))) malos[tel] = true;
+  });
+
   // 4. A quién le toca hoy
   var pausas = pausas_(hoyIso), idx = indiceGlobal_();
   var nuevos = [], sinAsesora = 0, cuenta = {};
   Object.keys(socios).forEach(function (tel) {
     var s = socios[tel];
     if (!s.activo || s.dias === null || s.dias < 4) return;
-    if (pausas[tel] || pausas['COD:' + String(s.cod || '').trim()] || (idx[tel] && idx[tel].bloqueado)) return;
+    if (malos[tel] || pausas[tel] || pausas['COD:' + String(s.cod || '').trim()] || (idx[tel] && idx[tel].bloqueado)) return;
     if (!s.asesora) { sinAsesora++; return; }
     var h = hist[tel], grupo;
     var desde = h ? diasEntreIso_(h.fecha, hoyIso) : 999;
