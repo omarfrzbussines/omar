@@ -18,6 +18,7 @@ function onOpen() {
     .addItem('Publicar YA la fila seleccionada', 'publicarSeleccionada')
     .addItem('Publicar las que ya tocan', 'publicarPendientes')
     .addSeparator()
+    .addItem('Ver cómo queda la fila seleccionada (sin publicar)', 'probarAjuste')
     .addItem('Probar conexión con Instagram', 'probarConexion')
     .addItem('Activar programación automática', 'activarReloj')
     .addToUi();
@@ -115,7 +116,7 @@ function publicar_(hoja, f) {
     }
     if (!cont) throw new Error(ultimoError);
     hoja.getRange(f.fila, COL.CONT).setValue(cont);
-    if (media.copia) hoja.getRange(f.fila, COL.DETALLE).setValue('Convertida a JPG');
+    if (media.copia) hoja.getRange(f.fila, COL.DETALLE).setValue('Ajustada a 9:16');
     f.cont = cont;
     return terminar_(hoja, f);
   } catch (e) {
@@ -162,30 +163,70 @@ function esperar_(cont, segundos) {
 
 /* ---------- Drive ---------- */
 
-// Instagram descarga el archivo desde una URL pública: se comparte "cualquiera con el enlace" solo hasta publicarse.
-// Las historias de imagen solo aceptan JPG: PNG/WEBP se convierten a una copia JPG.
-function mediaPublica_(archivo) {
-  const tipo = archivo.getMimeType();
-  const video = tipo.indexOf('video/') === 0;
-  let f = archivo;
-  let copia = false;
-  if (!video && tipo !== 'image/jpeg') {
-    const nombre = archivo.getName().replace(/\.[^.]+$/, '') + '.jpg';
-    f = subcarpeta_('_jpg').createFile(archivo.getBlob().getAs('image/jpeg').setName(nombre));
-    copia = true;
-  }
+// Arma la versión 9:16 de la fila seleccionada (o de la primera pendiente) y la deja en _jpg como "PRUEBA …", sin publicar.
+function probarAjuste() {
+  const hoja = hoja_();
+  let fila = 0;
+  try { fila = hoja.getActiveRange().getRow(); } catch (e) { /* desde el editor no hay selección */ }
+  const todas = filas_(hoja).filter((x) => x.id && x.estado !== EST.OK);
+  const f = todas.filter((x) => x.fila === fila)[0] || todas[0];
+  if (!f) return avisar_('No hay historias pendientes para probar.');
+  const archivo = DriveApp.getFileById(f.id);
   archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  try {
+    const jpg = subcarpeta_('_jpg').createFile(lienzo916_(archivo).setName('PRUEBA ' + archivo.getName().replace(/\.[^.]+$/, '') + '.jpg'));
+    avisar_('Lista la prueba de "' + f.archivo + '": ' + jpg.getUrl());
+  } finally {
+    archivo.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
+  }
+}
+
+// Instagram descarga el archivo desde una URL pública: se comparte "cualquiera con el enlace" solo hasta publicarse.
+// Imágenes: se arma una copia JPG vertical 9:16 (ver lienzo916_) y esa es la que se manda.
+function mediaPublica_(archivo) {
+  const video = archivo.getMimeType().indexOf('video/') === 0;
+  let f = archivo;
+  if (!video) {
+    archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    const nombre = archivo.getName().replace(/\.[^.]+$/, '') + '.jpg';
+    f = subcarpeta_('_jpg').createFile(lienzo916_(archivo).setName(nombre));
+  }
   f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   const id = f.getId();
-  // Primero la versión que Google entrega ya achicada a 1080 de ancho y en JPG (=w1080-rj):
-  // Instagram rechaza imágenes de más de 8 MB y los PNG de diseño suelen pasar de 10 MB.
   const urls = video
     ? ['https://drive.usercontent.google.com/download?id=' + id + '&export=download&confirm=t',
        'https://drive.google.com/uc?export=download&id=' + id]
-    : ['https://lh3.googleusercontent.com/d/' + archivo.getId() + '=w1080-rj',
-       'https://lh3.googleusercontent.com/d/' + id,
+    : ['https://lh3.googleusercontent.com/d/' + id + '=w1080-rj',
        'https://drive.usercontent.google.com/download?id=' + id + '&export=download&confirm=t'];
-  return { video: video, urls: urls, copia: copia };
+  return { video: video, urls: urls, copia: !video };
+}
+
+// Instagram hace zoom y recorta los costados de lo que no es 9:16. Para que se vea completa,
+// la imagen se centra sobre un fondo negro 9:16 (una diapositiva temporal de Slides) y se exporta como JPG.
+function lienzo916_(archivo) {
+  const auth = { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() } };
+  // versión achicada que entrega Google (los PNG de diseño pesan +10 MB)
+  const img = UrlFetchApp.fetch('https://lh3.googleusercontent.com/d/' + archivo.getId() + '=w1600-rj').getBlob();
+  const W = 405, H = 720;   // puntos, 9:16
+  const pres = Slides.Presentations.create({ title: 'tmp historia IG',
+    pageSize: { width: { magnitude: W, unit: 'PT' }, height: { magnitude: H, unit: 'PT' } } });
+  try {
+    const doc = SlidesApp.openById(pres.presentationId);
+    const sl = doc.getSlides()[0];
+    sl.getPageElements().forEach((e) => e.remove());
+    sl.getBackground().setSolidFill('#000000');
+    const im = sl.insertImage(img);
+    const r = Math.min(W / im.getWidth(), H / im.getHeight());
+    im.setWidth(im.getWidth() * r).setHeight(im.getHeight() * r);
+    im.setLeft((W - im.getWidth()) / 2).setTop((H - im.getHeight()) / 2);
+    const slideId = sl.getObjectId();
+    doc.saveAndClose();
+    const th = Slides.Presentations.Pages.getThumbnail(pres.presentationId, slideId,
+      { 'thumbnailProperties.thumbnailSize': 'LARGE', 'thumbnailProperties.mimeType': 'PNG' });
+    return UrlFetchApp.fetch(th.contentUrl, auth).getBlob().getAs('image/jpeg');
+  } finally {
+    DriveApp.getFileById(pres.presentationId).setTrashed(true);
+  }
 }
 
 // Ya publicada: se vuelve privada y se mueve a PUBLICADAS (la copia JPG, si hubo, se borra).

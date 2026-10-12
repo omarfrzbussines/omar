@@ -55,7 +55,7 @@ hace falta uno con otros permisos. Lo mejor es un *usuario del sistema* (no venc
 
 ## Bueno saber
 
-- **Formato:** imagen JPG o PNG (se mandan solas a 1080 de ancho en JPG, aunque pesen +10 MB) o video MP4 de hasta 60 s,
+- **Formato:** imagen JPG o PNG de cualquier tamaño o proporción (si no es vertical 9:16 se centra sobre fondo negro para que no se recorte) o video MP4 de hasta 60 s,
   vertical 1080×1920.
 - **Puntualidad:** sale entre 0 y 10 min después de la hora puesta (el reloj revisa cada 10 min).
 - **Lo que la API de Instagram no permite:** stickers (link, encuesta, música, menciones
