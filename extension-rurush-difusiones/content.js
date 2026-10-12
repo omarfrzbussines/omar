@@ -219,6 +219,17 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     reply(respuestas(msg.inicio));
   } else if (msg.type === 'diag') {
     reply(diag());
+  } else if (msg.type === 'cerrarAviso') {
+    // «Ahora no» / cerrar en la ventana del límite de chats nuevos
+    const dlg = [...document.querySelectorAll('[role="dialog"], [data-animate-modal-popup="true"]')].pop();
+    let ok = false;
+    if (dlg) {
+      const b = [...dlg.querySelectorAll('button, [role="button"]')].find((x) => /^(ahora no|not now|cerrar|close|ok|entendido)$/i.test((x.innerText || x.getAttribute('aria-label') || '').trim()))
+        || dlg.querySelector('[aria-label="Cerrar"], [aria-label="Close"], [data-icon="x"], [data-icon="close"]');
+      if (b) { (b.closest('button,[role="button"]') || b).click(); ok = true; }
+    }
+    if (!ok) document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    reply({ ok });
   } else if (msg.type === 'clearDraft') {
     reply(clearDraft());
   } else if (msg.type === 'send') {

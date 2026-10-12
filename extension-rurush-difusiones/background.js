@@ -26,8 +26,8 @@ const DEFAULTS = {
   // WhatsApp Web, busca a su asesora en ⚙️ CONFIG y envía sus pendientes.
   autoActivo: false,
   autoHora: 8,
-  autoDias: [1, 2, 3, 4, 5],  // 0 = domingo … 6 = sábado
-  autoPestanas: ['🏃 INASISTENCIAS', '📨 TANDA 8 EX ALUMNOS'],
+  autoDias: [1, 2, 3, 4, 5, 6],  // 0 = domingo … 6 = sábado
+  autoPestanas: ['🏃 INASISTENCIAS', '📨 TANDA *'],
   // Revisión de respuestas: 2 h después del último envío del día y cada mañana,
   // sobre lo enviado en los últimos 3 días que sigue «ENVIADO SIN RESPUESTA».
   revisarActivo: true,
@@ -246,6 +246,66 @@ let procesando = false;
 // Si WhatsApp no deja escribir en 3 chats seguidos (p. ej. limitó las conversaciones nuevas),
 // no tiene sentido seguir recorriendo la lista: se pausa la línea hasta el día siguiente.
 const FALLAS_PARA_PAUSAR = 3;
+// Ventana de WhatsApp: «Iniciaste 300 de 300 chats nuevos este mes … No puedes iniciar más chats
+// nuevos hasta el 31 de octubre de 2026». Los chats que ya existen sí se pueden seguir usando.
+const LIMITE_RX = /chats? nuevos? (este mes|hasta)|iniciar m[aá]s chats nuevos|new chats (this month|until)/i;
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+function fechaLimite(aviso) {
+  const m = /hasta el (\d{1,2}) de ([a-záéíóú]+)(?: de (\d{4}))?/i.exec(aviso || '');
+  const mes = m ? MESES.indexOf(m[2].toLowerCase()) : -1;
+  if (mes < 0) return null;
+  const y = Number(m[3]) || Number(limaNow().date.slice(0, 4));
+  return `${y}-${String(mes + 1).padStart(2, '0')}-${String(Number(m[1])).padStart(2, '0')}`;
+}
+async function limiteDeLinea(linea) {
+  const { limites = {} } = await chrome.storage.local.get('limites');
+  const h = limites[linea];
+  return h && h >= limaNow().date ? h : null; // fecha (aaaa-mm-dd) hasta la que no puede abrir chats nuevos
+}
+const esInasist = (tab) => /INASIST/i.test(tab || '');
+
+// Lista de pestañas del modo automático. Una línea que termina en * toma TODAS las pestañas
+// del Sheet que empiezan así, en el orden en que están en el Sheet. Ej.: «📨 TANDA *» incluye
+// sola cada tanda nueva que se cree, sin tocar las Opciones.
+function expandirCola(lista, pestanas) {
+  const out = [];
+  for (const e of lista || []) {
+    const t = String(e).trim();
+    if (!t) continue;
+    if (t.endsWith('*')) {
+      const pre = t.slice(0, -1).trim().toLowerCase();
+      for (const p of pestanas || []) if (p.toLowerCase().startsWith(pre) && !out.includes(p)) out.push(p);
+    } else if (!out.includes(t)) out.push(t);
+  }
+  return out;
+}
+async function colaAuto(cfg, info) {
+  if (!(cfg.autoPestanas || []).some((x) => String(x).trim().endsWith('*'))) return cfg.autoPestanas;
+  try {
+    const i = info || (await api({ a: 'info' }));
+    return expandirCola(cfg.autoPestanas, i.pestanas);
+  } catch { return cfg.autoPestanas.filter((x) => !String(x).trim().endsWith('*')); }
+}
+
+async function topeDeChatsNuevos(run, tabId, aviso) {
+  await ask(tabId, { type: 'cerrarAviso' });
+  const hasta = fechaLimite(aviso) || limaNow().date;
+  const { limites = {} } = await chrome.storage.local.get('limites');
+  limites[run.linea] = hasta;
+  await chrome.storage.local.set({ limites });
+  run.res.saltados += 1;
+  if (esInasist(run.tab)) {
+    // a los socios se les sigue escribiendo: los que ya tienen chat sí salen
+    await siguiente(run, { level: 'warn', msg: `⏭️ fila ${run.items[run.idx].fila}: sería un chat nuevo y la línea llegó al límite mensual de WhatsApp (hasta ${hasta}). Queda pendiente.` });
+    return true;
+  }
+  const motivo = `WhatsApp: la línea de ${run.asesora} llegó al límite de chats nuevos del mes (no puede abrir más hasta el ${hasta}). `
+    + 'Hasta esa fecha esta línea solo envía 🏃 INASISTENCIAS; las tandas quedan pendientes.';
+  await pausar(motivo);
+  notify('Rurush Difusiones', `⛔ ${motivo}`);
+  return false;
+}
+
 async function falloDeCarga(run, msg, aviso) {
   run.res.alertas += 1;
   run.fallasSeguidas = (run.fallasSeguidas || 0) + 1;
@@ -386,6 +446,7 @@ async function unPaso() {
   const chat = await openChat(tab.id, tel, run.simulacion ? null : it.mensaje);
   if (!chat) {
     const st = await ask(tab.id, { type: 'chatState' });
+    if (st && LIMITE_RX.test(st.aviso || '')) return topeDeChatsNuevos(run, tab.id, st.aviso);
     return falloDeCarga(run, `⚠️ ${etiqueta}: el chat no abrió o no cargó el mensaje, lo salto (sin marcar).`, st && st.aviso);
   }
   if (chat.invalid) {
@@ -417,6 +478,7 @@ async function unPaso() {
   // Envío real: comprobar que el borrador es exactamente el mensaje
   const draft = estadoChat;
   if (!draft || !String(draft.draft || '').trim()) {
+    if (draft && LIMITE_RX.test(draft.aviso || '')) return topeDeChatsNuevos(run, tab.id, draft.aviso);
     return falloDeCarga(run, `⚠️ ${etiqueta}: no se pudo cargar el mensaje (sin marcar).`, draft && draft.aviso);
   }
   if (normTexto(draft.draft) !== normTexto(it.mensaje)) {
@@ -617,7 +679,11 @@ async function autoCheck() {
       return;
     }
 
-    for (const pestana of cfg.autoPestanas) {
+    const limitada = await limiteDeLinea(status.wid);
+    if (limitada) await log('info', `🤖 ${asesora}: límite de chats nuevos de WhatsApp hasta el ${limitada}. Hoy solo 🏃 INASISTENCIAS.`);
+    const cola = await colaAuto(cfg, info);
+    for (const pestana of cola) {
+      if (limitada && !esInasist(pestana)) continue;
       const nuevo = await cargar(pestana, asesora);
       if (!nuevo.items.length) continue;
       nuevo.auto = true;
@@ -628,7 +694,7 @@ async function autoCheck() {
       await iniciar();
       return;
     }
-    await log('info', `🤖 Automático: ${asesora} no tiene pendientes en ${cfg.autoPestanas.join(', ')}.`);
+    await log('info', `🤖 Automático: ${asesora} no tiene pendientes en ${cola.join(', ')}.`);
     notify('Rurush Difusiones', `🤖 ${asesora}: no hay nada por enviar hoy.`);
   } catch (e) {
     await log('warn', `🤖 Automático: ${e.message || e}`);
@@ -640,8 +706,10 @@ async function autoCheck() {
 async function siguientePestanaAuto(run) {
   const cfg = await getConfig();
   if (!run.simulacion && (await contador(run.linea)) >= cfg.topeDiario) return false;
-  const lista = cfg.autoPestanas;
+  const lista = await colaAuto(cfg);
+  const limitada = await limiteDeLinea(run.linea);
   for (const pestana of lista.slice(lista.indexOf(run.tab) + 1)) {
+    if (limitada && !esInasist(pestana)) continue;
     let nuevo;
     try { nuevo = await cargar(pestana, run.asesora); } catch (e) {
       await log('info', `🤖 ${pestana}: ${e.message || e}`);

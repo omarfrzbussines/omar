@@ -93,3 +93,14 @@ OCTUBRE, NOVIEMBRE y DICIEMBRE: columna **COD** en ventas y renovación (autocom
 - **🗓 CALENDARIO DIFUSIONES** (sheetId 920010): plan diario con 35 por línea (≈3 inasistencias + 32 difusión, 15% sin WhatsApp),
   lun–sáb desde sáb 10/10. T5 termina mié 14 (Mónica) / jue 15 (Laura); T6 termina lun 26/10. Columnas REAL salen
   del 📜 LOG EXTENSIÓN (ESTADO = ENVIADO por fecha y asesora). Requiere subir el tope de la extensión de 30 a 35.
+
+## Actualización 12-oct — límite de WhatsApp y cola automática (extensión 1.3.4)
+- **WhatsApp limita a 300 chats nuevos al mes** con personas que no responden (aviso «Iniciaste 300 de 300 chats
+  nuevos este mes… hasta el 31 de octubre»). La línea de LAURA llegó al tope el 12-oct. Los chats que ya existen sí
+  se pueden usar. La 1.3.4 detecta el aviso, lo cierra, guarda «límite hasta» por línea y desde ahí esa línea solo
+  envía 🏃 INASISTENCIAS (los socios sin chat previo se saltan sin marcar).
+- Capacidad real: ~300 chats nuevos sin respuesta por línea al mes (≈12 por día hábil). El calendario de 35/día
+  ya no es realista para tandas en frío.
+- Cola automática con comodín: en Opciones, «📨 TANDA *» toma todas las pestañas que empiezan así, en el orden del
+  Sheet. Las tandas nuevas entran solas. TANDA 4 y 8 no tienen pendientes para Laura/Mónica.
+- 1.3.3: vigilante si la corrida queda «Enviando…» sin alarma; ask() con corte a 20 s; 3 fallas seguidas → pausa.
