@@ -52,6 +52,33 @@ foreach ($l in Get-Content (Join-Path $tools "proyectos.txt") -Encoding UTF8) {
     if (Test-Path $copia) { Remove-Item $copia -Recurse -Force }
     Copy-Item $dir $copia -Recurse
     $locales = Get-ChildItem (Join-Path $repo $carpeta) -File | Where-Object { $_.Extension -in ".gs",".js",".html" -or $_.Name -eq "appsscript.json" } | Where-Object { $NO_SUBIR -notcontains $_.Name }
+    # Emparejar cada archivo del repo con su archivo en Google aunque tenga otro nombre
+    # (Código.gs vs Code.gs, con o sin tilde): por nombre o por las funciones que define.
+    $funs = { param($t) ([regex]::Matches($t, '(?m)^\s*function\s+([A-Za-z_$][\w$]*)') | ForEach-Object { $_.Groups[1].Value }) }
+    $remotos = @(Get-ChildItem $dir -File | Where-Object { $_.Extension -in ".js",".gs" })
+    $usados = @{}
+    foreach ($f in $locales) {
+      if ($f.Extension -notin ".gs",".js") { continue }
+      $quiere = $(if ($mapa.ContainsKey($f.Name)) { $mapa[$f.Name] } else { $f.Name })
+      $bq = [IO.Path]::GetFileNameWithoutExtension($quiere)
+      $igual = $remotos | Where-Object { [IO.Path]::GetFileNameWithoutExtension($_.Name) -eq $bq } | Select-Object -First 1
+      if ($igual) { $usados[$igual.Name] = 1; continue }
+      $mias = @(& $funs (Get-Content $f.FullName -Raw -Encoding UTF8))
+      if (-not $mias.Count) { continue }
+      $mejor = $null; $puntaje = 0
+      foreach ($r in $remotos) {
+        if ($usados.ContainsKey($r.Name)) { continue }
+        $suyas = @(& $funs (Get-Content $r.FullName -Raw -Encoding UTF8))
+        $comunes = @($mias | Where-Object { $suyas -contains $_ }).Count
+        $p = $comunes / [Math]::Max(1, [Math]::Min($mias.Count, [Math]::Max(1, $suyas.Count)))
+        if ($p -gt $puntaje) { $puntaje = $p; $mejor = $r }
+      }
+      if ($mejor -and $puntaje -ge 0.5) {
+        $usados[$mejor.Name] = 1
+        $mapa[$f.Name] = [IO.Path]::GetFileNameWithoutExtension($mejor.Name) + ".gs"
+        Linea "      ↔ $($f.Name) = «$([IO.Path]::GetFileNameWithoutExtension($mejor.Name))» en Google" DarkGray
+      }
+    }
     foreach ($f in $locales) {
       $nombre = $(if ($mapa.ContainsKey($f.Name)) { $mapa[$f.Name] } else { $f.Name })
       $base = [IO.Path]::GetFileNameWithoutExtension($nombre)
