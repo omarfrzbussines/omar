@@ -68,3 +68,6 @@ hace falta uno con otros permisos. Lo mejor es un *usuario del sistema* (no venc
 - **Publicar ya:** selecciona la fila → menú **📲 Historias IG → Publicar YA la fila seleccionada**.
 - Al momento de publicar, el archivo se comparte unos segundos "cualquiera con el enlace" (Instagram lo
   descarga de ahí); al publicarse vuelve a privado.
+- **Plantilla 9:16:** en la carpeta debe estar la presentación **`_plantilla 9x16 (no borrar)`**
+  (sobre ella se arma cada historia). Si se borra, sube `plantilla_9x16.pptx` del repo a la
+  carpeta con ese mismo nombre (Drive la convierte a Presentaciones de Google).

@@ -202,16 +202,23 @@ function mediaPublica_(archivo) {
 }
 
 // Instagram hace zoom y recorta los costados de lo que no es 9:16. Para que se vea completa,
-// la imagen se centra sobre un fondo negro 9:16 (una diapositiva temporal de Slides) y se exporta como JPG.
+// la imagen se centra sobre fondo negro en una copia de la plantilla 9:16 y se exporta como JPG.
+// (La API de Slides no deja crear ni cambiar el tamaño de página: por eso se copia una plantilla
+// que ya es 9:16, "_plantilla 9x16 (no borrar)" en la carpeta; plantilla_9x16.pptx del repo la recrea.)
+const PLANTILLA = '_plantilla 9x16 (no borrar)';
+
 function lienzo916_(archivo) {
   const auth = { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() } };
   // versión achicada que entrega Google (los PNG de diseño pesan +10 MB)
   const img = UrlFetchApp.fetch('https://lh3.googleusercontent.com/d/' + archivo.getId() + '=w1600-rj').getBlob();
-  const W = 405, H = 720;   // puntos, 9:16
-  const pres = Slides.Presentations.create({ title: 'tmp historia IG',
-    pageSize: { width: { magnitude: W, unit: 'PT' }, height: { magnitude: H, unit: 'PT' } } });
+  const it = carpeta_().getFilesByName(PLANTILLA);
+  if (!it.hasNext()) throw new Error('Falta "' + PLANTILLA + '" en la carpeta (súbela de nuevo: plantilla_9x16.pptx del repo).');
+  const id = it.next().makeCopy('tmp historia IG', subcarpeta_('_jpg')).getId();
   try {
-    const doc = SlidesApp.openById(pres.presentationId);
+    const ps = Slides.Presentations.get(id, { fields: 'pageSize' }).pageSize;
+    const W = ps.width.magnitude / 12700, H = ps.height.magnitude / 12700;   // EMU → puntos
+    if (Math.abs(W / H - 9 / 16) > 0.01) throw new Error('La plantilla no es 9:16 (' + Math.round(W) + '×' + Math.round(H) + ' pt).');
+    const doc = SlidesApp.openById(id);
     const sl = doc.getSlides()[0];
     sl.getPageElements().forEach((e) => e.remove());
     sl.getBackground().setSolidFill('#000000');
@@ -221,11 +228,12 @@ function lienzo916_(archivo) {
     im.setLeft((W - im.getWidth()) / 2).setTop((H - im.getHeight()) / 2);
     const slideId = sl.getObjectId();
     doc.saveAndClose();
-    const th = Slides.Presentations.Pages.getThumbnail(pres.presentationId, slideId,
+    const th = Slides.Presentations.Pages.getThumbnail(id, slideId,
       { 'thumbnailProperties.thumbnailSize': 'LARGE', 'thumbnailProperties.mimeType': 'PNG' });
+    if (th.width >= th.height) throw new Error('La imagen salió horizontal (' + th.width + '×' + th.height + '); no se publica.');
     return UrlFetchApp.fetch(th.contentUrl, auth).getBlob().getAs('image/jpeg');
   } finally {
-    DriveApp.getFileById(pres.presentationId).setTrashed(true);
+    DriveApp.getFileById(id).setTrashed(true);
   }
 }
 
