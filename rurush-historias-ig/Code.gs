@@ -301,9 +301,12 @@ function hoja_() {
     h = ss.insertSheet(HOJA, 0);
     h.getRange(1, 1, 1, ENCABEZADO.length).setValues([ENCABEZADO]).setFontWeight('bold').setBackground('#111').setFontColor('#fff');
     h.setFrozenRows(1);
-    h.getRange('B2:B').setNumberFormat('yyyy-mm-dd')
+    h.getRange('B2:B').setNumberFormat('yyyy-mm-dd')   // doble clic → calendario
       .setDataValidation(SpreadsheetApp.newDataValidation().requireDate().setAllowInvalid(false).build());
-    h.getRange('C2:C').setNumberFormat('HH:mm');
+    const horas = [];
+    for (let m = 5 * 60; m < 24 * 60; m += 30) horas.push(('0' + Math.floor(m / 60)).slice(-2) + ':' + ('0' + m % 60).slice(-2));
+    h.getRange('C2:C').setNumberFormat('@').setHorizontalAlignment('center')   // desplegable cada 30 min (se puede escribir otra)
+      .setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(horas, true).setAllowInvalid(true).build());
     h.setColumnWidth(COL.ARCHIVO, 260);
     h.setColumnWidth(COL.DETALLE, 380);
     h.hideColumns(COL.ID, 2);
