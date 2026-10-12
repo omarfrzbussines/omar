@@ -27,7 +27,7 @@ const DEFAULTS = {
   autoActivo: false,
   autoHora: 8,
   autoDias: [1, 2, 3, 4, 5, 6],  // 0 = domingo … 6 = sábado
-  autoPestanas: ['🏃 INASISTENCIAS', '📨 TANDA *'],
+  autoPestanas: ['📨 TANDA * @8', '🏃 INASISTENCIAS @10'],
   // Revisión de respuestas: 2 h después del último envío del día y cada mañana,
   // sobre lo enviado en los últimos 3 días que sigue «ENVIADO SIN RESPUESTA».
   revisarActivo: true,
@@ -279,12 +279,27 @@ function expandirCola(lista, pestanas) {
   }
   return out;
 }
+// «🏃 INASISTENCIAS @10» → esa pestaña arranca a las 10; sin @hora usa la hora de arranque general.
+function parseEntrada(e, horaDef) {
+  const t = String(e || '').trim();
+  const m = /^(.*?)\s*@\s*(\d{1,2})(?::\d{2})?\s*$/.exec(t);
+  return m ? { nombre: m[1].trim(), hora: Number(m[2]) } : { nombre: t, hora: horaDef };
+}
+// Devuelve [{ tab, hora, clave }] en orden; «clave» identifica la línea de Opciones de la que salió.
 async function colaAuto(cfg, info) {
-  if (!(cfg.autoPestanas || []).some((x) => String(x).trim().endsWith('*'))) return cfg.autoPestanas;
-  try {
-    const i = info || (await api({ a: 'info' }));
-    return expandirCola(cfg.autoPestanas, i.pestanas);
-  } catch { return cfg.autoPestanas.filter((x) => !String(x).trim().endsWith('*')); }
+  const entradas = (cfg.autoPestanas || []).map((e) => parseEntrada(e, cfg.autoHora)).filter((x) => x.nombre);
+  let pestanas = null;
+  if (entradas.some((x) => x.nombre.endsWith('*'))) {
+    try { pestanas = (info || (await api({ a: 'info' }))).pestanas; } catch { pestanas = []; }
+  }
+  const out = [];
+  for (const x of entradas) {
+    const clave = `${x.nombre}@${x.hora}`;
+    for (const tab of x.nombre.endsWith('*') ? expandirCola([x.nombre], pestanas) : [x.nombre]) {
+      if (!out.some((o) => o.tab === tab)) out.push({ tab, hora: x.hora, clave });
+    }
+  }
+  return out;
 }
 
 async function topeDeChatsNuevos(run, tabId, aviso) {
@@ -385,7 +400,7 @@ async function unPaso() {
     notify('Rurush Difusiones', 'Pausado: fuera de horario de envío.');
     return false;
   }
-  if (!run.simulacion && (await contador(run.linea)) >= cfg.topeDiario) {
+  if (!run.simulacion && !esInasist(run.tab) && (await contador(run.linea)) >= cfg.topeDiario) {
     await pausar(`Tope diario alcanzado (${cfg.topeDiario} envíos en la línea ${run.linea}). Reanuda mañana.`);
     notify('Rurush Difusiones', 'Pausado: se llegó al tope diario.');
     return false;
@@ -509,7 +524,7 @@ async function unPaso() {
 
   // Cuenta como enviado aunque quede con reloj: WhatsApp lo manda al reconectar.
   await registrarEnvio(tel, run.linea, run.tab);
-  await contador(run.linea, 1);
+  if (!esInasist(run.tab)) await contador(run.linea, 1); // el tope es solo para difusiones
   await chrome.storage.local.set({ ultimoEnvio: Date.now() });
   run.res.enviados += 1;
   run.fallasSeguidas = 0;
@@ -651,10 +666,15 @@ async function autoCheck() {
     }
 
     if (!cfg.autoActivo) return;
-    if (!cfg.autoDias.includes(now.dow) || now.hour < cfg.autoHora || now.hour >= cfg.horaFin) return;
-    const { autoDia } = await chrome.storage.local.get('autoDia');
-    if (autoDia === now.date) {
-      // Mismo día: solo se retoma la corrida automática que cortó un reinicio de Chrome.
+    if (!cfg.autoDias.includes(now.dow) || now.hour >= cfg.horaFin) return;
+    // Turnos del día: cada línea de Opciones arranca a su hora (una vez por día).
+    let { autoHechas } = await chrome.storage.local.get('autoHechas');
+    if (!autoHechas || autoHechas.date !== now.date) autoHechas = { date: now.date, claves: [] };
+    const turnos = [...new Set((cfg.autoPestanas || []).map((e) => parseEntrada(e, cfg.autoHora))
+      .filter((x) => x.nombre && now.hour >= x.hora).map((x) => `${x.nombre}@${x.hora}`))]
+      .filter((k) => !autoHechas.claves.includes(k));
+    if (!turnos.length) {
+      // Nada nuevo a esta hora: solo se retoma la corrida automática que cortó un reinicio de Chrome.
       if (run && run.auto && run.dia === now.date && run.estado === 'pausado' && /reinici/i.test(run.motivo)) await iniciar();
       return;
     }
@@ -668,22 +688,19 @@ async function autoCheck() {
     }
     const info = await api({ a: 'info' });
     const asesora = (Object.entries(info.lineas).find(([, tel]) => normPhone(tel) === status.wid) || [])[0];
-    await chrome.storage.local.set({ autoDia: now.date });
+    autoHechas.claves.push(...turnos);
+    await chrome.storage.local.set({ autoDia: now.date, autoHechas });
     if (!asesora) {
       await log('warn', `🤖 Automático: la línea ${status.wid} no está en ⚙️ CONFIG (LINEAS). No envío nada hoy.`);
       notify('Rurush Difusiones', `La línea ${status.wid} no está en ⚙️ CONFIG. Hoy no se envía.`);
       return;
     }
-    if (!cfg.dryRun && (await contador(status.wid)) >= cfg.topeDiario) {
-      await log('info', `🤖 Automático: ${asesora} ya llegó al tope de hoy.`);
-      return;
-    }
-
+    const enTope = !cfg.dryRun && (await contador(status.wid)) >= cfg.topeDiario;
     const limitada = await limiteDeLinea(status.wid);
-    if (limitada) await log('info', `🤖 ${asesora}: límite de chats nuevos de WhatsApp hasta el ${limitada}. Hoy solo 🏃 INASISTENCIAS.`);
-    const cola = await colaAuto(cfg, info);
+    if (limitada) await log('info', `🤖 ${asesora}: límite de chats nuevos de WhatsApp hasta el ${limitada}. Solo 🏃 INASISTENCIAS.`);
+    const cola = (await colaAuto(cfg, info)).filter((c) => turnos.includes(c.clave)).map((c) => c.tab);
     for (const pestana of cola) {
-      if (limitada && !esInasist(pestana)) continue;
+      if ((limitada || enTope) && !esInasist(pestana)) continue;
       const nuevo = await cargar(pestana, asesora);
       if (!nuevo.items.length) continue;
       nuevo.auto = true;
@@ -705,11 +722,12 @@ async function autoCheck() {
 
 async function siguientePestanaAuto(run) {
   const cfg = await getConfig();
-  if (!run.simulacion && (await contador(run.linea)) >= cfg.topeDiario) return false;
-  const lista = await colaAuto(cfg);
+  const enTope = !run.simulacion && (await contador(run.linea)) >= cfg.topeDiario;
+  const hora = limaNow().hour;
+  const lista = (await colaAuto(cfg)).filter((c) => hora >= c.hora).map((c) => c.tab);
   const limitada = await limiteDeLinea(run.linea);
   for (const pestana of lista.slice(lista.indexOf(run.tab) + 1)) {
-    if (limitada && !esInasist(pestana)) continue;
+    if ((limitada || enTope) && !esInasist(pestana)) continue;
     let nuevo;
     try { nuevo = await cargar(pestana, run.asesora); } catch (e) {
       await log('info', `🤖 ${pestana}: ${e.message || e}`);
