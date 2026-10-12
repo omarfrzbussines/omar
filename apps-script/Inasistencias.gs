@@ -56,8 +56,8 @@ function activarInasistenciasDiario() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'generarInasistencias') ScriptApp.deleteTrigger(t);
   });
-  ScriptApp.newTrigger('generarInasistencias').timeBased().everyDays(1).atHour(7).inTimezone('America/Lima').create();
-  SpreadsheetApp.getUi().alert('Listo ✅ La lista de inasistencias se arma sola de lunes a sábado a las 7 am.');
+  ScriptApp.newTrigger('generarInasistencias').timeBased().everyDays(1).atHour(9).nearMinute(30).inTimezone('America/Lima').create();
+  SpreadsheetApp.getUi().alert('Listo ✅ La lista de inasistencias se arma sola de lunes a sábado a las 9:30 am (justo antes del envío de las 10), así no le escribe a quien vino temprano.');
 }
 
 // ───────────────────────── proceso ─────────────────────────

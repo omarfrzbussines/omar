@@ -28,7 +28,7 @@ function onOpen() {
     .addSeparator()
     .addItem('🏃 Guardar clave de Apps Fit', 'guardarClaveAppsFit')
     .addItem('🏃 Armar lista de inasistencias ahora', 'generarInasistenciasMenu')
-    .addItem('🏃 Activar lista diaria (7 am, lun–sáb)', 'activarInasistenciasDiario')
+    .addItem('🏃 Activar lista diaria (9:30 am, lun–sáb)', 'activarInasistenciasDiario')
     .addToUi();
 }
 
