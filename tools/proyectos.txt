@@ -1,0 +1,16 @@
+# Proyectos de Apps Script que ACTUALIZAR.bat sube a Google con clasp.
+# Formato:  carpeta | ID del script | cuenta | ID de la implementación (opcional, para apps web)
+#  - ID del script: Apps Script → ⚙️ Configuración del proyecto → "ID de la secuencia de comandos".
+#  - cuenta: un nombre corto para la cuenta de Google donde vive el script (ej. omar1, omar2).
+#            Cada cuenta se conecta una vez con CONECTAR_CUENTA.bat.
+#  - ID de la implementación: Implementar → Gestionar implementaciones → "ID de implementación".
+#    Si lo pones, la app web queda actualizada en el MISMO link (nueva versión).
+# Una línea sin ID del script se salta.
+
+rurush-app-celular   | 1CvThcipLfFKhCZv-glv6O3YTnkPUhrETIt6fjrQtiVRYlN2GeDxiFGqU | omar2 |
+rurush-sheet-scripts |  |  |
+rurush-nutricion     |  |  |
+apps-script          |  |  |
+rurush-historias-ig  |  |  |
+rurush-app-entrevistas |  |  |
+agenda-app           |  |  |
