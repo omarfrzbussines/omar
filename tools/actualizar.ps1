@@ -31,7 +31,10 @@ Linea "`n☁️  Apps Script:" Cyan
 foreach ($l in Get-Content (Join-Path $tools "proyectos.txt")) {
   if ($l.Trim() -eq "" -or $l.Trim().StartsWith("#")) { continue }
   $p = $l.Split("|") | ForEach-Object { $_.Trim() }
-  $carpeta, $id, $cuenta, $dep = $p[0], $p[1], $p[2], $(if ($p.Count -gt 3) { $p[3] } else { "" })
+  $carpeta, $id, $cuenta = $p[0], $p[1], $p[2]
+  $dep = $(if ($p.Count -gt 3) { $p[3] } else { "" })
+  $mapa = @{}
+  if ($p.Count -gt 4 -and $p[4]) { foreach ($par in $p[4].Split(";")) { $kv = $par.Split("="); if ($kv.Count -eq 2) { $mapa[$kv[0].Trim()] = $kv[1].Trim() } } }
   if (-not $id) { continue }
   $ultimo = (git log -1 --format=%H -- $carpeta).Trim()
   if ($estado[$carpeta] -eq $ultimo) { Linea "   = $carpeta (sin cambios)"; continue }
@@ -46,9 +49,10 @@ foreach ($l in Get-Content (Join-Path $tools "proyectos.txt")) {
     if ($LASTEXITCODE -ne 0) { throw "no pude bajar el proyecto (¿cuenta conectada? ¿API de Apps Script activada?)" }
     $locales = Get-ChildItem (Join-Path $repo $carpeta) -File | Where-Object { $_.Extension -in ".gs",".js",".html" -or $_.Name -eq "appsscript.json" } | Where-Object { $NO_SUBIR -notcontains $_.Name }
     foreach ($f in $locales) {
-      $base = [IO.Path]::GetFileNameWithoutExtension($f.Name)
+      $nombre = $(if ($mapa.ContainsKey($f.Name)) { $mapa[$f.Name] } else { $f.Name })
+      $base = [IO.Path]::GetFileNameWithoutExtension($nombre)
       if ($f.Extension -in ".gs",".js") { Remove-Item (Join-Path $dir "$base.js"), (Join-Path $dir "$base.gs") -ErrorAction SilentlyContinue }
-      Copy-Item $f.FullName (Join-Path $dir $f.Name) -Force
+      Copy-Item $f.FullName (Join-Path $dir $nombre) -Force
     }
     clasp @u push --force | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "falló clasp push" }
