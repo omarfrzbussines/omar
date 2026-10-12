@@ -174,12 +174,16 @@ function mediaPublica_(archivo) {
     f = subcarpeta_('_jpg').createFile(archivo.getBlob().getAs('image/jpeg').setName(nombre));
     copia = true;
   }
+  archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   const id = f.getId();
+  // Primero la versión que Google entrega ya achicada a 1080 de ancho y en JPG (=w1080-rj):
+  // Instagram rechaza imágenes de más de 8 MB y los PNG de diseño suelen pasar de 10 MB.
   const urls = video
     ? ['https://drive.usercontent.google.com/download?id=' + id + '&export=download&confirm=t',
        'https://drive.google.com/uc?export=download&id=' + id]
-    : ['https://lh3.googleusercontent.com/d/' + id,
+    : ['https://lh3.googleusercontent.com/d/' + archivo.getId() + '=w1080-rj',
+       'https://lh3.googleusercontent.com/d/' + id,
        'https://drive.usercontent.google.com/download?id=' + id + '&export=download&confirm=t'];
   return { video: video, urls: urls, copia: copia };
 }
