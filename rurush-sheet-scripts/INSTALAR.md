@@ -60,7 +60,8 @@ funcionando con la lectura de siempre.
 La app tiene dos pestañas arriba: **📞 Llamadas** y **💰 Cobros**. Cobros lee y escribe la pestaña
 **2. COLA RENOVAR** del Sheet *VENTAS RETENCIÓN 2026 V2*:
 - **Ver:** cada asesora ve SUS cobros (columna K = su nombre) con monto (N) y fecha de cobro (S),
-  separados en atrasados / hoy / próximos, con 💬 y 📞. Sale de la lista cuando RENOVADO? (O) = SÍ.
+  separados en atrasados / hoy / próximos, con 💬 y 📞, y un selector de mes (según la fecha de cobro;
+  el celular recuerda el último mes elegido). Sale de la lista cuando RENOVADO? (O) = SÍ.
 - **Agregar:** pone el **código** del socio (columna B) → la app muestra nombre, celular, plan, vence y
   asesor → pone **monto** y **fecha** → se escribe en la primera fila libre (B, N, S y una nota en T
   "📱 app ASESORA fecha"). Las fórmulas de la fila traen el resto, como cuando se escribe a mano.

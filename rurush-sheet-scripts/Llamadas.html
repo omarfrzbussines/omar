@@ -245,6 +245,10 @@ function revisarCola() { if (cola.length - idx <= 5) traer(false); }
 
 /* ---------- 💰 Cobros pendientes (pestaña "2. COLA RENOVAR" de VENTAS RETENCIÓN) ---------- */
 let VISTA = 'llamadas', cobros = null, cargandoCobros = false;
+// mes elegido en Cobros ("" = todos), se recuerda en el celular
+let MES_COBRO = (() => { try { return localStorage.getItem('rr_mescobro') || ''; } catch (e) { return ''; } })();
+const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const nombreMes = (ym) => MESES[Number(ym.slice(5, 7)) - 1] + ' ' + ym.slice(0, 4);
 const soles = (n) => 'S/' + Math.round(n).toLocaleString('en-US');
 const fechaCorta = (iso) => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : '';
 function cambiarVista(v) {
@@ -272,16 +276,21 @@ function filaCobro(c) {
     <div><div class="mt">${soles(c.monto)}</div>${f}</div>${tel}</div>`;
 }
 function pintarCobros() {
-  const l = cobros.lista, atr = l.filter((c) => c.dias < 0), hoyL = l.filter((c) => c.dias === 0), prox = l.filter((c) => c.dias > 0);
+  const hoyMes = cobros.hoy.slice(0, 7);
+  const meses = [...new Set(cobros.lista.map((c) => c.fecha.slice(0, 7)).concat(hoyMes))].sort();
+  if (MES_COBRO && meses.indexOf(MES_COBRO) < 0) MES_COBRO = '';
+  const l = MES_COBRO ? cobros.lista.filter((c) => c.fecha.slice(0, 7) === MES_COBRO) : cobros.lista, atr = l.filter((c) => c.dias < 0), hoyL = l.filter((c) => c.dias === 0), prox = l.filter((c) => c.dias > 0);
   const suma = (a) => a.reduce((t, c) => t + c.monto, 0);
   const seccion = (t, a) => a.length ? `<h2>${t} · ${soles(suma(a))}</h2>${a.map(filaCobro).join('')}` : '';
   $('#main').innerHTML = `
     <button class="nuevo" id="nuevoCobro">＋ Agregar cobro</button>
-    <div class="totales"><div class="tot"><span>Pendiente total (${l.length})</span><b>${soles(suma(l))}</b></div>
+    <select class="bases" id="mesCobro" style="margin:4px 0 10px"><option value="">📅 Todos los meses</option>${meses.map((m) => `<option value="${m}" ${m === MES_COBRO ? 'selected' : ''}>📅 ${nombreMes(m)}${m === hoyMes ? ' (este mes)' : ''}</option>`).join('')}</select>
+    <div class="totales"><div class="tot"><span>Pendiente ${MES_COBRO ? 'del mes' : 'total'} (${l.length})</span><b>${soles(suma(l))}</b></div>
       <div class="tot atr"><span>Atrasado (${atr.length})</span><b>${soles(suma(atr))}</b></div></div>
-    ${l.length ? seccion('⚠️ Atrasados', atr) + seccion('📅 Hoy', hoyL) + seccion('Próximos', prox) : '<div class="vacio">No tienes cobros pendientes 🎉</div>'}
+    ${l.length ? seccion('⚠️ Atrasados', atr) + seccion('📅 Hoy', hoyL) + seccion('Próximos', prox) : `<div class="vacio">No tienes cobros pendientes${MES_COBRO ? ' en ' + nombreMes(MES_COBRO) : ''} 🎉</div>`}
     <div class="tip" style="text-align:center;margin-top:14px">Cuando cobres, márcalo RENOVADO = SÍ en el Sheet y sale de esta lista.</div>`;
   $('#nuevoCobro').onclick = formCobro;
+  $('#mesCobro').onchange = () => { MES_COBRO = $('#mesCobro').value; try { localStorage.setItem('rr_mescobro', MES_COBRO); } catch (e) {} pintarCobros(); };
 }
 function formCobro() {
   $('#main').innerHTML = `
