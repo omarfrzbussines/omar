@@ -109,10 +109,21 @@ function leerLocal() {
   return null;
 }
 
+let vigia = null;
+function vigilar(t0, que) {
+  clearInterval(vigia);
+  vigia = setInterval(() => {
+    const s = Math.round((Date.now() - t0) / 1000);
+    if (!trayendo) return clearInterval(vigia);
+    if (s >= 15) $('#sub').textContent = `⏳ ${que}… ${s} s (el Sheet está lento)`;
+    if (s >= 90) { clearInterval(vigia); trayendo = false; toast('El servidor no respondió en 90 s. Toca 🔄 para reintentar y avisa a Omar.', true); }
+  }, 1000);
+}
 function traer(reset) {
   if (trayendo) return; trayendo = true;
   const excluir = reset ? [] : cola.slice(idx).map((x) => x.fila);
   const t0 = Date.now(), base = BASE;
+  vigilar(t0, 'Cargando tu cola');
   google.script.run
     .withSuccessHandler((r) => {
       trayendo = false;
