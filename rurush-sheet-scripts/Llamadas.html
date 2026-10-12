@@ -46,6 +46,25 @@
   .toast { position:fixed; left:16px; right:16px; bottom:16px; background:#2c2c2e; color:#fff; padding:12px 14px; border-radius:12px; font-size:14px; display:none; z-index:20; }
   .toast.err { background:#5c1f1f; }
   .vacio { text-align:center; color:var(--mut); padding:60px 10px; }
+  .tabs { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:10px; }
+  .tab { background:var(--card); color:var(--mut); border:1px solid var(--line); border-radius:10px; padding:9px; font-size:15px; font-weight:600; }
+  .tab.on { background:#2a1414; border-color:var(--red); color:#fff; }
+  .totales { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .tot { background:var(--card); border-radius:14px; padding:12px; } .tot b { display:block; font-size:22px; margin-top:2px; } .tot span { color:var(--mut); font-size:12px; }
+  .tot.atr b { color:var(--red); }
+  .cobro { background:var(--card); border-radius:14px; padding:12px 14px; margin-bottom:8px; }
+  .cobro .arriba { display:flex; gap:10px; align-items:flex-start; }
+  .cobro .btns { display:grid; grid-template-columns:1.15fr 1fr 1.15fr; gap:6px; margin-top:10px; }
+  .cobro .btns a, .cobro .btns button { display:flex; white-space:nowrap; align-items:center; justify-content:center; gap:4px; border-radius:10px; padding:9px 4px; font-size:14px; font-weight:600; text-decoration:none; border:0; background:var(--line); color:var(--tx); }
+  .cobro .d { flex:1; min-width:0; } .cobro .n { font-weight:700; word-break:break-word; } .cobro .s { color:var(--mut); font-size:13px; margin-top:2px; }
+  .cobro .mt { font-weight:700; font-size:17px; text-align:right; white-space:nowrap; }
+  .cobro .f { font-size:12px; color:var(--mut); text-align:right; margin-top:2px; } .cobro .f.atr { color:var(--red); font-weight:600; } .cobro .f.hoy { color:#ffcc00; font-weight:600; }
+  .cobro .btns .ok { background:#1f3d2b; color:var(--grn); font-weight:700; }
+  .nuevo { width:100%; background:var(--red); color:#fff; border:0; border-radius:14px; padding:14px; font-size:16px; font-weight:700; margin-bottom:6px; }
+  .buscar { display:grid; grid-template-columns:1fr auto; gap:8px; } .buscar button { background:var(--ice); color:#04121f; border:0; border-radius:12px; padding:0 16px; font-weight:700; font-size:15px; }
+  .sa { display:inline-block; white-space:nowrap; margin-top:4px; font-size:12px; padding:1px 7px; border-radius:7px; background:var(--line); color:var(--mut); }
+  .sa.med { background:#3a2e10; color:#ffcc00; } .sa.alto { background:#3d1515; color:#ff6b6b; }
+  .aviso { background:#3a2e10; color:#ffd666; border-radius:10px; padding:10px; font-size:13px; margin-top:10px; }
 </style>
 </head>
 <body>
@@ -54,8 +73,9 @@
     <div><h1><b>RURUSH</b> Llamadas</h1><div class="sub" id="sub">Hola <?= asesora ?></div></div>
     <button class="btn-s" id="recargar">🔄</button>
   </div>
-  <select class="bases" id="base"></select>
-  <div class="marcador" id="marcador"></div>
+  <div class="tabs"><button class="tab on" data-v="llamadas">📞 Llamadas</button><button class="tab" data-v="cobros">💰 Cobros</button></div>
+  <div id="vistaLlamadas"><select class="bases" id="base"></select>
+  <div class="marcador" id="marcador"></div></div>
 </header>
 <main id="main"><div class="vacio">Cargando tu cola…</div></main>
 <div class="toast" id="toast"></div>
@@ -89,10 +109,21 @@ function leerLocal() {
   return null;
 }
 
+let vigia = null;
+function vigilar(t0, que) {
+  clearInterval(vigia);
+  vigia = setInterval(() => {
+    const s = Math.round((Date.now() - t0) / 1000);
+    if (!trayendo) return clearInterval(vigia);
+    if (s >= 15) $('#sub').textContent = `⏳ ${que}… ${s} s (el Sheet está lento)`;
+    if (s >= 90) { clearInterval(vigia); trayendo = false; toast('El servidor no respondió en 90 s. Toca 🔄 para reintentar y avisa a Omar.', true); }
+  }, 1000);
+}
 function traer(reset) {
   if (trayendo) return; trayendo = true;
   const excluir = reset ? [] : cola.slice(idx).map((x) => x.fila);
   const t0 = Date.now(), base = BASE;
+  vigilar(t0, 'Cargando tu cola');
   google.script.run
     .withSuccessHandler((r) => {
       trayendo = false;
@@ -105,11 +136,12 @@ function traer(reset) {
         if (enPantalla) { const j = cola.findIndex((x) => x.fila === enPantalla.fila); if (j > 0) { cola.splice(j, 1); cola.unshift(enPantalla); } else if (j < 0) cola.unshift(enPantalla); }
       } else { cola = cola.concat(r.cola); }
       guardarLocal();
-      $('#sub').textContent = `Hola ${ASESORA} · cargó en ${((Date.now() - t0) / 1000).toFixed(1)} s`;
+      $('#sub').textContent = `Hola ${ASESORA} · cargó en ${((Date.now() - t0) / 1000).toFixed(1)} s${r.api === false ? ' · lectura lenta (falta servicio Sheets)' : ''}`;
+      if (!cobros && !cargandoCobros) setTimeout(traerCobros, 500);   // deja lista la pestaña Cobros
       pintarMarcador();
-      if (!mostrando || !actual()) { mostrando = true; pintar(); }
+      if (VISTA === 'llamadas' && (!mostrando || !actual())) { mostrando = true; pintar(); }
     })
-    .withFailureHandler((e) => { trayendo = false; if (/CELULAR_NO_AUTORIZADO/.test(e.message || e)) return google.script.run.withSuccessHandler(pantallaPin).app_estadoCelular(LLAVE); toast(e.message || String(e), true); if (!cola.length) $('#main').innerHTML = `<div class="vacio">${esc(e.message || e)}</div>`; })
+    .withFailureHandler((e) => { trayendo = false; if (/CELULAR_NO_AUTORIZADO/.test(e.message || e)) return google.script.run.withSuccessHandler(pantallaPin).app_estadoCelular(LLAVE); toast(e.message || String(e), true); if (!cola.length && VISTA === 'llamadas') $('#main').innerHTML = `<div class="vacio">${esc(e.message || e)}</div>`; })
     .app_getCola(LLAVE, BASE, excluir);
 }
 
@@ -228,7 +260,135 @@ function guardar() {
 
 function revisarCola() { if (cola.length - idx <= 5) traer(false); }
 
-$('#recargar').onclick = () => { mostrando = false; cola = []; idx = 0; $('#main').innerHTML = '<div class="vacio">Cargando…</div>'; traer(true); };
+/* ---------- 💰 Cobros pendientes (pestaña "2. COLA RENOVAR" de VENTAS RETENCIÓN) ---------- */
+let VISTA = 'llamadas', cobros = null, cargandoCobros = false;
+// última lista de cobros guardada en el celular: la pestaña abre al instante y se actualiza por detrás
+try { const c = JSON.parse(localStorage.getItem('rr_cobros_' + ASESORA) || 'null'); if (c && c.lista) cobros = c; } catch (e) {}
+// mes elegido en Cobros ("" = todos), se recuerda en el celular
+let MES_COBRO = (() => { try { return localStorage.getItem('rr_mescobro') || ''; } catch (e) { return ''; } })();
+const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const nombreMes = (ym) => MESES[Number(ym.slice(5, 7)) - 1] + ' ' + ym.slice(0, 4);
+const soles = (n) => 'S/' + Math.round(n).toLocaleString('en-US');
+// Días sin asistir: verde hasta 7, amarillo 8-14, rojo 15+.
+const diasSA = (d) => d == null ? '' : `<span class="sa ${d >= 15 ? 'alto' : d >= 8 ? 'med' : ''}">🏃 ${d === 0 ? 'vino hoy' : d + ' d sin asistir'}</span>`;
+const fechaCorta = (iso) => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : '';
+function cambiarVista(v) {
+  VISTA = v;
+  document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.dataset.v === v));
+  $('#vistaLlamadas').style.display = v === 'llamadas' ? '' : 'none';
+  if (v === 'llamadas') { if (mostrando) pintar(); else $('#main').innerHTML = '<div class="vacio">Cargando tu cola…</div>'; return; }
+  if (cobros) pintarCobros(); else $('#main').innerHTML = '<div class="vacio">Cargando tus cobros…</div>';
+  traerCobros();
+}
+document.querySelectorAll('.tab').forEach((t) => t.onclick = () => cambiarVista(t.dataset.v));
+function traerCobros() {
+  if (cargandoCobros) return; cargandoCobros = true;
+  google.script.run
+    .withSuccessHandler((r) => { cargandoCobros = false; cobros = r; try { localStorage.setItem('rr_cobros_' + ASESORA, JSON.stringify(r)); } catch (e) {} if (VISTA === 'cobros' && !$('#codigo') && !$('#montoOk')) pintarCobros(); })
+    .withFailureHandler((e) => { cargandoCobros = false; toast(e.message || String(e), true); if (VISTA === 'cobros' && !cobros) $('#main').innerHTML = `<div class="vacio">⚠️ ${esc(e.message || e)}</div>`; })
+    .cob_lista(LLAVE);
+}
+function filaCobro(c) {
+  const f = c.dias < 0 ? `<div class="f atr">atrasado ${-c.dias} d · ${fechaCorta(c.fecha)}</div>`
+    : c.dias === 0 ? '<div class="f hoy">HOY</div>' : `<div class="f">${fechaCorta(c.fecha)} · en ${c.dias} d</div>`;
+  const tel = c.celular ? `<a href="https://wa.me/51${c.celular}" target="_blank">💬 WhatsApp</a><a href="tel:+51${c.celular}">📞 Llamar</a>` : '<span></span><span></span>';
+  const ok = `<button class="ok" data-f="${c.fila}">✓ Cobrado</button>`;
+  return `<div class="cobro"><div class="arriba"><div class="d"><div class="n">${esc(c.nombre || 'Cód. ' + c.codigo)}</div>
+    <div class="s">Cód. ${esc(c.codigo)}${c.plan ? ' · ' + esc(c.plan) : ''}${c.notas ? ' · ' + esc(c.notas) : ''}</div>${diasSA(c.diasSA)}</div>
+    <div><div class="mt">${soles(c.monto)}</div>${f}</div></div><div class="btns">${tel}${ok}</div></div>`;
+}
+function pintarCobros() {
+  // la lista puede venir guardada de otro día: días y "hoy" se recalculan con la fecha del celular
+  const d = new Date(), hoyIso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  if (cobros.hoy !== hoyIso) { cobros.hoy = hoyIso; cobros.lista.forEach((c) => c.dias = Math.round((Date.parse(c.fecha) - Date.parse(hoyIso)) / 864e5)); }
+  const hoyMes = cobros.hoy.slice(0, 7);
+  const meses = [...new Set(cobros.lista.map((c) => c.fecha.slice(0, 7)).concat(hoyMes))].sort();
+  if (MES_COBRO && meses.indexOf(MES_COBRO) < 0) MES_COBRO = '';
+  const l = MES_COBRO ? cobros.lista.filter((c) => c.fecha.slice(0, 7) === MES_COBRO) : cobros.lista, atr = l.filter((c) => c.dias < 0), hoyL = l.filter((c) => c.dias === 0), prox = l.filter((c) => c.dias > 0);
+  const suma = (a) => a.reduce((t, c) => t + c.monto, 0);
+  const seccion = (t, a) => a.length ? `<h2>${t} · ${soles(suma(a))}</h2>${a.map(filaCobro).join('')}` : '';
+  $('#main').innerHTML = `
+    <button class="nuevo" id="nuevoCobro">＋ Agregar cobro</button>
+    <select class="bases" id="mesCobro" style="margin:4px 0 10px"><option value="">📅 Todos los meses</option>${meses.map((m) => `<option value="${m}" ${m === MES_COBRO ? 'selected' : ''}>📅 ${nombreMes(m)}${m === hoyMes ? ' (este mes)' : ''}</option>`).join('')}</select>
+    <div class="totales"><div class="tot"><span>Pendiente ${MES_COBRO ? 'del mes' : 'total'} (${l.length})</span><b>${soles(suma(l))}</b></div>
+      <div class="tot atr"><span>Atrasado (${atr.length})</span><b>${soles(suma(atr))}</b></div></div>
+    ${l.length ? seccion('⚠️ Atrasados', atr) + seccion('📅 Hoy', hoyL) + seccion('Próximos', prox) : `<div class="vacio">No tienes cobros pendientes${MES_COBRO ? ' en ' + nombreMes(MES_COBRO) : ''} 🎉</div>`}
+    <div class="tip" style="text-align:center;margin-top:14px">Cuando te paguen, toca ✓ Cobrado: queda RENOVADO = SÍ en el Sheet y sale de esta lista.</div>`;
+  $('#nuevoCobro').onclick = formCobro;
+  document.querySelectorAll('.cobro .ok').forEach((b) => b.onclick = () => formCobrado(cobros.lista.find((c) => c.fila === Number(b.dataset.f))));
+  $('#mesCobro').onchange = () => { MES_COBRO = $('#mesCobro').value; try { localStorage.setItem('rr_mescobro', MES_COBRO); } catch (e) {} pintarCobros(); };
+}
+// ✓ Cobrado: confirma monto y fecha real (hoy por defecto) → RENOVADO = SÍ en el Sheet.
+function formCobrado(c) {
+  if (!c) return;
+  const hoyIso = cobros.hoy;
+  $('#main').innerHTML = `
+    <h2 style="margin-top:4px">Marcar como cobrado</h2>
+    <div class="card"><div class="nombre">${esc(c.nombre || 'Cód. ' + c.codigo)}</div>
+      <div class="num">Cód. ${esc(c.codigo)} · pactado ${soles(c.monto)} para el ${fechaCorta(c.fecha)}</div></div>
+    <div class="fila2" style="margin-top:12px;color:var(--mut);font-size:12px"><span>Monto cobrado</span><span>Fecha en que pagó</span></div>
+    <div class="fila2" style="margin-top:4px"><input id="montoOk" type="number" inputmode="decimal" min="1" value="${c.monto}"><input id="fechaOk" type="date" value="${hoyIso}"></div>
+    <button class="guardar" id="guardarOk" style="background:#2e9d4f">✓ Confirmar cobro</button>
+    <button class="saltar" id="volverOk">← Volver a mis cobros</button>`;
+  $('#volverOk').onclick = pintarCobros;
+  $('#guardarOk').onclick = () => {
+    const monto = Number($('#montoOk').value), f = $('#fechaOk').value;
+    if (!(monto > 0)) return toast('Pon el monto', true);
+    if (!f) return toast('Pon la fecha', true);
+    $('#guardarOk').disabled = true;
+    google.script.run
+      .withSuccessHandler(() => { toast(`✓ ${c.nombre || c.codigo}: cobrado ${soles(monto)}`); cobros.lista = cobros.lista.filter((x) => x.fila !== c.fila); pintarCobros(); traerCobros(); })
+      .withFailureHandler((e) => { $('#guardarOk').disabled = false; toast(e.message || String(e), true); })
+      .cob_marcarCobrado(LLAVE, c.fila, c.codigo, monto, f);
+  };
+}
+function formCobro() {
+  $('#main').innerHTML = `
+    <h2 style="margin-top:4px">Nuevo cobro</h2>
+    <div class="buscar"><input id="codigo" inputmode="text" autocomplete="off" placeholder="Código del socio"><button id="buscar">Buscar</button></div>
+    <div id="socio"></div>
+    <button class="saltar" id="volver">← Volver a mis cobros</button>`;
+  $('#codigo').focus();
+  $('#volver').onclick = () => (cobros ? pintarCobros() : traerCobros());
+  const buscar = () => {
+    const cod = $('#codigo').value.trim(); if (!cod) return;
+    $('#socio').innerHTML = '<div class="vacio" style="padding:24px">Buscando…</div>';
+    google.script.run
+      .withSuccessHandler((s) => pintarSocio(s))
+      .withFailureHandler((e) => { $('#socio').innerHTML = `<div class="aviso">⚠️ ${esc(e.message || e)}</div>`; })
+      .cob_buscar(LLAVE, cod);
+  };
+  $('#buscar').onclick = buscar;
+  $('#codigo').onkeydown = (e) => { if (e.key === 'Enter') buscar(); };
+}
+function pintarSocio(s) {
+  const otra = s.quedaA && s.quedaA.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') !== ASESORA;
+  $('#socio').innerHTML = `
+    <div class="card" style="margin-top:12px">
+      <div class="nombre">${esc(s.nombre || 'Sin nombre')}</div>
+      <div class="num">${s.celular ? '+51 ' + esc(s.celular.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3')) : 'Sin celular'}</div>
+      <div class="meta"><span class="tag">Cód. ${esc(s.codigo)}</span>${s.plan ? `<span class="tag">${esc(s.plan)}</span>` : ''}${s.vence ? `<span class="tag">vence ${fechaCorta(s.vence)}</span>` : ''}${s.estado ? `<span class="tag">${esc(s.estado)}</span>` : ''}<span class="tag">asesor: ${esc(s.quedaA || '—')}</span></div>
+      ${diasSA(s.diasSA)}
+    </div>
+    ${otra ? `<div class="aviso">Este cobro queda a nombre de <b>${esc(s.quedaA || 'nadie')}</b> (asesor del socio) y no te va a salir en tu lista.</div>` : ''}
+    ${s.pendientes.length ? `<div class="aviso">Ya tiene ${s.pendientes.length} cobro(s) pendiente(s): ${s.pendientes.map((c) => soles(c.monto) + ' el ' + fechaCorta(c.fecha)).join(', ')}.</div>` : ''}
+    <div class="fila2" style="margin-top:12px;color:var(--mut);font-size:12px"><span>Monto</span><span>Fecha de cobro</span></div>
+    <div class="fila2" style="margin-top:4px"><input id="monto" type="number" inputmode="decimal" min="1" placeholder="Monto S/"><input id="fcobro" type="date"></div>
+    <button class="guardar" id="guardarCobro">Guardar cobro</button>`;
+  $('#monto').focus();
+  $('#guardarCobro').onclick = () => {
+    const monto = Number($('#monto').value), f = $('#fcobro').value;
+    if (!(monto > 0)) return toast('Pon el monto', true);
+    if (!f) return toast('Pon la fecha de cobro', true);
+    $('#guardarCobro').disabled = true;
+    google.script.run
+      .withSuccessHandler((r) => { toast(`✓ Cobro de ${soles(monto)} guardado (fila ${r.fila})`); cobros = null; $('#main').innerHTML = '<div class="vacio">Actualizando…</div>'; traerCobros(); })
+      .withFailureHandler((e) => { $('#guardarCobro').disabled = false; toast(e.message || String(e), true); })
+      .cob_agregar(LLAVE, s.codigo, monto, f);
+  };
+}
+
+$('#recargar').onclick = () => { if (VISTA === 'cobros') return traerCobros(); mostrando = false; cola = []; idx = 0; $('#main').innerHTML = '<div class="vacio">Cargando…</div>'; traer(true); };
 // Selector de base: cada base tiene su propia cola
 $('#base').innerHTML = BASES.map((b) => `<option ${b === BASE ? 'selected' : ''}>${esc(b)}</option>`).join('');
 $('#base').onchange = () => {

@@ -301,3 +301,36 @@ function app_guardar(llave, base, fila, numero, estado, obs, fpFecha, fpHora, in
   cache.put(k, JSON.stringify(c), 21600);
   return r;
 }
+
+/** Ejecutar desde el editor cuando la app "se queda cargando": mide cada paso que hace el celular
+ *  y muestra en el registro cuál falla o cuál tarda. No escribe nada. */
+function app_diagnostico() {
+  const llaves = JSON.parse(app_props().getProperty("APP_LLAVES") || "{}");
+  const k = Object.keys(llaves)[0];
+  Logger.log("Servicio Sheets (lectura rápida): " + (app_conApi() ? "SÍ ✅" : "NO ❌ → Servicios → + → Google Sheets API"));
+  Logger.log("Candado: " + (app_props().getProperty("APP_PIN") ? "encendido" : "apagado") + " · links: " + Object.keys(llaves).length);
+  if (!k) { Logger.log("❌ No hay links: ejecuta app_verLinks."); return; }
+  const paso = function (nombre, fn) {
+    const t0 = Date.now();
+    try { const r = fn(); Logger.log("✅ " + nombre + ": " + ((Date.now() - t0) / 1000).toFixed(1) + " s" + (r ? " · " + r : "")); }
+    catch (e) { Logger.log("❌ " + nombre + " (" + ((Date.now() - t0) / 1000).toFixed(1) + " s): " + e.message); }
+  };
+  const cache = CacheService.getScriptCache();
+  paso("cola 2026 (" + llaves[k] + ")", function () { return app_getColaDiag_(llaves[k], "2026"); });
+  paso("cobros (" + llaves[k] + ")", function () {
+    cache.remove("cobl_" + cob_norm(llaves[k]));
+    const l = cob_pendientesDe(cob_leerCola(), cob_norm(llaves[k]), null);
+    return l.length + " pendientes";
+  });
+}
+// Igual que app_getCola pero sin pedir el celular (solo para el diagnóstico); libera las reservas que crea.
+function app_getColaDiag_(asesora, base) {
+  const llaves = JSON.parse(app_props().getProperty("APP_LLAVES") || "{}");
+  const k = Object.keys(llaves).filter(function (x) { return llaves[x] === asesora; })[0];
+  const pin = app_props().getProperty("APP_PIN");
+  const cel = app_celulares()[asesora];
+  const r = app_getCola(k + "|" + (pin && cel ? cel.id : ""), base, []);
+  const cache = CacheService.getScriptCache();
+  r.cola.forEach(function (x) { cache.remove("r" + base + x.fila); });
+  return r.cola.length + " personas · " + r.leidas + " filas leídas · " + (r.api ? "con API" : "SIN API (lento)");
+}

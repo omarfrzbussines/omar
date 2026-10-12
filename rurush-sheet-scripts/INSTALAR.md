@@ -55,3 +55,31 @@ y se activa solo cuando el proyecto tiene el servicio:
 
 Para volver atrás: quita el servicio Sheets (o pon `APP_USAR_API = false`). La app sigue
 funcionando con la lectura de siempre.
+
+## 8. 💰 Cobros pendientes en la app (pestaña nueva)
+La app tiene dos pestañas arriba: **📞 Llamadas** y **💰 Cobros**. Cobros lee y escribe la pestaña
+**2. COLA RENOVAR** del Sheet *VENTAS RETENCIÓN 2026 V2*:
+- **Ver:** cada asesora ve SUS cobros (columna K = su nombre) con monto (N) y fecha de cobro (S),
+  separados en atrasados / hoy / próximos, con 💬 y 📞, y un selector de mes (según la fecha de cobro;
+  el celular recuerda el último mes elegido). Sale de la lista cuando RENOVADO? (O) = SÍ.
+- **Agregar:** pone el **código** del socio (columna B) → la app muestra nombre, celular, plan, vence y
+  asesor → pone **monto** y **fecha** → se escribe en la primera fila libre (B, N, S y una nota en T
+  "📱 app ASESORA fecha"). También muestra los **días sin asistir** del socio (columna V / DÍAS S/A):
+  gris hasta 7, amarillo 8-14, rojo 15 o más. Las fórmulas de la fila traen el resto, como cuando se escribe a mano.
+
+- **✓ Cobrado:** confirma monto y fecha en que pagó (hoy por defecto) → escribe O = SÍ, N = monto,
+  S = fecha de pago y agrega "✓ cobrado app ASESORA fecha" en T. Así entra en YA COBRADO del cuadro.
+  Antes de escribir verifica que la fila siga siendo ese código y que el cobro sea de esa asesora.
+
+El cuadro DASHBOARD POR ASESOR de esa pestaña se corrigió el 12-oct (ver DASHBOARD_COLA_RENOVAR.md).
+
+Instalar:
+1. **＋ → Secuencia de comandos** → nombre **Cobros** → pega **Cobros.gs** → Ctrl+S.
+2. Pega la versión nueva de **Llamadas.html** → Ctrl+S.
+3. Selector de funciones → **cob_probar** → ▶ Ejecutar → **Autorizar** (pide permiso para abrir el
+   otro Sheet). En el registro salen los pendientes de cada asesora. No escribe nada.
+4. Publica la **nueva versión** (paso 5). Los links de las asesoras no cambian.
+
+> La columna K queda con su fórmula (asesor del socio en BASE DE SOCIOS). Si prefieres que el cobro
+> quede a nombre de la asesora que lo registra, cambia en Cobros.gs
+> `COB_ASESOR_ES_QUIEN_REGISTRA = true`.
