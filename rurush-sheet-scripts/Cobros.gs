@@ -101,17 +101,33 @@ function cob_pendientesDe(filas, asesora, codigo) {
 }
 
 /** Cobros pendientes de la asesora (ordenados por fecha: los atrasados primero). */
+// La lista de cada asesora se guarda 2 min (abrir el otro Sheet tarda); guardar o marcar la borra.
+const COB_CACHE_SEG = 120;
 function cob_lista(llave) {
   const asesora = app_asesora(llave);
-  const t0 = Date.now();
+  const t0 = Date.now(), cache = CacheService.getScriptCache(), k = "cobl_" + cob_norm(asesora);
+  const c = cache.get(k);
+  if (c) { const r = JSON.parse(c); r.ms = Date.now() - t0; r.cache = true; return r; }
   const lista = cob_pendientesDe(cob_leerCola(), cob_norm(asesora), null);
-  return { asesora: asesora, lista: lista, hoy: cob_hoy(), ms: Date.now() - t0 };
+  const r = { asesora: asesora, lista: lista, hoy: cob_hoy(), api: app_conApi() };
+  try { cache.put(k, JSON.stringify(r), COB_CACHE_SEG); } catch (e) {}   // si pasa de 100 KB, sin caché
+  r.ms = Date.now() - t0;
+  return r;
+}
+function cob_limpiarCache() {
+  CacheService.getScriptCache().removeAll(APP_ASESORAS.map(function (a) { return "cobl_" + cob_norm(a); }));
 }
 
 /* Socio por código en BASE DE SOCIOS (B..S): lo mismo que traen las fórmulas de COLA RENOVAR. */
 function cob_socio(codigo) {
-  const hoja = cob_libro().getSheetByName(COB_SOCIOS);
-  const v = hoja.getRange(COB_SOCIOS_INI, 2, COB_SOCIOS_FIN - COB_SOCIOS_INI + 1, 18).getValues();
+  let v;
+  if (app_conApi()) {
+    v = Sheets.Spreadsheets.Values.get(COB_ID, "'" + COB_SOCIOS + "'!B" + COB_SOCIOS_INI + ":S" + COB_SOCIOS_FIN,
+      { valueRenderOption: "UNFORMATTED_VALUE", dateTimeRenderOption: "SERIAL_NUMBER" }).values || [];
+    v = v.map(function (f) { while (f.length < 18) f.push(""); return f; });
+  } else {
+    v = cob_libro().getSheetByName(COB_SOCIOS).getRange(COB_SOCIOS_INI, 2, COB_SOCIOS_FIN - COB_SOCIOS_INI + 1, 18).getValues();
+  }
   const c = cob_norm(codigo);
   for (let i = 0; i < v.length; i++) {
     if (cob_norm(v[i][0]) !== c) continue;
@@ -161,6 +177,7 @@ function cob_agregar(llave, codigo, monto, fechaIso) {
     if (COB_ASESOR_ES_QUIEN_REGISTRA) hoja.getRange(fila, 11).setValue(asesora);     // K
     hoja.getRange(fila, 14).setValue(monto);                                        // N
     hoja.getRange(fila, 19).setValue(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12)); // S
+    cob_limpiarCache();
     hoja.getRange(fila, 20).setValue("📱 app " + asesora + " " + Utilities.formatDate(new Date(), "America/Lima", "dd/MM HH:mm")); // T
     SpreadsheetApp.flush();
     return { ok: true, fila: fila, nombre: s.nombre, quedaA: COB_ASESOR_ES_QUIEN_REGISTRA ? asesora : s.asesor };
@@ -189,6 +206,7 @@ function cob_marcarCobrado(llave, fila, codigo, monto, fechaIso) {
     hoja.getRange(fila, 15).setValue("SÍ");                                         // O
     hoja.getRange(fila, 14).setValue(monto);                                        // N
     hoja.getRange(fila, 19).setValue(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12)); // S
+    cob_limpiarCache();
     const nota = String(f[COB.notas] || "").trim();
     hoja.getRange(fila, 20).setValue((nota ? nota + " · " : "") + "✓ cobrado app " + asesora + " " + Utilities.formatDate(new Date(), "America/Lima", "dd/MM HH:mm")); // T
     SpreadsheetApp.flush();

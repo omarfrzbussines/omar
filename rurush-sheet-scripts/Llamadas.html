@@ -125,7 +125,8 @@ function traer(reset) {
         if (enPantalla) { const j = cola.findIndex((x) => x.fila === enPantalla.fila); if (j > 0) { cola.splice(j, 1); cola.unshift(enPantalla); } else if (j < 0) cola.unshift(enPantalla); }
       } else { cola = cola.concat(r.cola); }
       guardarLocal();
-      $('#sub').textContent = `Hola ${ASESORA} · cargó en ${((Date.now() - t0) / 1000).toFixed(1)} s`;
+      $('#sub').textContent = `Hola ${ASESORA} · cargó en ${((Date.now() - t0) / 1000).toFixed(1)} s${r.api === false ? ' · lectura lenta (falta servicio Sheets)' : ''}`;
+      if (!cobros && !cargandoCobros) setTimeout(traerCobros, 500);   // deja lista la pestaña Cobros
       pintarMarcador();
       if (VISTA === 'llamadas' && (!mostrando || !actual())) { mostrando = true; pintar(); }
     })
@@ -250,6 +251,8 @@ function revisarCola() { if (cola.length - idx <= 5) traer(false); }
 
 /* ---------- 💰 Cobros pendientes (pestaña "2. COLA RENOVAR" de VENTAS RETENCIÓN) ---------- */
 let VISTA = 'llamadas', cobros = null, cargandoCobros = false;
+// última lista de cobros guardada en el celular: la pestaña abre al instante y se actualiza por detrás
+try { const c = JSON.parse(localStorage.getItem('rr_cobros_' + ASESORA) || 'null'); if (c && c.lista) cobros = c; } catch (e) {}
 // mes elegido en Cobros ("" = todos), se recuerda en el celular
 let MES_COBRO = (() => { try { return localStorage.getItem('rr_mescobro') || ''; } catch (e) { return ''; } })();
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -270,7 +273,7 @@ document.querySelectorAll('.tab').forEach((t) => t.onclick = () => cambiarVista(
 function traerCobros() {
   if (cargandoCobros) return; cargandoCobros = true;
   google.script.run
-    .withSuccessHandler((r) => { cargandoCobros = false; cobros = r; if (VISTA === 'cobros' && !$('#codigo')) pintarCobros(); })
+    .withSuccessHandler((r) => { cargandoCobros = false; cobros = r; try { localStorage.setItem('rr_cobros_' + ASESORA, JSON.stringify(r)); } catch (e) {} if (VISTA === 'cobros' && !$('#codigo') && !$('#montoOk')) pintarCobros(); })
     .withFailureHandler((e) => { cargandoCobros = false; toast(e.message || String(e), true); if (VISTA === 'cobros' && !cobros) $('#main').innerHTML = `<div class="vacio">⚠️ ${esc(e.message || e)}</div>`; })
     .cob_lista(LLAVE);
 }
@@ -284,6 +287,9 @@ function filaCobro(c) {
     <div><div class="mt">${soles(c.monto)}</div>${f}</div></div><div class="btns">${tel}${ok}</div></div>`;
 }
 function pintarCobros() {
+  // la lista puede venir guardada de otro día: días y "hoy" se recalculan con la fecha del celular
+  const d = new Date(), hoyIso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  if (cobros.hoy !== hoyIso) { cobros.hoy = hoyIso; cobros.lista.forEach((c) => c.dias = Math.round((Date.parse(c.fecha) - Date.parse(hoyIso)) / 864e5)); }
   const hoyMes = cobros.hoy.slice(0, 7);
   const meses = [...new Set(cobros.lista.map((c) => c.fecha.slice(0, 7)).concat(hoyMes))].sort();
   if (MES_COBRO && meses.indexOf(MES_COBRO) < 0) MES_COBRO = '';
