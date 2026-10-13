@@ -20,6 +20,8 @@ if (-not (Tiene "clasp")) { Linea "Instalando clasp (Google)..." Yellow; npm ins
 Set-Location $repo
 $antes = (git rev-parse HEAD).Trim()
 Linea "`n⬇️  Bajando lo nuevo de GitHub..." Cyan
+# si los únicos cambios locales son saltos de línea de Windows (CRLF), se descartan
+if (git status --porcelain) { git diff --ignore-cr-at-eol --quiet; if ($LASTEXITCODE -eq 0) { git checkout -- . } }
 git pull --ff-only
 $despues = (git rev-parse HEAD).Trim()
 if ($antes -eq $despues) { Linea "   Ya estaba al día." } else { git log --oneline "$antes..$despues" | ForEach-Object { Linea "   • $_" } }
@@ -92,8 +94,16 @@ foreach ($l in Get-Content (Join-Path $tools "proyectos.txt") -Encoding UTF8) {
         $base = [IO.Path]::GetFileNameWithoutExtension($nombre)
         $remoto = Get-ChildItem (Join-Path $tmp "$carpeta-google") -File -ErrorAction SilentlyContinue | Where-Object { [IO.Path]::GetFileNameWithoutExtension($_.Name) -eq $base -and ($_.Extension -eq $f.Extension -or ($_.Extension -in ".js",".gs" -and $f.Extension -in ".js",".gs")) } | Select-Object -First 1
         if (-not $remoto) { $dif += "NUEVO en Google: $nombre"; continue }
-        $a = (Get-Content $f.FullName -Raw) -replace "`r`n", "`n"; $b = (Get-Content $remoto.FullName -Raw) -replace "`r`n", "`n"
-        if ($a.Trim() -ne $b.Trim()) { $dif += "CAMBIA: $nombre" }
+        $a = (Get-Content $f.FullName -Raw -Encoding UTF8) -replace "`r`n", "`n"; $b = (Get-Content $remoto.FullName -Raw -Encoding UTF8) -replace "`r`n", "`n"
+        if ($f.Name -eq "appsscript.json") {   # Google reordena el JSON: se compara el contenido, no el texto
+          try { $a = ($a | ConvertFrom-Json | ConvertTo-Json -Depth 20 -Compress); $b = ($b | ConvertFrom-Json | ConvertTo-Json -Depth 20 -Compress) } catch {}
+        }
+        if ($a.Trim() -ne $b.Trim()) {
+          $la = $a.Trim() -split "`n"; $lb = $b.Trim() -split "`n"
+          $d = @(Compare-Object $lb $la)
+          $mas = @($d | Where-Object SideIndicator -eq "=>").Count; $menos = @($d | Where-Object SideIndicator -eq "<=").Count
+          $dif += "CAMBIA: $nombre (+$mas / -$menos líneas)"
+        }
       }
       $soloGoogle = Get-ChildItem (Join-Path $tmp "$carpeta-google") -File | Where-Object { $_.Name -ne ".clasp.json" } | ForEach-Object { $_.Name } | Where-Object { $n = [IO.Path]::GetFileNameWithoutExtension($_); -not ($locales | Where-Object { [IO.Path]::GetFileNameWithoutExtension($(if ($mapa.ContainsKey($_.Name)) { $mapa[$_.Name] } else { $_.Name })) -eq $n }) }
       if ($dif.Count) { Linea "   ⚠️ $carpeta : $($dif -join ' · ')" Yellow } else { Linea "   ✅ $carpeta : Google y el repo son iguales" Green }
