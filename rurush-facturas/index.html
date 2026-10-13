@@ -614,8 +614,12 @@ async function carpetaFotos(fechaIso) {
   const anio = fechaIso.slice(0, 4), m = Number(fechaIso.slice(5, 7));
   const mes = MESES[m - 1], alias = m === 9 ? ['SETIEMBRE', 'SEPTIEMBRE'] : [mes];
   const espera = (c) => `La contadora todavía no creó la carpeta ${c}. La foto se sube sola cuando exista.`;
-  const dA = await buscar(base, (n) => n === anio, espera(anio));
-  const dM = await buscar(dA, (n) => new RegExp('^0?' + m + '(\\D|$)').test(n) || alias.some((a) => n.includes(a)), espera(anio + ' / ' + pad(m) + ' ' + mes));
+  const esMes = (n) => new RegExp('^0?' + m + '(\\D|$)').test(n) || alias.some((a) => n.includes(a));
+  // El link puede ser de COMPRAS (lo normal), de la carpeta del año o de la del mes.
+  const nb = sinTildes(base.nombre);
+  const dA = /^\d{4}$/.test(nb) ? (nb === anio ? base : null) : esMes(nb) ? null : await buscar(base, (n) => n === anio, espera(anio));
+  if (!dA && !esMes(nb)) { const e = new Error('El link guardado es de la carpeta ' + base.nombre + ', no de ' + anio + '. Usa el link de COMPRAS.'); e.esperar = true; throw e; }
+  const dM = esMes(nb) && !/^\d{4}$/.test(nb) ? base : await buscar(dA, esMes, espera(anio + ' / ' + pad(m) + ' ' + mes));
   MES_CACHE[clave] = Object.assign(dM, { ruta: (base.nombre || '') + ' / ' + anio + ' / ' + dM.nombre });
   return MES_CACHE[clave];
 }
