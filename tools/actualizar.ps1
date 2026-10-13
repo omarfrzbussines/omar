@@ -27,6 +27,21 @@ $despues = (git rev-parse HEAD).Trim()
 if ($antes -eq $despues) { Linea "   Ya estaba al día." } else { git log --oneline "$antes..$despues" | ForEach-Object { Linea "   • $_" } }
 
 # 2) Apps Script
+
+# Las claves nunca están en GitHub: en el repo dicen PEGA-AQUÍ. Esas líneas se toman de Google.
+function Conservar-Secretos($textoRepo, $textoGoogle) {
+  if (-not $textoGoogle) { return $textoRepo }
+  $g = $textoGoogle -split "`r?`n"
+  $salida = foreach ($l in ($textoRepo -split "`r?`n")) {
+    if ($l -match 'PEGA[-_ ]?AQU' -and $l -match '^\s*(?:const|var|let)\s+([A-Za-z_$][\w$]*)\s*=') {
+      $nom = $Matches[1]
+      $real = $g | Where-Object { $_ -match "^\s*(?:const|var|let)\s+$([regex]::Escape($nom))\s*=" } | Select-Object -First 1
+      if ($real) { $real } else { $l }
+    } else { $l }
+  }
+  return ($salida -join "`n")
+}
+function Ocultar($l) { return ($l -replace '[A-Za-z0-9_\-]{20,}', '«…»').Trim() }
 $estado = @{}
 if (Test-Path $estadoF) { (Get-Content $estadoF -Raw | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $estado[$_.Name] = $_.Value } }
 $tmp = Join-Path $env:TEMP "rurush-clasp"
@@ -84,17 +99,21 @@ foreach ($l in Get-Content (Join-Path $tools "proyectos.txt") -Encoding UTF8) {
     foreach ($f in $locales) {
       $nombre = $(if ($mapa.ContainsKey($f.Name)) { $mapa[$f.Name] } else { $f.Name })
       $base = [IO.Path]::GetFileNameWithoutExtension($nombre)
+      $gArch = Get-ChildItem (Join-Path $tmp "$carpeta-google") -File | Where-Object { [IO.Path]::GetFileNameWithoutExtension($_.Name) -eq $base -and ($_.Extension -eq $f.Extension -or ($_.Extension -in ".js",".gs" -and $f.Extension -in ".js",".gs")) } | Select-Object -First 1
+      $gTexto = $(if ($gArch) { Get-Content $gArch.FullName -Raw -Encoding UTF8 } else { "" })
       if ($f.Extension -in ".gs",".js") { Remove-Item (Join-Path $dir "$base.js"), (Join-Path $dir "$base.gs") -ErrorAction SilentlyContinue }
-      Copy-Item $f.FullName (Join-Path $dir $nombre) -Force
+      $contenido = Conservar-Secretos (Get-Content $f.FullName -Raw -Encoding UTF8) $gTexto
+      [IO.File]::WriteAllText((Join-Path $dir $nombre), $contenido, (New-Object Text.UTF8Encoding $false))
     }
     if ($SoloComparar) {
-      $dif = @()
+      $dif = @(); $detalle = @()
       foreach ($f in $locales) {
         $nombre = $(if ($mapa.ContainsKey($f.Name)) { $mapa[$f.Name] } else { $f.Name })
         $base = [IO.Path]::GetFileNameWithoutExtension($nombre)
         $remoto = Get-ChildItem (Join-Path $tmp "$carpeta-google") -File -ErrorAction SilentlyContinue | Where-Object { [IO.Path]::GetFileNameWithoutExtension($_.Name) -eq $base -and ($_.Extension -eq $f.Extension -or ($_.Extension -in ".js",".gs" -and $f.Extension -in ".js",".gs")) } | Select-Object -First 1
         if (-not $remoto) { $dif += "NUEVO en Google: $nombre"; continue }
-        $a = (Get-Content $f.FullName -Raw -Encoding UTF8) -replace "`r`n", "`n"; $b = (Get-Content $remoto.FullName -Raw -Encoding UTF8) -replace "`r`n", "`n"
+        $b = (Get-Content $remoto.FullName -Raw -Encoding UTF8) -replace "`r`n", "`n"
+        $a = (Conservar-Secretos (Get-Content $f.FullName -Raw -Encoding UTF8) $b) -replace "`r`n", "`n"
         if ($f.Name -eq "appsscript.json") {   # Google reordena el JSON: se compara el contenido, no el texto
           try { $a = ($a | ConvertFrom-Json | ConvertTo-Json -Depth 20 -Compress); $b = ($b | ConvertFrom-Json | ConvertTo-Json -Depth 20 -Compress) } catch {}
         }
@@ -103,10 +122,11 @@ foreach ($l in Get-Content (Join-Path $tools "proyectos.txt") -Encoding UTF8) {
           $d = @(Compare-Object $lb $la)
           $mas = @($d | Where-Object SideIndicator -eq "=>").Count; $menos = @($d | Where-Object SideIndicator -eq "<=").Count
           $dif += "CAMBIA: $nombre (+$mas / -$menos líneas)"
+          $detalle += @("      ── $nombre ──") + @($d | Select-Object -First 12 | ForEach-Object { $(if ($_.SideIndicator -eq "=>") { "      + repo:   " } else { "      - Google: " }) + (Ocultar $_.InputObject) })
         }
       }
       $soloGoogle = Get-ChildItem (Join-Path $tmp "$carpeta-google") -File | Where-Object { $_.Name -ne ".clasp.json" } | ForEach-Object { $_.Name } | Where-Object { $n = [IO.Path]::GetFileNameWithoutExtension($_); -not ($locales | Where-Object { [IO.Path]::GetFileNameWithoutExtension($(if ($mapa.ContainsKey($_.Name)) { $mapa[$_.Name] } else { $_.Name })) -eq $n }) }
-      if ($dif.Count) { Linea "   ⚠️ $carpeta : $($dif -join ' · ')" Yellow } else { Linea "   ✅ $carpeta : Google y el repo son iguales" Green }
+      if ($dif.Count) { Linea "   ⚠️ $carpeta : $($dif -join ' · ')" Yellow; $detalle | ForEach-Object { Linea $_ } } else { Linea "   ✅ $carpeta : Google y el repo son iguales" Green }
       if ($soloGoogle) { Linea "      (solo en Google, se conservan: $($soloGoogle -join ', '))" }
       continue
     }
