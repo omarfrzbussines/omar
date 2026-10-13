@@ -12,7 +12,7 @@
 
 ## App de Diego (consulta en PC, sin Claude)
 
-Archivos: `AppDiego.gs` y `AppDiego.html` (van en este mismo proyecto; `Nutricion.gs` ya los llama desde `doGet`).
+Archivos: `AppDiego.gs` y `AppDiegoUI.html` (van en este mismo proyecto; `Nutricion.gs` ya los llama desde `doGet`).
 
 1. Sube los cambios con **ACTUALIZAR.bat** (o pega los dos archivos nuevos en el editor y reemplaza `Nutricion.gs`).
    Si lo haces a mano: Implementar → Administrar implementaciones → lápiz → Versión: **Nueva** → Implementar. El link no cambia.
@@ -26,4 +26,4 @@ Qué puede hacer Diego: ✅ Asistió (observación obligatoria, InBody, próxima
 🚫 Cancelar, ⧉ Duplicado, ↩ Deshacer, 📅 Agendar próxima, + Llegó sin cita (busca al socio por celular antes de crear ficha).
 Reglas: solo martes y miércoles, horas de `NU_HORAS`, nunca para hoy, sin choques, un socio no puede tener dos citas futuras.
 "No vino" deja la actividad abierta en Pipedrive a propósito: así el seguimiento de las 11:30 le escribe para reagendar.
-Para probar la pantalla sin Google: abre `AppDiego.html` directo en el navegador (modo demostración).
+Para probar la pantalla sin Google: abre `AppDiegoUI.html` directo en el navegador (modo demostración).

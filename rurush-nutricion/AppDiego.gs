@@ -16,7 +16,7 @@ const DG_NCOL = 16;
 
 /* ---------- entrada ---------- */
 function dg_pagina() {
-  return HtmlService.createTemplateFromFile('AppDiego').evaluate()
+  return HtmlService.createTemplateFromFile('AppDiegoUI').evaluate()
     .setTitle('Nutrición Rurush')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
