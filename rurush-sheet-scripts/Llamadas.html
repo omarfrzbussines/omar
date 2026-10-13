@@ -82,6 +82,7 @@
 
 <script>
 // id de ESTE celular (se crea una vez y queda guardado en el navegador) → candado por celular
+// OJO: dentro de textos `...` escribir https:\/\/ y no la doble barra: Google la toma como comentario y la app no arranca.
 const DISP = (() => { try { let d = localStorage.getItem('rr_disp'); if (!d) { d = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()) + Date.now()).replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 32); localStorage.setItem('rr_disp', d); } return d; } catch (e) { return ''; } })();
 const LLAVE = <?!= JSON.stringify(llave) ?> + '|' + DISP;
 const ASESORA = <?!= JSON.stringify(asesora) ?>;
@@ -212,8 +213,8 @@ function pintar() {
       <div class="meta"><span class="tag">${p.ronda}ª llamada</span>${p.dia ? `<span class="tag">lead del ${esc(p.dia)}</span>` : ''}${p.origen ? `<span class="tag">${esc(p.origen)}</span>` : ''}</div>
       <div class="acciones">
         <a class="llamar" id="llamar" href="tel:+51${p.numero}">📞 Llamar</a>
-        <a class="wacall" id="wacall" href="https://wa.me/51${p.numero}" target="_blank">📲 WhatsApp</a>
-        <a class="wa" href="https://wa.me/51${p.numero}" target="_blank">💬</a>
+        <a class="wacall" id="wacall" href="https:\/\/wa.me/51${p.numero}" target="_blank">📲 WhatsApp</a>
+        <a class="wa" href="https:\/\/wa.me/51${p.numero}" target="_blank">💬</a>
       </div>
       <div class="medidor" id="medidor"></div>
     </div>
@@ -291,7 +292,7 @@ function traerCobros() {
 function filaCobro(c) {
   const f = c.dias < 0 ? `<div class="f atr">atrasado ${-c.dias} d · ${fechaCorta(c.fecha)}</div>`
     : c.dias === 0 ? '<div class="f hoy">HOY</div>' : `<div class="f">${fechaCorta(c.fecha)} · en ${c.dias} d</div>`;
-  const tel = c.celular ? `<a href="https://wa.me/51${c.celular}" target="_blank">💬 WhatsApp</a><a href="tel:+51${c.celular}">📞 Llamar</a>` : '<span></span><span></span>';
+  const tel = c.celular ? `<a href="https:\/\/wa.me/51${c.celular}" target="_blank">💬 WhatsApp</a><a href="tel:+51${c.celular}">📞 Llamar</a>` : '<span></span><span></span>';
   const ok = `<button class="ok" data-f="${c.fila}">✓ Cobrado</button>`;
   return `<div class="cobro"><div class="arriba"><div class="d"><div class="n">${esc(c.nombre || 'Cód. ' + c.codigo)}</div>
     <div class="s">Cód. ${esc(c.codigo)}${c.plan ? ' · ' + esc(c.plan) : ''}${c.notas ? ' · ' + esc(c.notas) : ''}</div>${diasSA(c.diasSA)}</div>
