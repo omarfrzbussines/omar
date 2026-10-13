@@ -30,14 +30,34 @@ function app_asesoraLlave(k) {
   if (!a) throw new Error("Link no válido. Pídele a Omar tu link de acceso.");
   return a;
 }
-// Llave + celular (para leer la cola y guardar llamadas).
+// Llave + celular (para leer la cola y guardar llamadas). El celular manda "llave|id|huella".
+// El id vive en el navegador y a veces se pierde (al publicar una versión nueva de la app o al
+// borrar datos): entonces se reconoce el celular por su huella (modelo, pantalla, idioma) y
+// se le guarda el id nuevo, sin pedir el PIN otra vez.
 function app_asesora(k) {
   const a = app_asesoraLlave(k);
   if (!app_props().getProperty("APP_PIN")) return a;          // candado apagado
-  const disp = String(k || "").split("|")[1] || "";
+  const p = String(k || "").split("|"), disp = p[1] || "", huella = p[2] || "";
   const cel = app_celulares()[a];
-  if (!disp || !cel || cel.id !== disp) throw new Error("CELULAR_NO_AUTORIZADO: este link solo funciona en el celular activado de " + a + ".");
-  return a;
+  if (cel && disp && cel.id === disp) {
+    if (huella && !cel.huella) app_actualizarCel(a, { huella: huella });
+    return a;
+  }
+  if (cel && huella && cel.huella === huella && /^[a-z0-9]{16,}$/.test(disp)) {
+    app_actualizarCel(a, { id: disp });
+    return a;
+  }
+  throw new Error("CELULAR_NO_AUTORIZADO: este link solo funciona en el celular activado de " + a + ".");
+}
+function app_actualizarCel(a, cambios) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) return;
+  try {
+    const c = app_celulares();
+    if (!c[a]) return;
+    Object.keys(cambios).forEach(function (x) { c[a][x] = cambios[x]; });
+    app_props().setProperty("APP_CELULARES", JSON.stringify(c));
+  } finally { lock.releaseLock(); }
 }
 // La página pregunta al abrir si este celular está autorizado.
 function app_estadoCelular(k) {
@@ -63,7 +83,7 @@ function app_activarCelular(k, pin, modelo) {
   const lock = LockService.getScriptLock(); lock.waitLock(10000);
   try {
     const c = app_celulares();
-    c[a] = { id: disp, desde: Utilities.formatDate(new Date(), "America/Lima", "dd/MM/yyyy HH:mm"), modelo: String(modelo || "").slice(0, 80) };
+    c[a] = { id: disp, huella: String(k || "").split("|")[2] || "", desde: Utilities.formatDate(new Date(), "America/Lima", "dd/MM/yyyy HH:mm"), modelo: String(modelo || "").slice(0, 80) };
     app_props().setProperty("APP_CELULARES", JSON.stringify(c));
   } finally { lock.releaseLock(); }
   return { ok: true };
@@ -104,7 +124,8 @@ function app_doGet(e) {
   let asesora;
   try { asesora = app_asesoraLlave(e.parameter.k); } catch (err) {
     return HtmlService.createHtmlOutput('<p style="font:18px sans-serif;padding:24px">' + err.message + "</p>")
-      .addMetaTag("viewport", "width=device-width, initial-scale=1");
+      .addMetaTag("viewport", "width=device-width, initial-scale=1")
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
   const t = HtmlService.createTemplateFromFile("Llamadas");
   t.asesora = asesora;
@@ -113,7 +134,8 @@ function app_doGet(e) {
   return t.evaluate()
     .setTitle("RURUSH Llamadas · " + asesora)
     .addMetaTag("viewport", "width=device-width, initial-scale=1, maximum-scale=1")
-    .setFaviconUrl("https://em-content.zobj.net/source/apple/391/telephone-receiver_1f4de.png");
+    .setFaviconUrl("https://em-content.zobj.net/source/apple/391/telephone-receiver_1f4de.png")
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);   // para abrirla a pantalla completa desde rurush-llamadas (GitHub Pages)
 }
 
 /** Última fila con NÚMERO (no getLastRow: hay columnas prellenadas hasta el fondo). */

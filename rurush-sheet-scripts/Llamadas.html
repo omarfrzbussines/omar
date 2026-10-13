@@ -87,7 +87,15 @@
 // id de ESTE celular (se crea una vez y queda guardado en el navegador) → candado por celular
 // OJO: dentro de textos `...` escribir https:\/\/ y no la doble barra: Google la toma como comentario y la app no arranca.
 const DISP = (() => { try { let d = localStorage.getItem('rr_disp'); if (!d) { d = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()) + Date.now()).replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 32); localStorage.setItem('rr_disp', d); } return d; } catch (e) { return ''; } })();
-const LLAVE = <?!= JSON.stringify(llave) ?> + '|' + DISP;
+// Huella del celular (sin datos personales): sirve para reconocerlo si el navegador pierde DISP.
+const HUELLA = (() => {
+  const s = [navigator.platform, screen.width + 'x' + screen.height, window.devicePixelRatio, navigator.hardwareConcurrency || '',
+    navigator.maxTouchPoints || '', navigator.language, (Intl.DateTimeFormat().resolvedOptions().timeZone || ''),
+    navigator.userAgent.replace(/[\d_.]+/g, '')].join('|');
+  let h = 5381; for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+  return 'h' + h.toString(36);
+})();
+const LLAVE = <?!= JSON.stringify(llave) ?> + '|' + DISP + '|' + HUELLA;
 const ASESORA = <?!= JSON.stringify(asesora) ?>;
 const BASES = <?!= JSON.stringify(bases) ?>;
 // base elegida (se recuerda en el celular)
