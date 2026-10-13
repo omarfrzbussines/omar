@@ -125,11 +125,11 @@ function dg_libresLista(fecha, excepto) {
 function dg_libresTxt(fecha, excepto) { const l = dg_libresLista(fecha, excepto); return l.length ? l.map(nu_horaTxt).join(', ') : 'ninguna'; }
 
 // crea la cita en Pipedrive y su fila PENDIENTE en la hoja; devuelve el act_id
-function dg_crearCita(sh, pid, nombre, tel, fecha, hora, nota) {
+function dg_crearCita(sh, pid, nombre, tel, fecha, hora, nota, extra) {
   const due = dg_utc(fecha, hora);
-  const j = nu_pd('/activities', { method: 'post', contentType: 'application/json', payload: JSON.stringify({
+  const j = nu_pd('/activities', { method: 'post', contentType: 'application/json', payload: JSON.stringify(Object.assign({
     subject: 'Nutrición — ' + nombre, type: 'deadline', person_id: pid ? Number(pid) : undefined, user_id: NU_DIEGO,
-    due_date: due.due_date, due_time: due.due_time, duration: '00:30' }) });
+    due_date: due.due_date, due_time: due.due_time, duration: '00:30' }, extra || {})) });
   const act = String(j.data.id);
   dg_nuevaFila(sh, { FECHA: fecha, HORA: hora, SOCIO: nombre, TEL: tel || '', ESTADO: 'PENDIENTE', HECHO: false, INBODY: false,
                      OBS: nota || '', AGENDAR: false, ACT: Number(act), PID: pid ? Number(pid) : '' });
@@ -246,6 +246,9 @@ function dg_noVino(pin, q) {
 /* 🔁 Reagendar: mueve la MISMA cita (misma actividad de Pipedrive, misma fila) */
 function dg_reagendar(pin, q) {
   dg_pin(pin);
+  return dg_reagendar_(q);
+}
+function dg_reagendar_(q) {
   return dg_lock(() => {
     const sh = dg_hoja(), f = dg_fila(sh, q.act);
     if (f.hecho) throw new Error(f.socio + ' ya fue evaluado. Para su siguiente control usa "Agendar próxima".');
