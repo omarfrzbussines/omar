@@ -133,6 +133,8 @@ function nu_sync() {
   base.forEach((r) => {
     if (nuevos.length >= NU_MAX_ALTAS) return;
     const estado = String(r[9] || '').toUpperCase(), dni = String(r[3] || '').trim(), tel = nu_tel(r[2]);
+    // solo socios con plan: los códigos RE## / FP## son referidos o free pass cargados a mano, y SIN FECHA no tiene plan
+    if (!/^\d+$/.test(String(r[0] || '').trim()) || /SIN FECHA/.test(estado)) return;
     if (!estado || /VENCIDO/.test(estado) || !tel || enHoja[dni] || enHoja['t' + tel] || NU_NUNCA.indexOf(tel) >= 0) return;
     let pid = (dni && pidPorDni[dni]) || '';
     if (!pid) { try { const it = (nu_pd('/persons/search?fields=phone&limit=1&term=' + tel).data || {}).items || []; pid = it.length ? String(it[0].item.id) : ''; } catch (e) { /* sin pid */ } }
