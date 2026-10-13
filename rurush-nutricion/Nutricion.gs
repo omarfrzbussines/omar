@@ -257,6 +257,7 @@ function nu_resp(o) { return ContentService.createTextOutput(JSON.stringify(o)).
 function nu_ok(e) { const k = nu_props().getProperty('NU_LLAVE'); return k && e && e.parameter && e.parameter.k === k; }
 function doGet(e) {
   if (e && e.parameter && e.parameter.app === 'diego') return dg_pagina();   // App de Diego (AppDiego.gs), protegida con PIN
+  if (e && e.parameter && e.parameter.app === 'reservas') return rv_pagina(); // Reservas de las asesoras (AppReservas.gs), con su propio PIN
   if (!nu_ok(e)) return nu_resp({ ok: false, error: 'llave' });
   try {
     if (e.parameter.accion === 'plan') return nu_resp(Object.assign({ ok: true }, nu_plan()));
