@@ -1,7 +1,9 @@
 /* RURUSH Hoy — dashboard para el celular de Omar.
    App web de Apps Script: los tokens de Apps Fit y Pipedrive viven en las
-   Propiedades del script (nunca en el celular) y solo Omar puede abrirla
-   (appsscript.json → access: MYSELF).
+   Propiedades del script (nunca en el celular) y solo Omar puede abrirla, y SOLO en su celular:
+   acceso "cualquier usuario" (para verla a pantalla completa desde rurush-hoy en GitHub Pages)
+   pero doGet exige la llave (HOY_LLAVE) y el celular activado con el PIN (HOY_PIN). Si falta
+   algo responde texto plano: la página de la app (y sus funciones) no se entrega. Ver hoy_verLink.
 
    Misma lógica que el dashboard de la extensión "RURUSH — Panel Operativo". */
 
@@ -16,11 +18,58 @@ const ASESORAS = {
   valeria22: 'VALERIA', gustavo: 'GUSTAVO', erik: 'ERIK'
 };
 
-function doGet() {
+function doGet(e) {
+  const p = (e && e.parameter) || {};
+  const props = PropertiesService.getScriptProperties();
+  const llave = props.getProperty('HOY_LLAVE');
+  if (!llave || p.k !== llave) return p.accion ? hoy_json_({ ok: false, error: 'Link no válido.' }) : ContentService.createTextOutput('Link no válido.');
+  if (p.accion === 'estado') return hoy_json_({ ok: hoy_celularOk_(p.d, p.h) });
+  if (p.accion === 'activar') return hoy_json_(hoy_activar_(p.d, p.h, p.pin, p.modelo));
+  if (!hoy_celularOk_(p.d, p.h)) return ContentService.createTextOutput('Celular no autorizado.');
   return HtmlService.createHtmlOutputFromFile('Index')
     .setTitle('RURUSH Hoy')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1')
-    .setFaviconUrl('https://em-content.zobj.net/source/apple/391/fire_1f525.png');
+    .setFaviconUrl('https://em-content.zobj.net/source/apple/391/fire_1f525.png')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+/* ---------- candado: llave + un solo celular (el de Omar) ----------
+   La página rurush-hoy (GitHub Pages) manda d = id guardado en el celular y h = huella del celular
+   (modelo/pantalla/idioma). Si el navegador pierde el id, se reconoce por la huella. */
+function hoy_json_(o) {
+  return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
+}
+function hoy_celularOk_(d, h) {
+  const props = PropertiesService.getScriptProperties();
+  const c = JSON.parse(props.getProperty('HOY_CEL') || 'null');
+  if (!c) return false;
+  if (d && c.id === d) return true;
+  if (h && c.huella === h && /^[a-z0-9]{16,}$/.test(String(d || ''))) {
+    c.id = d; props.setProperty('HOY_CEL', JSON.stringify(c));
+    return true;
+  }
+  return false;
+}
+function hoy_activar_(d, h, pin, modelo) {
+  if (!/^[a-z0-9]{16,}$/.test(String(d || ''))) return { ok: false, error: 'No se pudo identificar este celular.' };
+  const cache = CacheService.getScriptCache(), fallos = Number(cache.get('hoy_pinfail') || 0);
+  if (fallos >= 5) return { ok: false, error: 'Demasiados intentos. Espera 15 minutos.' };
+  const props = PropertiesService.getScriptProperties(), PIN = props.getProperty('HOY_PIN');
+  if (!PIN || String(pin || '').trim() !== PIN) { cache.put('hoy_pinfail', String(fallos + 1), 900); return { ok: false, error: 'PIN incorrecto.' }; }
+  props.setProperty('HOY_CEL', JSON.stringify({ id: d, huella: String(h || ''), modelo: String(modelo || '').slice(0, 80),
+    desde: Utilities.formatDate(new Date(), 'America/Lima', 'dd/MM/yyyy HH:mm') }));
+  return { ok: true };
+}
+
+/** Ejecutar desde el editor: crea la llave y el PIN si no existen y muestra el link y el celular activado. */
+function hoy_verLink() {
+  const p = PropertiesService.getScriptProperties();
+  if (!p.getProperty('HOY_LLAVE')) p.setProperty('HOY_LLAVE', Utilities.getUuid().replace(/-/g, '').slice(0, 24));
+  if (!p.getProperty('HOY_PIN')) p.setProperty('HOY_PIN', String(Math.floor(100000 + Math.random() * 900000)));
+  Logger.log('Link (pantalla completa) → https://omarfrzbussines.github.io/omar/rurush-hoy/?k=' + p.getProperty('HOY_LLAVE'));
+  Logger.log('PIN para activar tu celular → ' + p.getProperty('HOY_PIN'));
+  const c = JSON.parse(p.getProperty('HOY_CEL') || 'null');
+  Logger.log('Celular activado: ' + (c ? c.desde + ' · ' + c.modelo : 'ninguno todavía'));
 }
 
 /* ---------- utilidades ---------- */

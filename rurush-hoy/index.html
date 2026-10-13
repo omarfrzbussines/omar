@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111111">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="RURUSH Hoy">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icono-192.png">
+<link rel="apple-touch-icon" href="icono-192.png">
+<title>RURUSH Hoy</title>
+<!-- Abre RURUSH Hoy (Apps Script) a pantalla completa, solo en el celular de Omar.
+     Link ?k=<llave> (sale de hoy_verLink). El servidor exige la llave + este celular activado
+     con el PIN; si no, no entrega la app. Ni la llave ni el PIN están en este archivo. -->
+<style>
+  html, body { margin:0; height:100%; background:#111; color:#ddd; font:16px -apple-system, system-ui, sans-serif; }
+  body { padding-top: env(safe-area-inset-top); box-sizing:border-box; }
+  iframe { display:block; width:100%; height:100%; border:0; }
+  .caja { padding:28px 20px; }
+  input, button { width:100%; box-sizing:border-box; padding:14px; font-size:17px; border-radius:10px; margin-top:12px; }
+  input { border:1px solid #444; background:#1c1c1e; color:#eee; }
+  button { border:0; background:#e53935; color:#fff; font-weight:600; }
+  .mut { color:#999; font-size:14px; }
+</style>
+</head>
+<body>
+<div class="caja" id="caja">Cargando…</div>
+<script>
+  const EXEC = 'https:\/\/script.google.com/macros/s/AKfycbxQ43YCw8-Jrgqncz1QiW0lIA4mmNW5_-QGYhKGS68aomEJUaZ5P2t01WqESRlCXfbZ/exec';
+  const guardado = (n, v) => { try { if (v) localStorage.setItem(n, v); return localStorage.getItem(n) || ''; } catch (e) { return v || ''; } };
+  const K = guardado('rr_hoy_llave', new URLSearchParams(location.search).get('k'));
+  let D = guardado('rr_hoy_disp');
+  if (!D) D = guardado('rr_hoy_disp', (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()) + Date.now()).replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 32));
+  const H = (() => {
+    const s = [navigator.platform, screen.width + 'x' + screen.height, window.devicePixelRatio, navigator.hardwareConcurrency || '',
+      navigator.maxTouchPoints || '', navigator.language, (Intl.DateTimeFormat().resolvedOptions().timeZone || ''),
+      navigator.userAgent.replace(/[\d_.]+/g, '')].join('|');
+    let h = 5381; for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+    return 'h' + h.toString(36);
+  })();
+  const caja = document.getElementById('caja');
+  const q = (o) => EXEC + '?' + new URLSearchParams(Object.assign({ k: K, d: D, h: H }, o || {})).toString();
+  const api = (o) => fetch(q(o)).then((r) => r.json());
+
+  function abrir() {
+    caja.remove();
+    const f = document.createElement('iframe');
+    f.src = q();
+    document.body.appendChild(f);
+  }
+  function pedirPin(msg) {
+    caja.innerHTML = '<b>🔒 Activa este celular</b><p class="mut">RURUSH Hoy solo funciona en el celular de Omar. ' +
+      'Escribe tu PIN una sola vez (si activas este, el anterior deja de funcionar).</p>' +
+      (msg ? '<p style="color:#ff8a80">' + msg + '</p>' : '') +
+      '<input id="pin" type="password" inputmode="numeric" autocomplete="off" placeholder="PIN"><button id="ok">Activar</button>';
+    document.getElementById('ok').onclick = () => {
+      document.getElementById('ok').disabled = true;
+      api({ accion: 'activar', pin: document.getElementById('pin').value, modelo: navigator.userAgent })
+        .then((r) => r.ok ? abrir() : pedirPin(r.error || 'No se pudo activar.'))
+        .catch(() => pedirPin('Sin conexión. Intenta de nuevo.'));
+    };
+  }
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if (!K) caja.textContent = 'Falta la llave en el link. Ábrelo con el link que sale en hoy_verLink.';
+  else api({ accion: 'estado' })
+    .then((r) => r.ok ? abrir() : (r.error ? (caja.textContent = r.error) : pedirPin()))
+    .catch(() => { caja.textContent = 'Sin conexión con Google. Toca para reintentar.'; caja.onclick = () => location.reload(); });
+</script>
+</body>
+</html>
