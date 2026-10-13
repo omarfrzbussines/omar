@@ -9,3 +9,21 @@
    Acceso **Cualquier usuario** → Implementar → copia el link que termina en `/exec`.
 6. En la extensión Rurush FP (v2.4.0) → Opciones → sección Nutrición: pega el link y la llave → Guardar.
    El módulo "Nutrición: seguimiento 11:30" empieza en 🧪 Simulación.
+
+## App de Diego (consulta en PC, sin Claude)
+
+Archivos: `AppDiego.gs` y `AppDiego.html` (van en este mismo proyecto; `Nutricion.gs` ya los llama desde `doGet`).
+
+1. Sube los cambios con **ACTUALIZAR.bat** (o pega los dos archivos nuevos en el editor y reemplaza `Nutricion.gs`).
+   Si lo haces a mano: Implementar → Administrar implementaciones → lápiz → Versión: **Nueva** → Implementar. El link no cambia.
+2. Configuración del proyecto → Propiedades del script → agrega **`DIEGO_PIN`** con una clave de 4 a 6 números.
+3. En el editor, elige `dg_probar` → Ejecutar. El registro debe decir cuántas filas leyó y "PIN configurado: sí".
+4. Link para Diego: el de la app web + `?app=diego`:
+   `https://script.google.com/macros/s/AKfycbzobT-hVbcpJ4-MzOpmFD_ia10vmn4WDu7c2RdNm1jnD6GAof5FwXlJtJcuzH2SmfW6/exec?app=diego`
+   Diego lo abre en Chrome, escribe el PIN una vez y lo guarda en favoritos. No necesita cuenta de Claude.
+
+Qué puede hacer Diego: ✅ Asistió (observación obligatoria, InBody, próxima cita), ❌ No vino, 🔁 Reagendar,
+🚫 Cancelar, ⧉ Duplicado, ↩ Deshacer, 📅 Agendar próxima, + Llegó sin cita (busca al socio por celular antes de crear ficha).
+Reglas: solo martes y miércoles, horas de `NU_HORAS`, nunca para hoy, sin choques, un socio no puede tener dos citas futuras.
+"No vino" deja la actividad abierta en Pipedrive a propósito: así el seguimiento de las 11:30 le escribe para reagendar.
+Para probar la pantalla sin Google: abre `AppDiego.html` directo en el navegador (modo demostración).
