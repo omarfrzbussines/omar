@@ -52,6 +52,13 @@
   .mini { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:10px; }
   .mini div { background:var(--bg); border-radius:10px; padding:8px; } .mini b { display:block; font-size:18px; } .mini span { color:var(--mut); font-size:11px; }
   .alerta { background:#3d2a12; color:#ffb74d; border-radius:10px; padding:7px 10px; font-size:12px; margin-top:8px; }
+  .desp { margin:18px 0 8px; }
+  .desp > summary { list-style:none; cursor:pointer; font-size:17px; font-weight:700; padding:12px 14px; border-radius:12px; background:var(--card); }
+  .desp > summary::-webkit-details-marker { display:none; }
+  .desp > summary::after { content:'▾'; float:right; color:var(--mut); }
+  .desp[open] > summary::after { content:'▴'; }
+  .desp > summary small { font-weight:400; color:var(--mut); font-size:13px; margin-left:6px; }
+  .desp[open] > summary { margin-bottom:10px; }
   .sel { width:100%; background:var(--card); color:var(--tx); border:1px solid var(--line); border-radius:10px; padding:9px 10px; font-size:14px; margin:2px 0 12px; }
   .kpi.rojo .n { color:#ff8a80; } .kpi.verde .n { color:var(--grn); }
   .monto { text-align:right; flex:none; } .monto b { display:block; } .monto span { font-size:11px; color:var(--mut); }
@@ -288,7 +295,7 @@ function seccionIngresos() {
 /* ---------- 🎁 Referidos (pestaña REFERIDOS de VENTAS RETENCIÓN) ----------
    Se muestra al instante lo guardado en el celular y se actualiza por detrás una vez por sesión. */
 let RF = (() => { try { return JSON.parse(localStorage.getItem('rr_ref') || 'null'); } catch (e) { return null; } })();
-let rfCargando = false, rfFresco = false, RF_MES = '';
+let rfCargando = false, rfFresco = false, RF_MES = '', RF_ABIERTO = false;   // la sección empieza cerrada
 function cargarReferidos(forzar) {
   if (rfCargando) return; rfCargando = true;
   google.script.run
@@ -305,7 +312,8 @@ function seccionReferidos() {
   const meses = [...new Set(RF.registro.map((x) => x.mes).filter(Boolean))].sort().reverse();
   const regs = RF.registro.filter((x) => mia(x.asesora) && (RF_MES === '' || (RF_MES === 'SF' ? !x.mes : x.mes === RF_MES)));
   const ins = regs.filter(esIns).length, cont = regs.filter((x) => x.estado !== 'PENDIENTE').length;
-  let h = `<h2>🎁 Referidos <small>${rfCargando ? 'actualizando…' : ''}</small></h2>
+  const pend = regs.filter((x) => !esIns(x) && !/DESCART|NO INTERES/.test(x.estado));
+  let h = `<details id="refBox" class="desp" ${RF_ABIERTO ? 'open' : ''}><summary>🎁 Referidos <small>${regs.length} · ${pend.length} por contactar${rfCargando ? ' · actualizando…' : ''}</small></summary>
     <select class="sel" id="refMes"><option value="">📅 Todos los meses</option>${meses.map((m) => `<option value="${m}" ${m === RF_MES ? 'selected' : ''}>📅 ${nomMes(m)}</option>`).join('')}
     <option value="SF" ${RF_MES === 'SF' ? 'selected' : ''}>Sin fecha de captura</option></select>
     <div class="grid">
@@ -320,11 +328,10 @@ function seccionReferidos() {
   const filas = Object.entries(por).sort((p, q) => q[1].n - p[1].n);
   h += lista(filas, ([n, p]) => { const m = metas[norm(n)];
     return `<div class="row"><div class="main"><div class="t">${esc(n)}</div><div class="d">${p.n} referidos · ${p.i} inscritos${m ? ` · meta del mes ${esc(m.meta)} ref / ${esc(m.metaIns)} ins` : ''}</div></div></div>`; }, 'Sin referidos en este periodo.');
-  const pend = regs.filter((x) => !esIns(x) && !/DESCART|NO INTERES/.test(x.estado));
   h += `<h2>Referidos por contactar <small>${pend.length}</small></h2>` + lista(pend, (x) => `<div class="row"><div class="main">
     <div class="t">${esc(x.referido || 'Sin nombre')}</div><div class="d">de ${esc(x.alumno)} · ${esc(x.asesora)} · ${esc(x.estado)}${x.fecha ? ' · ' + esc(x.fecha) : ''}${x.notas ? ' · ' + esc(x.notas) : ''}</div></div>${wa(x.tel)}</div>`,
     'Nada pendiente 👌');
-  return h;
+  return h + '</details>';
 }
 
 function pintar() {
@@ -404,6 +411,7 @@ function pintar() {
   const cambioIng = () => { ING.fecha = iF.value || D.fecha; ING.mes = iM.value === 'mes'; if (ING.mes || ING.fecha !== D.fecha) cargarIngresos(); else { ING.r = null; } pintar(); };
   if (iF) { iF.onchange = cambioIng; iM.onchange = cambioIng; }
   const rm = $('#refMes'); if (rm) rm.onchange = () => { RF_MES = rm.value; pintar(); };
+  const rb = $('#refBox'); if (rb) rb.ontoggle = () => { RF_ABIERTO = rb.open; };
 }
 
 document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
