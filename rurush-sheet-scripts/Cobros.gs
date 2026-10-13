@@ -144,6 +144,30 @@ function cob_socio(codigo) {
   return null;
 }
 
+/* Celulares de BASE DE SOCIOS → datos del socio (guardado 10 min). La app de llamadas lo usa
+   para avisar "YA ES SOCIO" y dejar marcar CLIENTE sin llamar. */
+function cob_sociosPorTel() {
+  const cache = CacheService.getScriptCache(), c = cache.get("socios_tel");
+  if (c) return JSON.parse(c);
+  let v = null;
+  if (app_conApi()) {
+    try { v = app_valores(COB_ID, ["'" + COB_SOCIOS + "'!B" + COB_SOCIOS_INI + ":S" + COB_SOCIOS_FIN], COB_API_OPC)[0]; }
+    catch (e) { if (!/^API Sheets/.test(e.message)) throw e; }
+  }
+  if (!v) v = cob_libro().getSheetByName(COB_SOCIOS).getRange(COB_SOCIOS_INI, 2, COB_SOCIOS_FIN - COB_SOCIOS_INI + 1, 18).getValues();
+  const m = {};
+  v.forEach(function (f) {
+    const t = ll_limpiarTel(f[2]);
+    if (t) m[t] = { codigo: String(f[0] || "").trim(), plan: String(f[5] || "").trim(), vence: cob_iso(f[7]),
+                    estado: String(f[9] || "").trim(), asesor: String(f[10] || "").trim() };
+  });
+  try { cache.put("socios_tel", JSON.stringify(m), 600); } catch (e) {}
+  return m;
+}
+function cob_esSocio(numero) {
+  try { return !!cob_sociosPorTel()[ll_limpiarTel(numero)]; } catch (e) { return false; }
+}
+
 /** La asesora escribe el código: datos del socio + los cobros que ya tiene pendientes. */
 function cob_buscar(llave, codigo) {
   const asesora = app_asesora(llave);

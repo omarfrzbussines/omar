@@ -206,6 +206,10 @@ function app_getCola_(llave, base, excluir, api) {
   nuevos.sort(function (a, c) { return c.diaIso.localeCompare(a.diaIso) || c.fila - a.fila; });
   seguimiento.sort(function (a, c) { return a.ultFecha.localeCompare(c.ultFecha); });
   const cola = nuevos.concat(seguimiento).slice(0, APP_TAM_COLA);
+  // ¿ya es socio? (BASE DE SOCIOS). Si falla, la cola sale igual, sin el aviso.
+  let socios = {};
+  try { socios = cob_sociosPorTel(); } catch (e) {}
+  cola.forEach(function (x) { if (socios[x.numero]) x.socio = socios[x.numero]; });
   const res = {};
   cola.forEach(function (x) { res["r" + base + x.fila] = asesora; });
   if (cola.length) cache.putAll(res, APP_RESERVA_SEG);
@@ -310,9 +314,12 @@ function app_guardar(llave, base, fila, numero, estado, obs, fpFecha, fpHora, in
   const asesora = app_asesora(llave);
   if (APP_BASES.indexOf(base) < 0) throw new Error("Base no habilitada: " + base);
   if (APP_ESTADOS.indexOf(estado) < 0) throw new Error("Estado no válido.");
+  // Si ya es socio puede marcarse CLIENTE sin llamar (se verifica aquí, no en el celular).
+  const sinLlamar = estado === "CLIENTE" && !(Number(intentos) > 0) && cob_esSocio(numero);
   const r = ll_registrar({
     base: base, fila: Number(fila), telefono: numero, asesora: asesora, estado: estado,
-    observacion: obs || "", fechaFp: fpFecha || "", horaFp: fpHora || "",
+    sinLlamar: sinLlamar,
+    observacion: (sinLlamar ? "🟢 Ya es socio (sin llamar) " : "") + (obs || ""), fechaFp: fpFecha || "", horaFp: fpHora || "",
     intentos: Number(intentos) || 0, segundos: Number(segundos) || 0
   });
   const cache = CacheService.getScriptCache();
