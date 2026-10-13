@@ -287,6 +287,10 @@ function pintar() {
       <div class="kpi"><div class="n">${soles(D.ventaHoy ? Object.keys(D.ventaHoy).filter((n) => ase === 'TODAS' || n === norm(ase)).reduce((t, n) => t + D.ventaHoy[n], 0) : ins.reduce((t, x) => t + x.pago, 0))}</div><div class="l">venta de hoy</div></div>
     </div>`;
     if (nunca) h += `<div class="sub" style="margin-bottom:10px">${nunca} socios activos nunca registraron asistencia.</div>`;
+    // Ingresos de hoy por asesora (DATOS_ORIGEN, igual que el cuadro diario)
+    const vh = Object.entries(D.ventaHoy || {}).filter(([n]) => ase === 'TODAS' || n === norm(ase)).sort((p, q) => q[1] - p[1]);
+    if (D.ventaHoy) h += `<h2>Ingresos de hoy <small>${soles(vh.reduce((t, [, m]) => t + m, 0))}</small></h2>` + lista(vh, ([n, m]) =>
+      `<div class="row"><div class="main"><div class="t">${esc(n)}</div><div class="d">DATOS_ORIGEN</div></div><div class="t">${soles(m)}</div></div>`, 'Todavía no hay ingresos registrados hoy.');
     h += `<h2>Inscritos hoy <small>${ins.length}</small></h2>` + lista(ins, (x) =>
       `<div class="row"><div class="main"><div class="t">${esc(x.nombre)}</div><div class="d">${esc(x.plan)} · ${soles(x.pago)} · ${esc(x.asesora)}</div></div>${wa(x.tel)}</div>`, 'Todavía nadie hoy.');
   }
