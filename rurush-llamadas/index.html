@@ -28,7 +28,18 @@
   let k = new URLSearchParams(location.search).get('k');
   try { if (k) localStorage.setItem('rr_llave', k); else k = localStorage.getItem('rr_llave'); } catch (e) {}
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
-  if (!k) document.body.innerHTML = '<p>Falta tu llave en el link. Pídele a Omar tu link de Llamadas.</p>';
+  if (!k) {
+    // Sin llave (p. ej. un ícono antiguo): se puede pegar el link de la asesora aquí una sola vez.
+    document.body.innerHTML = '<p>Pega aquí tu link de Llamadas (te lo da Omar):</p>' +
+      '<p><input id="l" style="width:100%;padding:12px;font-size:16px;border-radius:10px;border:1px solid #444;background:#1c1c1e;color:#eee" placeholder="https://…?k=…"></p>' +
+      '<p><button id="b" style="width:100%;padding:14px;font-size:17px;border:0;border-radius:10px;background:#e53935;color:#fff">Entrar</button></p>';
+    document.getElementById('b').onclick = () => {
+      const v = document.getElementById('l').value.trim(), m = v.match(/[?&]k=([A-Za-z0-9]+)/) || v.match(/^([A-Za-z0-9]{16,})$/);
+      if (!m) return alert('Ese link no tiene la llave (?k=…).');
+      try { localStorage.setItem('rr_llave', m[1]); } catch (e) {}
+      location.href = './?k=' + m[1];
+    };
+  }
   else {
     const f = document.createElement('iframe');
     f.src = EXEC + '?k=' + encodeURIComponent(k);

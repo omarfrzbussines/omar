@@ -1,13 +1,20 @@
 {
   "name": "RURUSH Llamadas",
   "short_name": "Llamadas",
-  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#111111",
   "theme_color": "#111111",
   "icons": [
-    { "src": "icono-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icono-512.png", "sizes": "512x512", "type": "image/png" }
+    {
+      "src": "icono-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icono-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
   ]
 }
