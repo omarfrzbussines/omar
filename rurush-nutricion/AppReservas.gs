@@ -1,5 +1,5 @@
 /* RURUSH Nutrición — Reservas de las asesoras (reemplaza el formulario de Pipedrive).
-   Se abre con el link de la app web + ?app=reservas. Clave propia: propiedad del script RESERVAS_PIN.
+   Se abre con el link de la app web + ?app=reservas. Sin clave: solo abre con la cuenta de Google del gimnasio.
    La asesora escribe el CELULAR → ve la ficha del socio en Pipedrive (nombre, DNI, organización, citas).
    Si no existe, la crea con nombre y celular (y DNI si lo tiene). No se pide correo: la cita se pega
    a la ficha por person_id, así nunca cae en la ficha de Omar (el error del formulario de reserva).
@@ -15,11 +15,8 @@ function rv_pagina() {
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
-function rv_pin(pin) {
-  const p = nu_props().getProperty('RESERVAS_PIN');
-  if (!p) throw new Error('Falta configurar la clave: en Apps Script → Configuración del proyecto → Propiedades del script, agrega RESERVAS_PIN.');
-  if (String(pin || '') !== p) throw new Error('PIN');
-}
+// Sin clave: la app web solo abre con la cuenta de Google del gimnasio (rurushfitclub), esa es la protección.
+function rv_pin(pin) { }
 function rv_nombreOk(n) {
   return n.split(/\s+/).filter((w) => w.length >= 2).length >= 2 && !/^(socio|cliente|nuevo|nueva|prueba|test)\b/i.test(n);
 }
@@ -158,7 +155,6 @@ function rv_agendar(pin, q) {
 
 /* Ejecutar una vez desde el editor: prueba la búsqueda sin escribir nada. */
 function rv_probar() {
-  Logger.log('PIN de reservas configurado: ' + (nu_props().getProperty('RESERVAS_PIN') ? 'sí' : 'NO — agrega RESERVAS_PIN en Propiedades del script'));
   const [f] = nu_opciones(nu_hoy());
   Logger.log('Horas libres el ' + nu_lab(f) + ': ' + dg_libresTxt(f));
 }

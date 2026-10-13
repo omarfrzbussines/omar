@@ -116,7 +116,7 @@ var DIAS=["domingo","lunes","martes","miércoles","jueves","viernes","sábado"],
 var MES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
 var DIR="Av. Larco 1164, Víctor Larco (al costado de Mass)";
 var S={pin:"",asesora:"",ini:null,tel:"",fichas:null,sel:null,nuevo:null,parecidos:[],fecha:"",libres:null,hora:"",nota:"",mover:false,busy:"",err:"",done:null};
-try{S.pin=localStorage.getItem("rv_pin")||"";S.asesora=localStorage.getItem("rv_asesora")||"";}catch(e){}
+try{S.asesora=localStorage.getItem("rv_asesora")||"";}catch(e){}
 
 function $(s,r){return (r||document).querySelector(s);}
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
@@ -146,12 +146,11 @@ function pinScreen(){
   $("#root").innerHTML='<div class="pinwrap"><form class="pincard" id="f"><img src="'+LOGO+'" alt="Rurush"><h1>Reservas de nutrición</h1><p>Agenda la evaluación con Diego sin usar correo.</p>'+
     (S.err?'<div class="err">'+esc(S.err)+'</div>':'')+
     '<div class="field" style="text-align:left"><label for="as">Tu nombre (asesora)</label><input type="text" id="as" value="'+esc(S.asesora)+'" placeholder="Ej. Danna" autocomplete="name"></div>'+
-    '<div class="field" style="text-align:left"><label for="pn">Clave</label><input class="pin" type="password" id="pn" inputmode="numeric" maxlength="6" placeholder="••••"></div>'+
-    '<button class="btn primary">Entrar</button></form></div>';
-  $("#"+(S.asesora?"pn":"as")).focus();
-  $("#f").onsubmit=function(e){e.preventDefault();var a=$("#as").value.trim(),p=$("#pn").value.trim();
-    if(a.length<2){S.err="Escribe tu nombre.";return pinScreen();} if(!p){S.err="Escribe la clave.";return pinScreen();}
-    S.asesora=a;S.pin=p;S.err="";try{localStorage.setItem("rv_asesora",a);localStorage.setItem("rv_pin",p);}catch(x){} arrancar();};
+    '<button class="btn primary">Empezar</button></form></div>';
+  $("#as").focus();
+  $("#f").onsubmit=function(e){e.preventDefault();var a=$("#as").value.trim();
+    if(a.length<2){S.err="Escribe tu nombre.";return pinScreen();}
+    S.asesora=a;S.err="";try{localStorage.setItem("rv_asesora",a);}catch(x){} arrancar();};
 }
 function arrancar(){
   $("#root").innerHTML='<div class="pinwrap"><div class="pincard"><img src="'+LOGO+'" alt="Rurush"><p>Cargando…</p></div></div>';
@@ -245,7 +244,7 @@ function vDone(){
 function reset(){S.tel="";S.fichas=null;S.sel=null;S.nuevo=null;S.parecidos=[];S.form=null;S.fecha="";S.libres=null;S.hora="";S.nota="";S.mover=false;S.err="";S.done=null;}
 function bind(){
   var on=function(sel,ev,fn){var e=$(sel);if(e)e[ev]=fn;};
-  on("#salir","onclick",function(){S.pin="";try{localStorage.removeItem("rv_pin");}catch(x){}reset();pinScreen();});
+  on("#salir","onclick",function(){reset();pinScreen();});
   on("#fb","onsubmit",function(e){e.preventDefault();var t=telOk($("#tel").value);S.err="";
     if(!t){S.tel=$("#tel").value;S.fichas=null;S.err="Escribe el celular de 9 dígitos (empieza con 9).";return render();}
     reset();S.tel=t;S.busy="buscar";render();
@@ -295,7 +294,7 @@ function demo(fn,a){
   if(fn==="rv_agendar")return {ok:true,nombre:a[0].nombre,fecha:a[0].fecha,hora:a[0].hora,msg:a[0].nombre+" agendado el "+lab(a[0].fecha)+" a las "+hTxt(a[0].hora)+" (demo)"};
 }
 
-if(DEMO){S.pin="demo";S.asesora=S.asesora||"Demo";arrancar();} else if(S.pin&&S.asesora) arrancar(); else pinScreen();
+if(DEMO){S.asesora=S.asesora||"Demo";arrancar();} else if(S.asesora) arrancar(); else pinScreen();
 })();
 </script>
 </body>

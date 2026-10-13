@@ -33,7 +33,7 @@ Para probar la pantalla sin Google: abre `AppDiegoUI.html` directo en el navegad
 Archivos: `AppReservas.gs` y `AppReservasUI.html` (mismo proyecto; `Nutricion.gs` los abre con `?app=reservas`).
 
 1. Sube con **ACTUALIZAR.bat** y crea una **nueva versión** de la implementación (el link no cambia).
-2. Propiedades del script → agrega **`RESERVAS_PIN`** (clave para las asesoras, distinta a la de Diego).
+2. Sin clave: la asesora solo escribe su nombre la primera vez. Solo abre con la cuenta de Google del gimnasio.
 3. Link: el de la app web + `?app=reservas`.
 
 Cómo funciona: la asesora escribe el **celular** → ve la ficha (nombre, DNI, activo/inactivo, evaluaciones, si ya tiene cita).
