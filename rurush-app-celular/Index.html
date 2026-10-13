@@ -261,6 +261,58 @@ const filaFP = (a) => `<div class="row"><div class="hora">${esc(a.hora || '—')
   <div class="t">${esc(a.persona)}${a.hecha ? '<span class="tag ok">asistió</span>' : ''}</div>
   <div class="d">${esc(a.asunto)}</div></div>${wa(a.tel)}</div>`;
 
+/* ---------- 💵 Ingresos por día o mes (DATOS_ORIGEN, igual que el cuadro diario) ---------- */
+let ING = { fecha: '', mes: false, r: null, cargando: false };
+function cargarIngresos() {
+  ING.fecha = ING.fecha || D.fecha; ING.r = null; ING.cargando = true;
+  google.script.run
+    .withSuccessHandler((r) => { ING.r = r; ING.cargando = false; if (tab === 'hoy') pintar(); })
+    .withFailureHandler((e) => { ING.r = { error: e.message || String(e) }; ING.cargando = false; if (tab === 'hoy') pintar(); })
+    .getIngresos(ING.fecha, ING.mes);
+}
+function seccionIngresos() {
+  const f = ING.fecha || D.fecha;
+  const datos = !ING.mes && f === D.fecha ? D.ingresosHoy : (ING.r && !ING.r.error ? ING.r.datos : null);
+  const filas = Object.entries(datos || {}).filter(([n]) => ase === 'TODAS' || n === norm(ase)).sort((p, q) => q[1].t - p[1].t);
+  const total = filas.reduce((t, [, a]) => t + a.t, 0);
+  let h = `<h2>💵 Ingresos ${ING.mes ? 'del mes' : f === D.fecha ? 'de hoy' : 'del ' + fm(f)} <small>${datos ? soles(total) : ''}</small></h2>
+    <div style="display:flex;gap:8px"><input type="date" class="sel" id="ingF" value="${f}" max="${D.fecha}">
+    <select class="sel" id="ingM"><option value="dia">Día</option><option value="mes" ${ING.mes ? 'selected' : ''}>Mes completo</option></select></div>`;
+  if (ING.r && ING.r.error) return h + `<div class="err">⚠️ ${esc(ING.r.error)}</div>`;
+  if (!datos) return h + `<div class="list"><div class="vacio">Cargando…</div></div>`;
+  return h + lista(filas, ([n, a]) => `<div class="row"><div class="main"><div class="t">${esc(n)}</div>
+    <div class="d">${Object.entries(a.c).map(([c, m]) => esc(c) + ' ' + soles(m)).join(' · ')}</div></div><div class="t">${soles(a.t)}</div></div>`,
+    'No hay ingresos registrados.');
+}
+
+/* ---------- 🎁 Referidos (pestaña REFERIDOS de VENTAS RETENCIÓN) ---------- */
+let RF = null, rfCargando = false;
+function cargarReferidos(forzar) {
+  if (rfCargando) return; rfCargando = true;
+  google.script.run
+    .withSuccessHandler((r) => { RF = r; rfCargando = false; if (tab === 'hoy') pintar(); })
+    .withFailureHandler((e) => { RF = { error: e.message || String(e) }; rfCargando = false; if (tab === 'hoy') pintar(); })
+    .getReferidos(!!forzar);
+}
+function seccionReferidos() {
+  if (!RF) { setTimeout(() => cargarReferidos(false), 0); return `<h2>🎁 Referidos</h2><div class="list"><div class="vacio">Cargando…</div></div>`; }
+  if (RF.error) return `<h2>🎁 Referidos</h2><div class="err">⚠️ ${esc(RF.error)}</div>`;
+  const k = RF.kpi, mia = (x) => ase === 'TODAS' || norm(x) === norm(ase);
+  let h = `<h2>🎁 Referidos</h2>`;
+  if (ase === 'TODAS') h += `<div class="grid">
+    <div class="kpi"><div class="n">${esc(k.referidos)}</div><div class="l">referidos obtenidos</div></div>
+    <div class="kpi"><div class="n">${esc(k.cobertura)}</div><div class="l">cobertura (de ${esc(k.vigentes)} vigentes)</div></div>
+    <div class="kpi"><div class="n">${esc(k.contactados)}</div><div class="l">contactados</div></div>
+    <div class="kpi"><div class="n">${esc(k.convertidos)}</div><div class="l">convertidos</div></div></div>`;
+  h += lista(RF.metas.filter((m) => mia(m.asesora)), (m) => `<div class="row"><div class="main"><div class="t">${esc(m.asesora)}</div>
+    <div class="d">meta ${esc(m.meta)} · obtenidos ${esc(m.obtenidos)} (${esc(m.avance)}) · inscritos ${esc(m.conv)}/${esc(m.metaIns)}</div></div></div>`, 'Sin metas.');
+  const pend = RF.registro.filter((x) => mia(x.asesora) && !/INSCRIT|CONVERT|DESCART|NO INTERES/i.test(x.estado));
+  h += `<h2>Referidos por contactar <small>${pend.length}</small></h2>` + lista(pend, (x) => `<div class="row"><div class="main">
+    <div class="t">${esc(x.referido || 'Sin nombre')}</div><div class="d">de ${esc(x.alumno)} · ${esc(x.asesora)} · ${esc(x.estado)}${x.fecha ? ' · ' + esc(x.fecha) : ''}</div></div>${wa(x.tel)}</div>`,
+    'Nada pendiente 👌');
+  return h;
+}
+
 function pintar() {
   if (!D) return;
   pintarChips();
@@ -284,13 +336,10 @@ function pintar() {
       <div class="kpi"><div class="n">${pct(d30, n)}%</div><div class="l">vino en 30 días</div></div>
       <div class="kpi"><div class="n" style="color:var(--ice)">${riesgo}</div><div class="l">🔥 en riesgo (+10 días)</div></div>
       <div class="kpi"><div class="n">${ins.length}</div><div class="l">inscritos hoy</div></div>
-      <div class="kpi"><div class="n">${soles(D.ventaHoy ? Object.keys(D.ventaHoy).filter((n) => ase === 'TODAS' || n === norm(ase)).reduce((t, n) => t + D.ventaHoy[n], 0) : ins.reduce((t, x) => t + x.pago, 0))}</div><div class="l">venta de hoy</div></div>
+      <div class="kpi"><div class="n">${soles(D.ingresosHoy ? Object.keys(D.ingresosHoy).filter((n) => ase === 'TODAS' || n === norm(ase)).reduce((t, n) => t + D.ingresosHoy[n].t, 0) : ins.reduce((t, x) => t + x.pago, 0))}</div><div class="l">venta de hoy</div></div>
     </div>`;
     if (nunca) h += `<div class="sub" style="margin-bottom:10px">${nunca} socios activos nunca registraron asistencia.</div>`;
-    // Ingresos de hoy por asesora (DATOS_ORIGEN, igual que el cuadro diario)
-    const vh = Object.entries(D.ventaHoy || {}).filter(([n]) => ase === 'TODAS' || n === norm(ase)).sort((p, q) => q[1] - p[1]);
-    if (D.ventaHoy) h += `<h2>Ingresos de hoy <small>${soles(vh.reduce((t, [, m]) => t + m, 0))}</small></h2>` + lista(vh, ([n, m]) =>
-      `<div class="row"><div class="main"><div class="t">${esc(n)}</div><div class="d">DATOS_ORIGEN</div></div><div class="t">${soles(m)}</div></div>`, 'Todavía no hay ingresos registrados hoy.');
+    h += seccionIngresos() + seccionReferidos();
     h += `<h2>Inscritos hoy <small>${ins.length}</small></h2>` + lista(ins, (x) =>
       `<div class="row"><div class="main"><div class="t">${esc(x.nombre)}</div><div class="d">${esc(x.plan)} · ${soles(x.pago)} · ${esc(x.asesora)}</div></div>${wa(x.tel)}</div>`, 'Todavía nadie hoy.');
   }
@@ -337,6 +386,9 @@ function pintar() {
   $('#main').innerHTML = h;
   document.querySelectorAll('.seg button').forEach((b) => b.onclick = () => { periodo = b.dataset.p; pintar(); });
   const mc = $('#mesCb'); if (mc) mc.onchange = () => { mesCb = mc.value; pintar(); };
+  const iF = $('#ingF'), iM = $('#ingM');
+  const cambioIng = () => { ING.fecha = iF.value || D.fecha; ING.mes = iM.value === 'mes'; if (ING.mes || ING.fecha !== D.fecha) cargarIngresos(); else { ING.r = null; } pintar(); };
+  if (iF) { iF.onchange = cambioIng; iM.onchange = cambioIng; }
 }
 
 document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
@@ -344,7 +396,7 @@ document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
   document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('on', x === b));
   pintar(); window.scrollTo(0, 0);
 });
-$('#refresh').onclick = () => { if (tab === 'cb') { CB = null; cargarCobros(); pintar(); return; } if (tab === 'sm') { SM = null; cargarSemanal(true); pintar(); return; } if (VD != null || tab === 'vd') { VD = null; cargarVentasDia(true); } cargar(true); if (E || tab === 'eq') { E = null; cargarEquipo(false); } };
+$('#refresh').onclick = () => { if (tab === 'cb') { CB = null; cargarCobros(); pintar(); return; } if (tab === 'sm') { SM = null; cargarSemanal(true); pintar(); return; } if (VD != null || tab === 'vd') { VD = null; cargarVentasDia(true); } cargar(true); if (tab === 'hoy') { RF = null; cargarReferidos(true); if (ING.mes || (ING.fecha && ING.fecha !== D.fecha)) cargarIngresos(); } if (E || tab === 'eq') { E = null; cargarEquipo(false); } };
 cargar(false);
 </script>
 </body>

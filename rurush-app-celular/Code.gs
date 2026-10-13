@@ -211,21 +211,34 @@ const esFP = (a) => /^\s*(FP\b|FREE\s*PASS)/i.test(a.asunto);
 
 /* ---------- dashboard ---------- */
 
-// { ASESORA: monto } de hoy en 'DATOS_ORIGEN_<MES>' (todas las columnas de ingreso, sin TOTAL DÍA).
-function hoy_ventaDeHoy_(hoy) {
+// Ingresos de DATOS_ORIGEN_<MES> por asesora: { ASESORA: { t: total, c: { categoría: monto } } }.
+// mes = true → todo el mes de "iso"; si no, solo ese día. Sin la fila TOTAL DÍA.
+const HOY_CATS = ['Referidos', 'Redes', 'Cerca/visitó', 'Cobros', 'Renovaciones', 'Ampliaciones'];
+function hoy_ingresos_(iso, mes) {
   const r = Sheets.Spreadsheets.Values.batchGet(DV_ID, {
-    ranges: ["'DATOS_ORIGEN_" + MESES[Number(hoy.slice(5, 7)) - 1] + "'!C1:J800"], valueRenderOption: 'UNFORMATTED_VALUE'
+    ranges: ["'DATOS_ORIGEN_" + MESES[Number(iso.slice(5, 7)) - 1] + "'!C1:J800"], valueRenderOption: 'UNFORMATTED_VALUE'
   });
   const out = {};
   (r.valueRanges[0].values || []).forEach(function (f) {
-    if (typeof f[0] !== 'number' || dv_serialAIso(f[0]) !== hoy) return;
+    if (typeof f[0] !== 'number') return;
+    const fecha = dv_serialAIso(f[0]);
+    if (mes ? fecha.slice(0, 7) !== iso.slice(0, 7) : fecha !== iso) return;
     const n = dv_nom(f[1]);
     if (!n || n === 'TOTAL DIA') return;
-    let m = 0;
-    for (let c = 2; c <= 7; c++) m += dv_num(f[c]);
-    if (m) out[n] = (out[n] || 0) + m;
+    for (let c = 2; c <= 7; c++) {
+      const m = dv_num(f[c]);
+      if (!m) continue;
+      const a = out[n] || (out[n] = { t: 0, c: {} });
+      a.t += m; a.c[HOY_CATS[c - 2]] = (a.c[HOY_CATS[c - 2]] || 0) + m;
+    }
   });
   return out;
+}
+/** Desde el celular: ingresos de un día ("yyyy-MM-dd") o de su mes completo. */
+function getIngresos(iso, mes) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(iso || ''))) throw new Error('Fecha no válida.');
+  try { return { fecha: iso, mes: !!mes, datos: hoy_ingresos_(iso, !!mes) }; }
+  catch (e) { throw new Error('No encontré la hoja DATOS_ORIGEN_' + MESES[Number(iso.slice(5, 7)) - 1] + '.'); }
 }
 
 function getDashboard(forzar) {
@@ -274,7 +287,7 @@ function getDashboard(forzar) {
 
   // Venta de hoy: la misma fuente que el cuadro diario (DATOS_ORIGEN), no el "Pago" de Apps Fit
   // (que queda en 0 cuando el pago no se registró allí).
-  try { res.ventaHoy = hoy_ventaDeHoy_(hoy); } catch (e) { res.errores.push('Ventas (DATOS_ORIGEN): ' + e.message); }
+  try { res.ingresosHoy = hoy_ingresos_(hoy, false); } catch (e) { res.errores.push('Ventas (DATOS_ORIGEN): ' + e.message); }
 
   try { cache.put('dash', JSON.stringify(res), 300); } catch (e) { /* >100 KB: sin caché */ }
   return res;
