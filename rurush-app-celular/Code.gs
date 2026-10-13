@@ -211,6 +211,23 @@ const esFP = (a) => /^\s*(FP\b|FREE\s*PASS)/i.test(a.asunto);
 
 /* ---------- dashboard ---------- */
 
+// { ASESORA: monto } de hoy en 'DATOS_ORIGEN_<MES>' (todas las columnas de ingreso, sin TOTAL DÍA).
+function hoy_ventaDeHoy_(hoy) {
+  const r = Sheets.Spreadsheets.Values.batchGet(DV_ID, {
+    ranges: ["'DATOS_ORIGEN_" + MESES[Number(hoy.slice(5, 7)) - 1] + "'!C1:J800"], valueRenderOption: 'UNFORMATTED_VALUE'
+  });
+  const out = {};
+  (r.valueRanges[0].values || []).forEach(function (f) {
+    if (typeof f[0] !== 'number' || dv_serialAIso(f[0]) !== hoy) return;
+    const n = dv_nom(f[1]);
+    if (!n || n === 'TOTAL DIA') return;
+    let m = 0;
+    for (let c = 2; c <= 7; c++) m += dv_num(f[c]);
+    if (m) out[n] = (out[n] || 0) + m;
+  });
+  return out;
+}
+
 function getDashboard(forzar) {
   const cache = CacheService.getScriptCache();
   if (!forzar) {
@@ -254,6 +271,10 @@ function getDashboard(forzar) {
   } catch (e) {
     res.errores.push('Pipedrive: ' + e.message);
   }
+
+  // Venta de hoy: la misma fuente que el cuadro diario (DATOS_ORIGEN), no el "Pago" de Apps Fit
+  // (que queda en 0 cuando el pago no se registró allí).
+  try { res.ventaHoy = hoy_ventaDeHoy_(hoy); } catch (e) { res.errores.push('Ventas (DATOS_ORIGEN): ' + e.message); }
 
   try { cache.put('dash', JSON.stringify(res), 300); } catch (e) { /* >100 KB: sin caché */ }
   return res;

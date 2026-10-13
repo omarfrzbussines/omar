@@ -284,7 +284,7 @@ function pintar() {
       <div class="kpi"><div class="n">${pct(d30, n)}%</div><div class="l">vino en 30 días</div></div>
       <div class="kpi"><div class="n" style="color:var(--ice)">${riesgo}</div><div class="l">🔥 en riesgo (+10 días)</div></div>
       <div class="kpi"><div class="n">${ins.length}</div><div class="l">inscritos hoy</div></div>
-      <div class="kpi"><div class="n">${soles(ins.reduce((t, x) => t + x.pago, 0))}</div><div class="l">venta de hoy</div></div>
+      <div class="kpi"><div class="n">${soles(D.ventaHoy ? Object.keys(D.ventaHoy).filter((n) => ase === 'TODAS' || n === norm(ase)).reduce((t, n) => t + D.ventaHoy[n], 0) : ins.reduce((t, x) => t + x.pago, 0))}</div><div class="l">venta de hoy</div></div>
     </div>`;
     if (nunca) h += `<div class="sub" style="margin-bottom:10px">${nunca} socios activos nunca registraron asistencia.</div>`;
     h += `<h2>Inscritos hoy <small>${ins.length}</small></h2>` + lista(ins, (x) =>
