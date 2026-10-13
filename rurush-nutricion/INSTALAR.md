@@ -27,3 +27,17 @@ Qué puede hacer Diego: ✅ Asistió (observación obligatoria, InBody, próxima
 Reglas: solo martes y miércoles, horas de `NU_HORAS`, nunca para hoy, sin choques, un socio no puede tener dos citas futuras.
 "No vino" deja la actividad abierta en Pipedrive a propósito: así el seguimiento de las 11:30 le escribe para reagendar.
 Para probar la pantalla sin Google: abre `AppDiegoUI.html` directo en el navegador (modo demostración).
+
+## Reservas de las asesoras (reemplaza el formulario de Pipedrive)
+
+Archivos: `AppReservas.gs` y `AppReservasUI.html` (mismo proyecto; `Nutricion.gs` los abre con `?app=reservas`).
+
+1. Sube con **ACTUALIZAR.bat** y crea una **nueva versión** de la implementación (el link no cambia).
+2. Sin clave: la asesora solo escribe su nombre la primera vez. Solo abre con la cuenta de Google del gimnasio.
+3. Link: el de la app web + `?app=reservas`.
+
+Cómo funciona: la asesora escribe el **celular** → ve la ficha (nombre, DNI, activo/inactivo, evaluaciones, si ya tiene cita).
+Si no existe: nombre y apellido (+ DNI opcional); antes de crear muestra fichas parecidas para no duplicar.
+No se pide correo: la cita va directo a la ficha (`person_id`), así nunca cae en la ficha de Omar.
+Si ya tiene cita futura no deja crear otra: ofrece **moverla**. Al confirmar, la cita entra a Pipedrive (de Diego)
+y a CONTROL NUTRICIÓN, y sale el mensaje de WhatsApp listo para copiar.

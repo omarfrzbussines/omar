@@ -109,27 +109,27 @@ function dg_validarCita(fecha, hora, pid, excepto) {
   if (fecha <= hoy) throw new Error('Hoy no se agenda: elige una fecha desde mañana.');
   if (NU_DIAS_DIEGO.indexOf(nu_dow(fecha)) < 0) throw new Error('Diego atiende solo martes y miércoles. El ' + nu_lab(fecha) + ' no hay consulta.');
   if (NU_HORAS.indexOf(hora) < 0) throw new Error('Elige una hora de la lista (8:00 a 10:30 am o 5:00 a 7:30 pm).');
-  const citas = nu_citas(fecha, fecha, false).concat(nu_citas(fecha, fecha, true));
+  const citas = nu_citasRango(fecha, fecha);
   const choque = citas.filter((c) => c.hora === hora && String(c.id) !== String(excepto))[0];
   if (choque) throw new Error('Esa hora ya está ocupada (' + (choque.nombre || choque.asunto) + '). Libres ese día: ' + dg_libresTxt(fecha, excepto));
   if (pid) {
-    const otra = nu_citas(hoy, nu_mas(hoy, 90), false).filter((c) => c.pid === String(pid) && String(c.id) !== String(excepto) && c.ms > Date.now())[0];
+    const otra = nu_citasDe(pid).filter((c) => !c.done && !/^(DUPLICADO|CANCELADA|PRUEBA)/i.test(c.asunto) && String(c.id) !== String(excepto) && c.ms > Date.now())[0];
     if (otra) throw new Error('Este socio ya tiene una cita el ' + nu_lab(otra.fecha) + ' a las ' + nu_horaTxt(otra.hora) + '. Reagenda esa en lugar de crear otra.');
   }
 }
 function dg_libresLista(fecha, excepto) {
   const ocup = {};
-  nu_citas(fecha, fecha, false).concat(nu_citas(fecha, fecha, true)).forEach((c) => { if (String(c.id) !== String(excepto)) ocup[c.hora] = 1; });
+  nu_citasRango(fecha, fecha).forEach((c) => { if (String(c.id) !== String(excepto)) ocup[c.hora] = 1; });
   return NU_HORAS.filter((h) => !ocup[h]);
 }
 function dg_libresTxt(fecha, excepto) { const l = dg_libresLista(fecha, excepto); return l.length ? l.map(nu_horaTxt).join(', ') : 'ninguna'; }
 
 // crea la cita en Pipedrive y su fila PENDIENTE en la hoja; devuelve el act_id
-function dg_crearCita(sh, pid, nombre, tel, fecha, hora, nota) {
+function dg_crearCita(sh, pid, nombre, tel, fecha, hora, nota, extra) {
   const due = dg_utc(fecha, hora);
-  const j = nu_pd('/activities', { method: 'post', contentType: 'application/json', payload: JSON.stringify({
+  const j = nu_pd('/activities', { method: 'post', contentType: 'application/json', payload: JSON.stringify(Object.assign({
     subject: 'Nutrición — ' + nombre, type: 'deadline', person_id: pid ? Number(pid) : undefined, user_id: NU_DIEGO,
-    due_date: due.due_date, due_time: due.due_time, duration: '00:30' }) });
+    due_date: due.due_date, due_time: due.due_time, duration: '00:30' }, extra || {})) });
   const act = String(j.data.id);
   dg_nuevaFila(sh, { FECHA: fecha, HORA: hora, SOCIO: nombre, TEL: tel || '', ESTADO: 'PENDIENTE', HECHO: false, INBODY: false,
                      OBS: nota || '', AGENDAR: false, ACT: Number(act), PID: pid ? Number(pid) : '' });
@@ -138,9 +138,33 @@ function dg_crearCita(sh, pid, nombre, tel, fecha, hora, nota) {
 
 /* ================= funciones que llama la app ================= */
 
+/* Trae a la hoja las citas de nutrición de Pipedrive (hoy y próximos 14 días) que todavía no están,
+   así la agenda no depende de que corra la sincronización de la hoja. Busca por act_id: nunca duplica. */
+function dg_traerCitas_(sh) {
+  const hoy = nu_hoy(), ya = {};
+  dg_leer(sh).forEach((f) => { if (f.act) ya[f.act] = 1; });
+  const nuevas = nu_citas(hoy, nu_mas(hoy, 14), false)
+    .filter((c) => !ya[String(c.id)] && !/^(DUPLICADO|CANCELADA|PRUEBA|NO VINO)/i.test(c.asunto));
+  if (!nuevas.length) return 0;
+  return dg_lock(() => {
+    const ya2 = {}; dg_leer(sh).forEach((f) => { if (f.act) ya2[f.act] = 1; });
+    let n = 0;
+    nuevas.forEach((c) => {
+      if (ya2[String(c.id)]) return;
+      const nombre = c.nombre || String(c.asunto).split(' / ')[0].replace(/^Nutrición — /, '');
+      dg_nuevaFila(sh, { FECHA: c.fecha, HORA: c.hora, SOCIO: nombre, ESTADO: 'PENDIENTE', HECHO: false, INBODY: false,
+                         AGENDAR: false, ACT: Number(c.id), PID: c.pid ? Number(c.pid) : '' });
+      n++;
+    });
+    return n;
+  });
+}
+
 function dg_datos(pin) {
   dg_pin(pin);
-  const sh = dg_hoja(), filas = dg_leer(sh);
+  const sh = dg_hoja();
+  try { dg_traerCitas_(sh); } catch (e) { /* si Pipedrive no responde, se muestra lo que ya hay en la hoja */ }
+  const filas = dg_leer(sh);
   const tels = {};
   const rg = sh.getParent().getSheetByName(DG_REAG);
   if (rg && rg.getLastRow() > 1) rg.getRange(2, 1, rg.getLastRow() - 1, 16).getDisplayValues().forEach((r) => {
@@ -222,6 +246,9 @@ function dg_noVino(pin, q) {
 /* 🔁 Reagendar: mueve la MISMA cita (misma actividad de Pipedrive, misma fila) */
 function dg_reagendar(pin, q) {
   dg_pin(pin);
+  return dg_reagendar_(q);
+}
+function dg_reagendar_(q) {
   return dg_lock(() => {
     const sh = dg_hoja(), f = dg_fila(sh, q.act);
     if (f.hecho) throw new Error(f.socio + ' ya fue evaluado. Para su siguiente control usa "Agendar próxima".');

@@ -66,23 +66,47 @@ function nu_pd(path, opt) {
   if (r.getResponseCode() >= 300 || j.success === false) throw new Error('Pipedrive ' + path.split('?')[0] + ': ' + (j.error || r.getResponseCode()));
   return j;
 }
+// actividad de Pipedrive → cita de nutrición con fecha/hora Lima (null si no es de nutrición)
+function nu_cita(a) {
+  if (!a || !a.due_date || a.type !== 'deadline') return null;
+  if (!/nutri/i.test(a.subject || '')) return null;          // solo citas de nutrición (no Free Pass / FP)
+  const t = (a.due_time || '05:00').slice(0, 5);
+  const l = new Date(Date.parse(a.due_date + 'T' + t + ':00Z') - 5 * 3600e3);
+  const pid = a.person_id && a.person_id.value != null ? a.person_id.value : a.person_id;
+  return { id: a.id, pid: pid ? String(pid) : '', fecha: l.toISOString().slice(0, 10), hora: nu_pad(l.getUTCHours()) + ':' + nu_pad(l.getUTCMinutes()),
+           ms: l.getTime() + 5 * 3600e3, asunto: a.subject || '', nombre: a.person_name || '', done: !!a.done };
+}
+// varias lecturas a Pipedrive EN PARALELO (una sola espera en vez de una por llamada)
+function nu_pdAll(paths) {
+  const tk = nu_props().getProperty('PIPEDRIVE_TOKEN');
+  return UrlFetchApp.fetchAll(paths.map((p) => ({ url: 'https://api.pipedrive.com/v1' + p, headers: { 'x-api-token': tk }, muteHttpExceptions: true })))
+    .map((r, i) => {
+      const j = JSON.parse(r.getContentText() || '{}');
+      if (r.getResponseCode() >= 300 || j.success === false) throw new Error('Pipedrive ' + paths[i].split('?')[0] + ': ' + (j.error || r.getResponseCode()));
+      return j;
+    });
+}
+// citas (pendientes y hechas) entre dos fechas, con las dos consultas en paralelo
+function nu_citasRango(desde, hasta) {
+  const q = '/activities?type=deadline&user_id=0&limit=500&start=0&start_date=' + nu_mas(desde, -1) + '&end_date=' + nu_mas(hasta, 2) + '&done=';
+  const js = nu_pdAll([q + '0', q + '1']);
+  if (js.some((j) => j.additional_data && j.additional_data.pagination && j.additional_data.pagination.more_items_in_collection))
+    return nu_citas(desde, hasta, false).concat(nu_citas(desde, hasta, true));   // muchas: se pagina normal
+  const out = [];
+  js.forEach((j) => (j.data || []).forEach((a) => { const c = nu_cita(a); if (c && c.fecha >= desde && c.fecha <= hasta) out.push(c); }));
+  return out;
+}
+// citas de nutrición de UNA persona (una sola llamada, sin recorrer toda la agenda)
+function nu_citasDe(pid) {
+  return (nu_pd('/persons/' + pid + '/activities?limit=500').data || []).map(nu_cita).filter(Boolean);
+}
 // citas de nutrición (type=deadline) con fecha/hora Lima entre desde y hasta
 function nu_citas(desde, hasta, hechas) {
   const out = [];
   for (let start = 0, v = 0; v < 40; v++) {
     const j = nu_pd('/activities?type=deadline&user_id=0&limit=500&start=' + start + '&done=' + (hechas ? 1 : 0) +
       '&start_date=' + nu_mas(desde, -1) + '&end_date=' + nu_mas(hasta, 2));
-    (j.data || []).forEach((a) => {
-      if (!a.due_date) return;
-      if (!/nutri/i.test(a.subject || '')) return;          // solo citas de nutrición (no Free Pass / FP)
-      const t = (a.due_time || '05:00').slice(0, 5);
-      const l = new Date(Date.parse(a.due_date + 'T' + t + ':00Z') - 5 * 3600e3);
-      const fecha = l.toISOString().slice(0, 10);
-      if (fecha < desde || fecha > hasta) return;
-      const pid = a.person_id && a.person_id.value != null ? a.person_id.value : a.person_id;
-      out.push({ id: a.id, pid: pid ? String(pid) : '', fecha: fecha, hora: nu_pad(l.getUTCHours()) + ':' + nu_pad(l.getUTCMinutes()),
-                 ms: l.getTime() + 5 * 3600e3, asunto: a.subject || '', nombre: a.person_name || '' });
-    });
+    (j.data || []).forEach((a) => { const c = nu_cita(a); if (c && c.fecha >= desde && c.fecha <= hasta) out.push(c); });
     const pg = j.additional_data && j.additional_data.pagination;
     if (!pg || !pg.more_items_in_collection) break;
     start = pg.next_start;
@@ -257,6 +281,7 @@ function nu_resp(o) { return ContentService.createTextOutput(JSON.stringify(o)).
 function nu_ok(e) { const k = nu_props().getProperty('NU_LLAVE'); return k && e && e.parameter && e.parameter.k === k; }
 function doGet(e) {
   if (e && e.parameter && e.parameter.app === 'diego') return dg_pagina();   // App de Diego (AppDiego.gs), protegida con PIN
+  if (e && e.parameter && e.parameter.app === 'reservas') return rv_pagina(); // Reservas de las asesoras (AppReservas.gs), con su propio PIN
   if (!nu_ok(e)) return nu_resp({ ok: false, error: 'llave' });
   try {
     if (e.parameter.accion === 'plan') return nu_resp(Object.assign({ ok: true }, nu_plan()));
