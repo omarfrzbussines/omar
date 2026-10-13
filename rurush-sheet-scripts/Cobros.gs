@@ -183,6 +183,7 @@ function cob_buscar(llave, codigo) {
 /** Agrega el cobro en la primera fila libre de COLA RENOVAR: B = código, N = monto, S = fecha. */
 function cob_agregar(llave, codigo, monto, fechaIso) {
   const asesora = app_asesora(llave);
+  if (asesora === APP_PRUEBA) throw new Error("🧪 Modo prueba: los cobros no se guardan.");
   monto = Number(monto);
   if (!(monto > 0) || monto > 100000) throw new Error("Monto no válido.");
   const m = String(fechaIso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -216,6 +217,7 @@ function cob_agregar(llave, codigo, monto, fechaIso) {
  *  (así entra en YA COBRADO del cuadro con esa fecha) y deja constancia en T. */
 function cob_marcarCobrado(llave, fila, codigo, monto, fechaIso) {
   const asesora = app_asesora(llave);
+  if (asesora === APP_PRUEBA) throw new Error("🧪 Modo prueba: los cobros no se guardan.");
   fila = Number(fila); monto = Number(monto);
   if (!(fila > COB_FILA_HEADER)) throw new Error("Fila no válida.");
   if (!(monto > 0) || monto > 100000) throw new Error("Monto no válido.");

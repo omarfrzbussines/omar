@@ -419,6 +419,8 @@ $('#base').onchange = () => {
   if (l) { cola = l.cola; mostrando = true; pintar(); } else $('#main').innerHTML = '<div class="vacio">Cargando la base ' + esc(BASE) + '…</div>';
   traer(true);
 };
+// Link de prueba de Omar: avisa que nada se guarda.
+if (ASESORA === 'OMAR') { const b = document.createElement('div'); b.textContent = '🧪 MODO PRUEBA · no se guarda nada en el Sheet'; b.style.cssText = 'background:#5a3a00;color:#ffd27a;text-align:center;padding:6px;font-size:13px'; document.body.prepend(b); }
 function iniciar() {
   // Al abrir: si hay una cola guardada de hoy, se muestra al instante y se actualiza por detrás.
   const local = leerLocal();

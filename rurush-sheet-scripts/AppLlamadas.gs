@@ -10,6 +10,8 @@
  */
 
 const APP_ASESORAS = ["MONICA", "DANNA", "LAURA"];
+// Link de prueba de Omar: ve una cola real pero NO guarda nada ni reserva personas a las asesoras.
+const APP_PRUEBA = "OMAR";
 // Bases que se pueden llamar desde el celular (en este orden aparecen en el selector).
 const APP_BASES = ["2026", "FP 2026 NI", "2025", "FPS 2025", "FPS NA 2026", "DIARIO 🔥", "EXAL2025", "INACTIVOS", "INASISTENCIAS", "ACTIVOS", "2024"];
 const APP_ESTADOS = ["CONTESTO", "NO CONTESTO", "CORTO", "APAGADO", "AGENDADO", "CLIENTE", "DESCARTADO", "Otra Ciudad"];
@@ -93,7 +95,7 @@ function app_activarCelular(k, pin, modelo) {
 function app_verLinks() {
   const llaves = JSON.parse(app_props().getProperty("APP_LLAVES") || "{}");
   const url = ScriptApp.getService().getUrl();
-  APP_ASESORAS.forEach(function (a) {
+  APP_ASESORAS.concat([APP_PRUEBA]).forEach(function (a) {
     let k = Object.keys(llaves).filter(function (x) { return llaves[x] === a; })[0];
     if (!k) { k = Utilities.getUuid().replace(/-/g, "").slice(0, 20); llaves[k] = a; Logger.log("(nuevo) " + a); }
     Logger.log(a + " → " + url + "?k=" + k);
@@ -234,7 +236,7 @@ function app_getCola_(llave, base, excluir, api) {
   cola.forEach(function (x) { if (socios[x.numero]) x.socio = socios[x.numero]; });
   const res = {};
   cola.forEach(function (x) { res["r" + base + x.fila] = asesora; });
-  if (cola.length) cache.putAll(res, APP_RESERVA_SEG);
+  if (cola.length && asesora !== APP_PRUEBA) cache.putAll(res, APP_RESERVA_SEG);
 
   return {
     asesora: asesora, cola: cola, hoy: app_contadorHoy(asesora), estados: APP_ESTADOS, horas: LL_HORAS,
@@ -336,6 +338,7 @@ function app_guardar(llave, base, fila, numero, estado, obs, fpFecha, fpHora, in
   const asesora = app_asesora(llave);
   if (APP_BASES.indexOf(base) < 0) throw new Error("Base no habilitada: " + base);
   if (APP_ESTADOS.indexOf(estado) < 0) throw new Error("Estado no válido.");
+  if (asesora === APP_PRUEBA) return { ok: true, prueba: true };   // modo prueba: no escribe en el Sheet
   // Si ya es socio puede marcarse CLIENTE sin llamar (se verifica aquí, no en el celular).
   const sinLlamar = estado === "CLIENTE" && !(Number(intentos) > 0) && cob_esSocio(numero);
   const r = ll_registrar({
