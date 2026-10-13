@@ -423,7 +423,7 @@ function sinCita(){
     collect:function(v){var o=$("#so",v).value.trim();if(o.length<3)throw new Error("Escribe la observación.");if(sel.f&&!sel.h)throw new Error("Elige la hora de la próxima cita.");
       var q={obs:o,inbody:$("#sib",v).checked,prox:sel.f?{fecha:sel.f,hora:sel.h}:null};
       if(elegido){q.pid=elegido.pid;q.nombre=elegido.nombre;q.tel=elegido.tels[0]||"";}
-      else{q.nombre=$("#nn",v).value.trim();q.tel=$("#nc",v).value.trim();if(q.nombre.length<5)throw new Error("Elige un socio de la búsqueda o escribe nombre y apellido.");if(!/^9\d{8}$/.test(q.tel.replace(/\D/g,"").replace(/^51/,"")))throw new Error("Escribe un celular de 9 dígitos que empiece con 9.");}
+      else{q.nombre=$("#nn",v).value.trim();q.tel=$("#nc",v).value.trim();if(q.nombre.split(/\s+/).length<2||/^(socio|cliente|nuevo|nueva|prueba)\b/i.test(q.nombre))throw new Error("Escribe el nombre y apellido reales del socio (no \"Socio\").");if(!/^9\d{8}$/.test(q.tel.replace(/\D/g,"").replace(/^51/,"")))throw new Error("Escribe un celular de 9 dígitos que empiece con 9.");}
       return q;}});
 }
 function toast(t){var x=document.createElement("div");x.className="toast";x.textContent=t;document.body.appendChild(x);setTimeout(function(){x.remove();},3200);}

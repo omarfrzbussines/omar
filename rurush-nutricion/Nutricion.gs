@@ -74,6 +74,7 @@ function nu_citas(desde, hasta, hechas) {
       '&start_date=' + nu_mas(desde, -1) + '&end_date=' + nu_mas(hasta, 2));
     (j.data || []).forEach((a) => {
       if (!a.due_date) return;
+      if (!/nutri/i.test(a.subject || '')) return;          // solo citas de nutrición (no Free Pass / FP)
       const t = (a.due_time || '05:00').slice(0, 5);
       const l = new Date(Date.parse(a.due_date + 'T' + t + ':00Z') - 5 * 3600e3);
       const fecha = l.toISOString().slice(0, 10);
@@ -133,6 +134,8 @@ function nu_sync() {
   base.forEach((r) => {
     if (nuevos.length >= NU_MAX_ALTAS) return;
     const estado = String(r[9] || '').toUpperCase(), dni = String(r[3] || '').trim(), tel = nu_tel(r[2]);
+    // solo socios con plan: los códigos RE## / FP## son referidos o free pass cargados a mano, y SIN FECHA no tiene plan
+    if (!/^\d+$/.test(String(r[0] || '').trim()) || /SIN FECHA/.test(estado)) return;
     if (!estado || /VENCIDO/.test(estado) || !tel || enHoja[dni] || enHoja['t' + tel] || NU_NUNCA.indexOf(tel) >= 0) return;
     let pid = (dni && pidPorDni[dni]) || '';
     if (!pid) { try { const it = (nu_pd('/persons/search?fields=phone&limit=1&term=' + tel).data || {}).items || []; pid = it.length ? String(it[0].item.id) : ''; } catch (e) { /* sin pid */ } }
@@ -167,8 +170,10 @@ function nu_plan() {
   const pasadas = nu_citas(nu_mas(hoy, -7), hoy, false).filter((c) => c.ms < Date.now() - 30 * 60e3);
   if (pasadas.length) {
     const futuras = {}; nu_citas(hoy, nu_mas(hoy, 60), false).filter((c) => c.ms > Date.now()).forEach((c) => { futuras[c.pid] = 1; });
+    const evaluado = {};   // si ya fue evaluado después (sin cita u otro día), no es no-show
+    nu_citas(nu_mas(hoy, -7), hoy, true).forEach((c) => { if (c.pid && (!evaluado[c.pid] || c.fecha > evaluado[c.pid])) evaluado[c.pid] = c.fecha; });
     pasadas.forEach((c) => {
-      if (!c.pid || futuras[c.pid] || usados[c.pid]) return;
+      if (!c.pid || futuras[c.pid] || usados[c.pid] || (evaluado[c.pid] && evaluado[c.pid] >= c.fecha)) return;
       usados[c.pid] = 1;
       const s = porPid[c.pid];
       if (!s) { plan.fueraHoja.push(c.nombre + ' (person_id ' + c.pid + ', cita ' + nu_lab(c.fecha) + ' ' + nu_horaTxt(c.hora) + ')'); return; }
