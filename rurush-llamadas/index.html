@@ -8,11 +8,13 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Llamadas">
-<link rel="icon" href="https://em-content.zobj.net/source/apple/391/telephone-receiver_1f4de.png">
-<link rel="apple-touch-icon" href="https://em-content.zobj.net/source/apple/391/telephone-receiver_1f4de.png">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icono-192.png">
+<link rel="apple-touch-icon" href="icono-192.png">
 <title>RURUSH Llamadas</title>
-<!-- Abre la app de Llamadas (Apps Script) a pantalla completa: se agrega a la pantalla de inicio
-     con el link ?k=<llave de la asesora>. La llave no está en este archivo. -->
+<!-- Abre la app de Llamadas (Apps Script) a pantalla completa. La asesora abre su link ?k=<llave>
+     una vez y la agrega a la pantalla de inicio; la llave queda guardada en su celular (la app
+     instalada en Android abre sin el ?k=). La llave no está en este archivo. -->
 <style>
   html, body { margin:0; height:100%; background:#111; color:#ccc; font:16px -apple-system, system-ui, sans-serif; }
   body { padding-top: env(safe-area-inset-top); box-sizing:border-box; }
@@ -23,7 +25,9 @@
 <body>
 <script>
   const EXEC = 'https://script.google.com/macros/s/AKfycbzsvzWanclhKavutDs3l1N-7MEbdY4hojdnS3Pm8WkMffgSPihvwQxPuppMgCNwKG95/exec';
-  const k = new URLSearchParams(location.search).get('k');
+  let k = new URLSearchParams(location.search).get('k');
+  try { if (k) localStorage.setItem('rr_llave', k); else k = localStorage.getItem('rr_llave'); } catch (e) {}
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   if (!k) document.body.innerHTML = '<p>Falta tu llave en el link. Pídele a Omar tu link de Llamadas.</p>';
   else {
     const f = document.createElement('iframe');
