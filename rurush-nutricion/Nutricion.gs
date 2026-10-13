@@ -169,8 +169,10 @@ function nu_plan() {
   const pasadas = nu_citas(nu_mas(hoy, -7), hoy, false).filter((c) => c.ms < Date.now() - 30 * 60e3);
   if (pasadas.length) {
     const futuras = {}; nu_citas(hoy, nu_mas(hoy, 60), false).filter((c) => c.ms > Date.now()).forEach((c) => { futuras[c.pid] = 1; });
+    const evaluado = {};   // si ya fue evaluado después (sin cita u otro día), no es no-show
+    nu_citas(nu_mas(hoy, -7), hoy, true).forEach((c) => { if (c.pid && (!evaluado[c.pid] || c.fecha > evaluado[c.pid])) evaluado[c.pid] = c.fecha; });
     pasadas.forEach((c) => {
-      if (!c.pid || futuras[c.pid] || usados[c.pid]) return;
+      if (!c.pid || futuras[c.pid] || usados[c.pid] || (evaluado[c.pid] && evaluado[c.pid] >= c.fecha)) return;
       usados[c.pid] = 1;
       const s = porPid[c.pid];
       if (!s) { plan.fueraHoja.push(c.nombre + ' (person_id ' + c.pid + ', cita ' + nu_lab(c.fecha) + ' ' + nu_horaTxt(c.hora) + ')'); return; }
