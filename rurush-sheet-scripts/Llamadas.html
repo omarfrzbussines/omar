@@ -43,6 +43,7 @@
   .guardar { width:100%; margin-top:16px; background:var(--red); color:#fff; border:0; border-radius:14px; padding:16px; font-size:17px; font-weight:700; }
   .guardar:disabled { opacity:.45; }
   .socio { margin-top:10px; padding:10px 12px; border-radius:10px; background:#12391f; color:#7ee2a0; font-size:14px; }
+  .socio.exsocio { background:#2a2a2a; color:#ccc; }
   .socio button { display:block; width:100%; margin-top:8px; padding:10px; border:0; border-radius:8px; background:#1f7a3f; color:#fff; font-size:15px; font-weight:600; }
   .saltar { width:100%; margin-top:8px; background:none; border:0; color:var(--mut); padding:10px; font-size:14px; }
   .toast { position:fixed; left:16px; right:16px; bottom:16px; background:#2c2c2e; color:#fff; padding:12px 14px; border-radius:12px; font-size:14px; display:none; z-index:20; }
@@ -198,6 +199,10 @@ function pintarMarcador() {
     `<div class="m"><b>${Math.max(cola.length - idx, 0)}</b>en tu cola</div>`;
 }
 
+// Socio con plan vigente (vence hoy o después): se puede marcar CLIENTE sin llamar. Vencido = ex-socio.
+const hoyIso = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const socioVigente = (s) => !!(s.vence && s.vence >= hoyIso());
+const datosSocio = (s) => (s.plan ? ' · ' + esc(s.plan) : '') + (s.vence ? ' · ' + (socioVigente(s) ? 'vence ' : 'venció ') + esc(s.vence.slice(8, 10) + '/' + s.vence.slice(5, 7) + '/' + s.vence.slice(2, 4)) : '') + (s.asesor ? ' · ' + esc(s.asesor) : '');
 function pintar() {
   const p = actual();
   estado = null;
@@ -218,8 +223,9 @@ function pintar() {
         <a class="wacall" id="wacall" href="https:\/\/wa.me/51${p.numero}" target="_blank">📲 WhatsApp</a>
         <a class="wa" href="https:\/\/wa.me/51${p.numero}" target="_blank">💬</a>
       </div>
-      ${p.socio ? `<div class="socio">🟢 <b>YA ES SOCIO</b>${p.socio.plan ? ' · ' + esc(p.socio.plan) : ''}${p.socio.vence ? ' · vence ' + esc(p.socio.vence.slice(8, 10) + '/' + p.socio.vence.slice(5, 7)) : ''}${p.socio.estado ? ' · ' + esc(p.socio.estado) : ''}${p.socio.asesor ? ' · ' + esc(p.socio.asesor) : ''}
-        <button id="esSocio">✅ Marcar CLIENTE sin llamar</button></div>` : ''}
+      ${p.socio ? (socioVigente(p.socio)
+        ? `<div class="socio">🟢 <b>YA ES SOCIO</b>${datosSocio(p.socio)}<button id="esSocio">✅ Marcar CLIENTE sin llamar</button></div>`
+        : `<div class="socio exsocio">⚪ <b>EX-SOCIO</b>${datosSocio(p.socio)}<br>Su plan ya venció: llámalo para que regrese.</div>`) : ''}
       <div class="medidor" id="medidor"></div>
     </div>
     ${hist}

@@ -164,8 +164,9 @@ function cob_sociosPorTel() {
   try { cache.put("socios_tel", JSON.stringify(m), 600); } catch (e) {}
   return m;
 }
+// Socio con plan vigente (F. FIN de hoy en adelante). Los vencidos son ex-socios: se llaman normal.
 function cob_esSocio(numero) {
-  try { return !!cob_sociosPorTel()[ll_limpiarTel(numero)]; } catch (e) { return false; }
+  try { const s = cob_sociosPorTel()[ll_limpiarTel(numero)]; return !!(s && s.vence && s.vence >= cob_hoy()); } catch (e) { return false; }
 }
 
 /** La asesora escribe el código: datos del socio + los cobros que ya tiene pendientes. */
