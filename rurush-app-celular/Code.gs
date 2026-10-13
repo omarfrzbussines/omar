@@ -214,23 +214,41 @@ const esFP = (a) => /^\s*(FP\b|FREE\s*PASS)/i.test(a.asunto);
 // Ingresos de DATOS_ORIGEN_<MES> por asesora: { ASESORA: { t: total, c: { categoría: monto } } }.
 // mes = true → todo el mes de "iso"; si no, solo ese día. Sin la fila TOTAL DÍA.
 const HOY_CATS = ['Referidos', 'Redes', 'Cerca/visitó', 'Cobros', 'Renovaciones', 'Ampliaciones'];
-function hoy_ingresos_(iso, mes) {
+// Todo el mes de una vez y en caché: { "yyyy-MM-dd": { ASESORA: { t, c } } }. El mes en curso se
+// guarda 2 min (y 🔄 lo renueva); los meses pasados, 1 h. Así cambiar de día es instantáneo.
+function hoy_ingresosMes_(ym, forzar) {
+  const cache = CacheService.getScriptCache(), key = 'ing_' + ym;
+  if (!forzar) { const c = cache.get(key); if (c) return JSON.parse(c); }
   const r = Sheets.Spreadsheets.Values.batchGet(DV_ID, {
-    ranges: ["'DATOS_ORIGEN_" + MESES[Number(iso.slice(5, 7)) - 1] + "'!C1:J800"], valueRenderOption: 'UNFORMATTED_VALUE'
+    ranges: ["'DATOS_ORIGEN_" + MESES[Number(ym.slice(5, 7)) - 1] + "'!C1:J800"], valueRenderOption: 'UNFORMATTED_VALUE'
   });
   const out = {};
   (r.valueRanges[0].values || []).forEach(function (f) {
     if (typeof f[0] !== 'number') return;
     const fecha = dv_serialAIso(f[0]);
-    if (mes ? fecha.slice(0, 7) !== iso.slice(0, 7) : fecha !== iso) return;
+    if (fecha.slice(0, 7) !== ym) return;
     const n = dv_nom(f[1]);
     if (!n || n === 'TOTAL DIA') return;
     for (let c = 2; c <= 7; c++) {
       const m = dv_num(f[c]);
       if (!m) continue;
-      const a = out[n] || (out[n] = { t: 0, c: {} });
-      a.t += m; a.c[HOY_CATS[c - 2]] = (a.c[HOY_CATS[c - 2]] || 0) + m;
+      const dia = out[fecha] || (out[fecha] = {}), x = dia[n] || (dia[n] = { t: 0, c: {} });
+      x.t += m; x.c[HOY_CATS[c - 2]] = (x.c[HOY_CATS[c - 2]] || 0) + m;
     }
+  });
+  try { cache.put(key, JSON.stringify(out), ym === fechaLima(0).slice(0, 7) ? 120 : 3600); } catch (e) {}
+  return out;
+}
+function hoy_ingresos_(iso, mes, forzar) {
+  const porDia = hoy_ingresosMes_(iso.slice(0, 7), forzar);
+  if (!mes) return porDia[iso] || {};
+  const out = {};
+  Object.keys(porDia).forEach(function (d) {
+    Object.keys(porDia[d]).forEach(function (n) {
+      const x = out[n] || (out[n] = { t: 0, c: {} }), y = porDia[d][n];
+      x.t += y.t;
+      Object.keys(y.c).forEach(function (c) { x.c[c] = (x.c[c] || 0) + y.c[c]; });
+    });
   });
   return out;
 }
@@ -287,7 +305,7 @@ function getDashboard(forzar) {
 
   // Venta de hoy: la misma fuente que el cuadro diario (DATOS_ORIGEN), no el "Pago" de Apps Fit
   // (que queda en 0 cuando el pago no se registró allí).
-  try { res.ingresosHoy = hoy_ingresos_(hoy, false); } catch (e) { res.errores.push('Ventas (DATOS_ORIGEN): ' + e.message); }
+  try { res.ingresosHoy = hoy_ingresos_(hoy, false, forzar); } catch (e) { res.errores.push('Ventas (DATOS_ORIGEN): ' + e.message); }
 
   try { cache.put('dash', JSON.stringify(res), 300); } catch (e) { /* >100 KB: sin caché */ }
   return res;

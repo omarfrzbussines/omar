@@ -285,30 +285,44 @@ function seccionIngresos() {
     'No hay ingresos registrados.');
 }
 
-/* ---------- 🎁 Referidos (pestaña REFERIDOS de VENTAS RETENCIÓN) ---------- */
-let RF = null, rfCargando = false;
+/* ---------- 🎁 Referidos (pestaña REFERIDOS de VENTAS RETENCIÓN) ----------
+   Se muestra al instante lo guardado en el celular y se actualiza por detrás una vez por sesión. */
+let RF = (() => { try { return JSON.parse(localStorage.getItem('rr_ref') || 'null'); } catch (e) { return null; } })();
+let rfCargando = false, rfFresco = false, RF_MES = '';
 function cargarReferidos(forzar) {
   if (rfCargando) return; rfCargando = true;
   google.script.run
-    .withSuccessHandler((r) => { RF = r; rfCargando = false; if (tab === 'hoy') pintar(); })
-    .withFailureHandler((e) => { RF = { error: e.message || String(e) }; rfCargando = false; if (tab === 'hoy') pintar(); })
+    .withSuccessHandler((r) => { RF = r; rfCargando = false; rfFresco = true; try { localStorage.setItem('rr_ref', JSON.stringify(r)); } catch (e) {} if (tab === 'hoy') pintar(); })
+    .withFailureHandler((e) => { rfCargando = false; rfFresco = true; if (!RF) RF = { error: e.message || String(e) }; if (tab === 'hoy') pintar(); })
     .getReferidos(!!forzar);
 }
 function seccionReferidos() {
-  if (!RF) { setTimeout(() => cargarReferidos(false), 0); return `<h2>🎁 Referidos</h2><div class="list"><div class="vacio">Cargando…</div></div>`; }
+  if (!rfFresco && !rfCargando) setTimeout(() => cargarReferidos(false), 0);
+  if (!RF) return `<h2>🎁 Referidos</h2><div class="list"><div class="vacio">Cargando…</div></div>`;
   if (RF.error) return `<h2>🎁 Referidos</h2><div class="err">⚠️ ${esc(RF.error)}</div>`;
-  const k = RF.kpi, mia = (x) => ase === 'TODAS' || norm(x) === norm(ase);
-  let h = `<h2>🎁 Referidos</h2>`;
-  if (ase === 'TODAS') h += `<div class="grid">
-    <div class="kpi"><div class="n">${esc(k.referidos)}</div><div class="l">referidos obtenidos</div></div>
-    <div class="kpi"><div class="n">${esc(k.cobertura)}</div><div class="l">cobertura (de ${esc(k.vigentes)} vigentes)</div></div>
-    <div class="kpi"><div class="n">${esc(k.contactados)}</div><div class="l">contactados</div></div>
-    <div class="kpi"><div class="n">${esc(k.convertidos)}</div><div class="l">convertidos</div></div></div>`;
-  h += lista(RF.metas.filter((m) => mia(m.asesora)), (m) => `<div class="row"><div class="main"><div class="t">${esc(m.asesora)}</div>
-    <div class="d">meta ${esc(m.meta)} · obtenidos ${esc(m.obtenidos)} (${esc(m.avance)}) · inscritos ${esc(m.conv)}/${esc(m.metaIns)}</div></div></div>`, 'Sin metas.');
-  const pend = RF.registro.filter((x) => mia(x.asesora) && !/INSCRIT|CONVERT|DESCART|NO INTERES/i.test(x.estado));
+  const mia = (x) => ase === 'TODAS' || norm(x) === norm(ase);
+  const esIns = (x) => /INSCRIT|CONVERT|MATRICUL/.test(x.estado);
+  const meses = [...new Set(RF.registro.map((x) => x.mes).filter(Boolean))].sort().reverse();
+  const regs = RF.registro.filter((x) => mia(x.asesora) && (RF_MES === '' || (RF_MES === 'SF' ? !x.mes : x.mes === RF_MES)));
+  const ins = regs.filter(esIns).length, cont = regs.filter((x) => x.estado !== 'PENDIENTE').length;
+  let h = `<h2>🎁 Referidos <small>${rfCargando ? 'actualizando…' : ''}</small></h2>
+    <select class="sel" id="refMes"><option value="">📅 Todos los meses</option>${meses.map((m) => `<option value="${m}" ${m === RF_MES ? 'selected' : ''}>📅 ${nomMes(m)}</option>`).join('')}
+    <option value="SF" ${RF_MES === 'SF' ? 'selected' : ''}>Sin fecha de captura</option></select>
+    <div class="grid">
+    <div class="kpi"><div class="n">${regs.length}</div><div class="l">referidos</div></div>
+    <div class="kpi"><div class="n">${cont}</div><div class="l">contactados</div></div>
+    <div class="kpi"><div class="n">${ins}</div><div class="l">inscritos</div></div>
+    <div class="kpi"><div class="n">${regs.length ? Math.round(ins * 100 / regs.length) : 0}%</div><div class="l">conversión</div></div></div>`;
+  // por asesora: lo del mes elegido + la meta mensual de la hoja
+  const por = {};
+  regs.forEach((x) => { const p = por[x.asesora] || (por[x.asesora] = { n: 0, i: 0 }); p.n++; if (esIns(x)) p.i++; });
+  const metas = {}; (RF.metas || []).forEach((m) => { metas[norm(m.asesora)] = m; });
+  const filas = Object.entries(por).sort((p, q) => q[1].n - p[1].n);
+  h += lista(filas, ([n, p]) => { const m = metas[norm(n)];
+    return `<div class="row"><div class="main"><div class="t">${esc(n)}</div><div class="d">${p.n} referidos · ${p.i} inscritos${m ? ` · meta del mes ${esc(m.meta)} ref / ${esc(m.metaIns)} ins` : ''}</div></div></div>`; }, 'Sin referidos en este periodo.');
+  const pend = regs.filter((x) => !esIns(x) && !/DESCART|NO INTERES/.test(x.estado));
   h += `<h2>Referidos por contactar <small>${pend.length}</small></h2>` + lista(pend, (x) => `<div class="row"><div class="main">
-    <div class="t">${esc(x.referido || 'Sin nombre')}</div><div class="d">de ${esc(x.alumno)} · ${esc(x.asesora)} · ${esc(x.estado)}${x.fecha ? ' · ' + esc(x.fecha) : ''}</div></div>${wa(x.tel)}</div>`,
+    <div class="t">${esc(x.referido || 'Sin nombre')}</div><div class="d">de ${esc(x.alumno)} · ${esc(x.asesora)} · ${esc(x.estado)}${x.fecha ? ' · ' + esc(x.fecha) : ''}${x.notas ? ' · ' + esc(x.notas) : ''}</div></div>${wa(x.tel)}</div>`,
     'Nada pendiente 👌');
   return h;
 }
@@ -389,6 +403,7 @@ function pintar() {
   const iF = $('#ingF'), iM = $('#ingM');
   const cambioIng = () => { ING.fecha = iF.value || D.fecha; ING.mes = iM.value === 'mes'; if (ING.mes || ING.fecha !== D.fecha) cargarIngresos(); else { ING.r = null; } pintar(); };
   if (iF) { iF.onchange = cambioIng; iM.onchange = cambioIng; }
+  const rm = $('#refMes'); if (rm) rm.onchange = () => { RF_MES = rm.value; pintar(); };
 }
 
 document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
@@ -396,7 +411,7 @@ document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
   document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('on', x === b));
   pintar(); window.scrollTo(0, 0);
 });
-$('#refresh').onclick = () => { if (tab === 'cb') { CB = null; cargarCobros(); pintar(); return; } if (tab === 'sm') { SM = null; cargarSemanal(true); pintar(); return; } if (VD != null || tab === 'vd') { VD = null; cargarVentasDia(true); } cargar(true); if (tab === 'hoy') { RF = null; cargarReferidos(true); if (ING.mes || (ING.fecha && ING.fecha !== D.fecha)) cargarIngresos(); } if (E || tab === 'eq') { E = null; cargarEquipo(false); } };
+$('#refresh').onclick = () => { if (tab === 'cb') { CB = null; cargarCobros(); pintar(); return; } if (tab === 'sm') { SM = null; cargarSemanal(true); pintar(); return; } if (VD != null || tab === 'vd') { VD = null; cargarVentasDia(true); } cargar(true); if (tab === 'hoy') { cargarReferidos(true); if (ING.mes || (ING.fecha && ING.fecha !== D.fecha)) cargarIngresos(); } if (E || tab === 'eq') { E = null; cargarEquipo(false); } };
 cargar(false);
 </script>
 </body>

@@ -4,6 +4,16 @@
    H fecha captura · I estado · J fecha contacto · K notas). */
 const REF_HOJA = 'REFERIDOS';
 
+const ref_norm = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+// "13/10/26", "20/10/2026" o "2026-10-13" → "2026-10" ('' si no hay fecha de captura).
+function ref_mes(s) {
+  const t = String(s == null ? '' : s).trim();
+  let m = t.match(/^(\d{4})-(\d{1,2})/);
+  if (m) return m[1] + '-' + ('0' + m[2]).slice(-2);
+  m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  return m ? (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + ('0' + m[2]).slice(-2) : '';
+}
+
 function getReferidos(forzar) {
   const cache = CacheService.getScriptCache();
   if (!forzar) { const c = cache.get('referidos'); if (c) return JSON.parse(c); }
@@ -19,9 +29,10 @@ function getReferidos(forzar) {
       return { asesora: txt(f[0]), cartera: txt(f[1]), meta: txt(f[2]), obtenidos: txt(f[3]), avance: txt(f[4]),
                metaIns: txt(f[5]), conv: txt(f[6]), pctConv: txt(f[7]) };
     }),
-    registro: v[2].filter(function (f) { return txt(f[4]) || txt(f[6]); }).map(function (f) {
-      return { alumno: txt(f[1]), referido: txt(f[4]), asesora: txt(f[5]) || 'SIN ASIGNAR',
-               tel: (txt(f[6]).replace(/\D/g, '').slice(-9)), fecha: txt(f[7]), estado: txt(f[8]) || 'PENDIENTE', notas: txt(f[10]) };
+    registro: v[2].filter(function (f) { return txt(f[4]) || txt(f[6]) || txt(f[5]); }).map(function (f) {
+      return { alumno: txt(f[1]), referido: txt(f[4]), asesora: ref_norm(f[5]) || 'SIN ASIGNAR',
+               tel: (txt(f[6]).replace(/\D/g, '').slice(-9)), fecha: txt(f[7]), mes: ref_mes(f[7]),
+               estado: ref_norm(f[8]) || 'PENDIENTE', notas: txt(f[10]) };
     })
   };
   try { cache.put('referidos', JSON.stringify(res), 300); } catch (e) {}
