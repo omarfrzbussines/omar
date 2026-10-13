@@ -253,6 +253,14 @@ function app_leerApi(rangos) {
   return app_valores(SpreadsheetApp.getActive().getId(), rangos, { valueRenderOption: "FORMATTED_VALUE" });
 }
 
+// "08/10/2026" → Date a la medianoche de Lima (lo mismo que devuelve getValues).
+function app_aFecha(v) {
+  const m = String(v || "").trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})(?!\d)/);
+  if (!m) return v;
+  const a = Number(m[3].length === 2 ? "20" + m[3] : m[3]);
+  return new Date(Date.UTC(a, Number(m[2]) - 1, Number(m[1]), 5));
+}
+
 /* Imita lo que app_getCola usa de la hoja (getLastColumn / getRange del encabezado para
    ll_estructura), más ultimaFila y filas, leyendo con la API. */
 function app_hojaApi(base) {
