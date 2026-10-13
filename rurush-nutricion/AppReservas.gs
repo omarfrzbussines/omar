@@ -29,7 +29,7 @@ function rv_fichas(pids) {
   const js = nu_pdAll(pids.reduce((l, id) => l.concat(['/persons/' + id, '/persons/' + id + '/activities?limit=500']), []));
   return pids.map((id, i) => {
     const p = js[2 * i].data, citas = (js[2 * i + 1].data || []).map(nu_cita).filter(Boolean);
-    const tels = (p.phone || []).map((x) => nu_tel(x.value)).filter(String);
+    const tels = (p.phone || []).map((x) => nu_tel(x.value)).filter((t, k, l) => t && l.indexOf(t) === k);
     const prox = citas.filter((c) => !c.done && c.ms > Date.now() && !/^(DUPLICADO|CANCELADA|PRUEBA)/i.test(c.asunto)).sort((a, b) => a.ms - b.ms)[0] || null;
     const hechas = citas.filter((c) => c.done && !/^(DUPLICADO|CANCELADA|NO VINO|PRUEBA)/i.test(c.asunto));
     const org = p.org_name || (p.org_id && p.org_id.name) || '';
@@ -65,15 +65,30 @@ function rv_inicio(pin) {
   return { hoy: nu_hoy(), fechas: fechas, horas: NU_HORAS, libres: libres };
 }
 
-// 1) buscar por celular: devuelve las fichas que tienen ese número
-function rv_buscarTel(pin, t) {
+// 1) buscar por CELULAR, DNI o NOMBRE (una sola casilla; se detecta qué escribió la asesora)
+function rv_buscar(pin, q) {
   rv_pin(pin);
-  const tel = nu_tel(t);
-  if (!tel) throw new Error('Escribe el celular de 9 dígitos (empieza con 9).');
-  const items = ((nu_pd('/persons/search?limit=10&fields=phone&term=' + tel).data || {}).items) || [];
-  const pids = items.filter((it) => (it.item.phones || []).map(nu_tel).indexOf(tel) >= 0).map((it) => String(it.item.id));
-  return { tel: tel, fichas: rv_fichas(pids.slice(0, 5)) };
+  q = String(q || '').trim();
+  const tel = nu_tel(q), num = q.replace(/[\s.-]/g, '');
+  let modo, pids;
+  if (tel) {
+    modo = 'tel';
+    const items = ((nu_pd('/persons/search?limit=10&fields=phone&term=' + tel).data || {}).items) || [];
+    pids = items.filter((it) => (it.item.phones || []).map(nu_tel).indexOf(tel) >= 0).map((it) => String(it.item.id));
+  } else if (/^\d{8,9}$/.test(num)) {
+    modo = 'dni';
+    const items = ((nu_pd('/persons/search?limit=5&exact_match=true&fields=custom_fields&term=' + num).data || {}).items) || [];
+    pids = items.map((it) => String(it.item.id));
+  } else if (q.replace(/[^a-záéíóúñü]/gi, '').length >= 3) {
+    modo = 'nombre';
+    const items = ((nu_pd('/persons/search?limit=6&fields=name&term=' + encodeURIComponent(q)).data || {}).items) || [];
+    pids = items.map((it) => String(it.item.id));
+  } else {
+    throw new Error('Escribe el celular (9 dígitos), el DNI (8 números) o el nombre y apellido.');
+  }
+  return { modo: modo, q: q, tel: tel, dni: modo === 'dni' ? num : '', fichas: rv_fichas(pids.slice(0, 6)) };
 }
+function rv_buscarTel(pin, t) { return rv_buscar(pin, t); }
 
 // 2) si el celular no está: buscar por nombre o DNI para no crear una ficha repetida
 function rv_parecidos(pin, nombre, dni) {
