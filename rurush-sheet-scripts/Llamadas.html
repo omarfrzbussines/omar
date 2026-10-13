@@ -423,10 +423,9 @@ function pantallaPin(r) {
   };
 }
 if (!DISP) $('#main').innerHTML = '<div class="vacio">⚠️ Este navegador no guarda datos (¿modo incógnito?). Ábrelo en Chrome normal.</div>';
-else google.script.run
-  .withSuccessHandler((r) => { if (r.ok) iniciar(); else pantallaPin(r); })
-  .withFailureHandler((e) => { $('#main').innerHTML = `<div class="vacio">⚠️ ${esc(e.message || e)}</div>`; })
-  .app_estadoCelular(LLAVE);
+// Pide la cola de una vez (una vuelta menos al servidor): si el celular no está autorizado,
+// traer() recibe CELULAR_NO_AUTORIZADO y muestra la pantalla del PIN.
+else iniciar();
 </script>
 </body>
 </html>

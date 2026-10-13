@@ -59,13 +59,14 @@ function cob_dias(iso) { return Math.round((Date.parse(iso) - Date.parse(cob_hoy
 
 /* Filas B..V de COLA RENOVAR desde la 8. Con el servicio Sheets (el mismo de la lectura rápida
    de la cola) no espera a que el Sheet recalcule; sin él, lee con SpreadsheetApp. */
+const COB_API_OPC = { valueRenderOption: "UNFORMATTED_VALUE", dateTimeRenderOption: "SERIAL_NUMBER" };
 function cob_leerCola() {
   if (app_conApi()) {
-    const r = Sheets.Spreadsheets.Values.get(COB_ID, "'" + COB_HOJA + "'!B" + COB_FILA_HEADER + ":V",
-      { valueRenderOption: "UNFORMATTED_VALUE", dateTimeRenderOption: "SERIAL_NUMBER" });
-    const v = r.values || [];
-    cob_verificarTitulos(v[0] || []);
-    return v.slice(1).map(function (f) { while (f.length < COB_ANCHO) f.push(""); return f; });
+    try {
+      const v = app_valores(COB_ID, ["'" + COB_HOJA + "'!B" + COB_FILA_HEADER + ":V"], COB_API_OPC)[0];
+      cob_verificarTitulos(v[0] || []);
+      return v.slice(1).map(function (f) { while (f.length < COB_ANCHO) f.push(""); return f; });
+    } catch (e) { if (!/^API Sheets/.test(e.message)) throw e; }   // la API falló: se lee como antes
   }
   const hoja = cob_libro().getSheetByName(COB_HOJA);
   const n = hoja.getLastRow() - COB_FILA_HEADER + 1;
@@ -122,10 +123,12 @@ function cob_limpiarCache() {
 function cob_socio(codigo) {
   let v;
   if (app_conApi()) {
-    v = Sheets.Spreadsheets.Values.get(COB_ID, "'" + COB_SOCIOS + "'!B" + COB_SOCIOS_INI + ":S" + COB_SOCIOS_FIN,
-      { valueRenderOption: "UNFORMATTED_VALUE", dateTimeRenderOption: "SERIAL_NUMBER" }).values || [];
-    v = v.map(function (f) { while (f.length < 18) f.push(""); return f; });
-  } else {
+    try {
+      v = app_valores(COB_ID, ["'" + COB_SOCIOS + "'!B" + COB_SOCIOS_INI + ":S" + COB_SOCIOS_FIN], COB_API_OPC)[0];
+      v = v.map(function (f) { while (f.length < 18) f.push(""); return f; });
+    } catch (e) { if (!/^API Sheets/.test(e.message)) throw e; }
+  }
+  if (!v) {
     v = cob_libro().getSheetByName(COB_SOCIOS).getRange(COB_SOCIOS_INI, 2, COB_SOCIOS_FIN - COB_SOCIOS_INI + 1, 18).getValues();
   }
   const c = cob_norm(codigo);
