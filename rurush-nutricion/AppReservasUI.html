@@ -154,7 +154,7 @@ function pinScreen(){
 }
 function arrancar(){
   $("#root").innerHTML='<div class="pinwrap"><div class="pincard"><img src="'+LOGO+'" alt="Rurush"><p>Cargando…</p></div></div>';
-  call("rv_inicio").then(function(r){S.ini=r;render();setTimeout(function(){var t=$("#tel");if(t)t.focus();},50);},function(e){if(e.message!=="PIN"){S.err=e.message;pinScreen();}});
+  call("rv_inicio").then(function(r){S.ini=r;S.iniAt=Date.now();render();setTimeout(function(){var t=$("#tel");if(t)t.focus();},50);},function(e){if(e.message!=="PIN"){S.err=e.message;pinScreen();}});
 }
 
 /* ---------- pantalla ---------- */
@@ -266,15 +266,16 @@ function bind(){
       if(!l.length)S.nuevo={nombre:n,dni:dn};else S.err="Revisa la lista: si no es ninguno, vuelve a tocar \"Es nuevo, continuar\".";render();},
       function(e){S.busy="";S.err=e.message;render();});});
   document.querySelectorAll("[data-f]").forEach(function(b){b.onclick=function(){S.fecha=b.dataset.f;S.hora="";S.libres=null;S.err="";render();
-    var f=S.fecha;call("rv_libres",f).then(function(l){if(S.fecha===f){S.libres=l;render();}},function(e){S.err=e.message;S.libres=[];render();});};});
+    var f=S.fecha;if(S.ini.libres&&S.ini.libres[f]&&!S.ini.libres._viejo&&Date.now()-S.iniAt<300000){S.libres=S.ini.libres[f];return render();}
+    call("rv_libres",f).then(function(l){if(S.fecha===f){S.libres=l;render();}},function(e){S.err=e.message;S.libres=[];render();});};});
   document.querySelectorAll("[data-h]").forEach(function(b){b.onclick=function(){S.hora=b.dataset.h;S.err="";render();var n=$("#nota");if(n)n.focus();};});
   on("#nota","oninput",function(e){S.nota=e.target.value;});
   on("#ok","onclick",function(){var p=persona();S.busy="ok";S.err="";render();
     var q={pid:S.sel?S.sel.pid:"",nombre:p.nombre,tel:S.tel,dni:S.nuevo?S.nuevo.dni:"",fecha:S.fecha,hora:S.hora,asesora:S.asesora,nota:S.nota};
     if(S.mover&&S.sel&&S.sel.prox)q.mover=S.sel.prox.act;
-    call("rv_agendar",q).then(function(r){S.busy="";r.nombre=r.nombre||p.nombre;r.movida=!!q.mover;S.done=r;render();window.scrollTo(0,0);},
+    call("rv_agendar",q).then(function(r){S.busy="";call("rv_inicio").then(function(x){S.ini=x;S.iniAt=Date.now();});r.nombre=r.nombre||p.nombre;r.movida=!!q.mover;S.done=r;render();window.scrollTo(0,0);},
       function(e){S.busy="";if(e.message==="PIN")return;S.err=e.message;
-        if(/ocupada/.test(e.message)){S.hora="";S.libres=null;var f=S.fecha;call("rv_libres",f).then(function(l){S.libres=l;render();});}
+        if(/ocupada/.test(e.message)){if(S.ini.libres)S.ini.libres._viejo=1;S.hora="";S.libres=null;var f=S.fecha;call("rv_libres",f).then(function(l){S.libres=l;render();});}
         render();});});
   on("#copiar","onclick",function(){var t=$("#wa").textContent;(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){toast("Mensaje copiado");},function(){var r=document.createRange();r.selectNodeContents($("#wa"));var s=getSelection();s.removeAllRanges();s.addRange(r);document.execCommand("copy");toast("Mensaje copiado");});});
   on("#nueva","onclick",function(){reset();render();$("#tel").focus();});

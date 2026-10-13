@@ -22,29 +22,35 @@ function rv_nombreOk(n) {
 }
 function rv_titulo(n) { return String(n || '').trim().replace(/\s+/g, ' ').toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase()); }
 
-// ficha completa de una persona: lo que la asesora necesita ver antes de agendar
-function rv_ficha(pid) {
-  const p = nu_pd('/persons/' + pid).data;
-  const tels = (p.phone || []).map((x) => nu_tel(x.value)).filter(String);
-  const hoy = nu_hoy();
-  const prox = nu_citas(hoy, nu_mas(hoy, 120), false).filter((c) => c.pid === String(pid) && c.ms > Date.now())
-    .sort((a, b) => a.ms - b.ms)[0] || null;
-  let ultima = '', evaluaciones = 0;
-  try {
-    const acts = (nu_pd('/persons/' + pid + '/activities?done=1&limit=100').data || [])
-      .filter((a) => a.type === 'deadline' && /nutri/i.test(a.subject || '') && !/^(DUPLICADO|CANCELADA|NO VINO|PRUEBA)/i.test(a.subject || ''));
-    evaluaciones = acts.length;
-    ultima = acts.map((a) => a.due_date).sort().pop() || '';
-  } catch (e) { /* sin historial */ }
-  const org = p.org_name || (p.org_id && p.org_id.name) || '';
-  return {
-    pid: String(p.id), nombre: p.name, dni: String(p[RV_DNI] || ''), org: org,
-    estado: /INACTIV/i.test(org) ? 'inactivo' : (/ACTIV/i.test(org) ? 'activo' : ''),
-    tels: tels.slice(0, 4), mezclada: tels.length > 3,
-    prox: prox ? { act: String(prox.id), fecha: prox.fecha, hora: prox.hora } : null,
-    ultima: ultima, evaluaciones: evaluaciones,
-    url: 'https://rurushfitnessclub.pipedrive.com/person/' + p.id
-  };
+// fichas completas (lo que la asesora ve antes de agendar). Todas las lecturas van en paralelo:
+// 2 por persona (datos + actividades) en una sola espera, sin recorrer la agenda completa.
+function rv_fichas(pids) {
+  if (!pids.length) return [];
+  const js = nu_pdAll(pids.reduce((l, id) => l.concat(['/persons/' + id, '/persons/' + id + '/activities?limit=500']), []));
+  return pids.map((id, i) => {
+    const p = js[2 * i].data, citas = (js[2 * i + 1].data || []).map(nu_cita).filter(Boolean);
+    const tels = (p.phone || []).map((x) => nu_tel(x.value)).filter(String);
+    const prox = citas.filter((c) => !c.done && c.ms > Date.now() && !/^(DUPLICADO|CANCELADA|PRUEBA)/i.test(c.asunto)).sort((a, b) => a.ms - b.ms)[0] || null;
+    const hechas = citas.filter((c) => c.done && !/^(DUPLICADO|CANCELADA|NO VINO|PRUEBA)/i.test(c.asunto));
+    const org = p.org_name || (p.org_id && p.org_id.name) || '';
+    return {
+      pid: String(p.id), nombre: p.name, dni: String(p[RV_DNI] || ''), org: org,
+      estado: /INACTIV/i.test(org) ? 'inactivo' : (/ACTIV/i.test(org) ? 'activo' : ''),
+      tels: tels.slice(0, 4), mezclada: tels.length > 3,
+      prox: prox ? { act: String(prox.id), fecha: prox.fecha, hora: prox.hora } : null,
+      ultima: hechas.map((c) => c.fecha).sort().pop() || '', evaluaciones: hechas.length,
+      url: 'https://rurushfitnessclub.pipedrive.com/person/' + p.id
+    };
+  });
+}
+// horas libres de varios días con UNA sola lectura de la agenda
+function rv_libresDe(fechas) {
+  const out = {};
+  if (!fechas.length) return out;
+  const ocup = {};
+  nu_citasRango(fechas[0], fechas[fechas.length - 1]).forEach((c) => { ocup[c.fecha + ' ' + c.hora] = 1; });
+  fechas.forEach((f) => { out[f] = NU_HORAS.filter((h) => !ocup[f + ' ' + h]); });
+  return out;
 }
 
 /* ================= funciones que llama la pantalla ================= */
@@ -54,7 +60,9 @@ function rv_inicio(pin) {
   const fechas = [];
   for (let f = nu_mas(nu_hoy(), 1); f <= nu_mas(nu_hoy(), RV_SEMANAS * 7); f = nu_mas(f, 1))
     if (NU_DIAS_DIEGO.indexOf(nu_dow(f)) >= 0) fechas.push(f);
-  return { hoy: nu_hoy(), fechas: fechas, horas: NU_HORAS };
+  let libres = null;
+  try { libres = rv_libresDe(fechas); } catch (e) { /* si Pipedrive tarda, la pantalla las pide día por día */ }
+  return { hoy: nu_hoy(), fechas: fechas, horas: NU_HORAS, libres: libres };
 }
 
 // 1) buscar por celular: devuelve las fichas que tienen ese número
@@ -64,7 +72,7 @@ function rv_buscarTel(pin, t) {
   if (!tel) throw new Error('Escribe el celular de 9 dígitos (empieza con 9).');
   const items = ((nu_pd('/persons/search?limit=10&fields=phone&term=' + tel).data || {}).items) || [];
   const pids = items.filter((it) => (it.item.phones || []).map(nu_tel).indexOf(tel) >= 0).map((it) => String(it.item.id));
-  return { tel: tel, fichas: pids.slice(0, 5).map(rv_ficha) };
+  return { tel: tel, fichas: rv_fichas(pids.slice(0, 5)) };
 }
 
 // 2) si el celular no está: buscar por nombre o DNI para no crear una ficha repetida
@@ -72,14 +80,15 @@ function rv_parecidos(pin, nombre, dni) {
   rv_pin(pin);
   const out = {}, add = (it) => { if (!out[it.item.id]) out[it.item.id] = { pid: String(it.item.id), nombre: it.item.name,
     tels: (it.item.phones || []).map(nu_tel).filter(String).slice(0, 3) }; };
-  dni = String(dni || '').replace(/\D/g, '');
-  if (dni.length >= 8) (((nu_pd('/persons/search?limit=5&exact_match=true&fields=custom_fields&term=' + dni).data || {}).items) || []).forEach(add);
-  nombre = String(nombre || '').trim();
-  if (nombre.length >= 5) (((nu_pd('/persons/search?limit=8&fields=name&term=' + encodeURIComponent(nombre)).data || {}).items) || []).forEach(add);
+  dni = String(dni || '').replace(/\D/g, ''); nombre = String(nombre || '').trim();
+  const qs = [];
+  if (dni.length >= 8) qs.push('/persons/search?limit=5&exact_match=true&fields=custom_fields&term=' + dni);
+  if (nombre.length >= 5) qs.push('/persons/search?limit=8&fields=name&term=' + encodeURIComponent(nombre));
+  nu_pdAll(qs).forEach((j) => (((j.data || {}).items) || []).forEach(add));
   return Object.keys(out).map((k) => out[k]).slice(0, 8);
 }
 
-function rv_ver(pin, pid) { rv_pin(pin); return rv_ficha(pid); }
+function rv_ver(pin, pid) { rv_pin(pin); return rv_fichas([String(pid)])[0]; }
 
 function rv_libres(pin, fecha) {
   rv_pin(pin);
