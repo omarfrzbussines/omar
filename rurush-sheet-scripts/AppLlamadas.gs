@@ -140,10 +140,16 @@ function app_contadorHoy(asesora) {
 const APP_BLOQUE = 1200;
 
 function app_getCola(llave, base, excluir, sinApi) {
+  if (!sinApi && app_conApi()) {
+    try { return app_getCola_(llave, base, excluir, true); }
+    catch (e) { if (!/^API Sheets/.test(e.message)) throw e; }   // la API falló: se lee como antes
+  }
+  return app_getCola_(llave, base, excluir, false);
+}
+function app_getCola_(llave, base, excluir, api) {
   const t0 = Date.now();
   const asesora = app_asesora(llave);
   if (APP_BASES.indexOf(base) < 0) throw new Error("Base no habilitada: " + base);
-  const api = !sinApi && app_conApi();
   const hoja = api ? app_hojaApi(base) : SpreadsheetApp.getActive().getSheetByName(base);
   const est = ll_estructura(hoja);
   const ultima = api ? hoja.ultimaFila(est) : app_ultimaFila(hoja, est);
@@ -200,6 +206,10 @@ function app_getCola(llave, base, excluir, sinApi) {
   nuevos.sort(function (a, c) { return c.diaIso.localeCompare(a.diaIso) || c.fila - a.fila; });
   seguimiento.sort(function (a, c) { return a.ultFecha.localeCompare(c.ultFecha); });
   const cola = nuevos.concat(seguimiento).slice(0, APP_TAM_COLA);
+  // ¿ya es socio? (BASE DE SOCIOS). Si falla, la cola sale igual, sin el aviso.
+  let socios = {};
+  try { socios = cob_sociosPorTel(); } catch (e) {}
+  cola.forEach(function (x) { if (socios[x.numero]) x.socio = socios[x.numero]; });
   const res = {};
   cola.forEach(function (x) { res["r" + base + x.fila] = asesora; });
   if (cola.length) cache.putAll(res, APP_RESERVA_SEG);
@@ -213,20 +223,38 @@ function app_getCola(llave, base, excluir, sinApi) {
 /* ---------- lectura rápida con la API de Sheets ----------
    SpreadsheetApp espera a que el Sheet recalcule (RESUMEN, etc.) antes de cada lectura:
    en RURUSH Hoy eso eran 6-15 s por consulta. La API de Sheets devuelve los valores ya
-   calculados. Se activa sola cuando el proyecto tiene el servicio avanzado "Sheets"
-   (Servicios → + → Google Sheets API); sin él, la app sigue leyendo como antes. */
+   calculados. Usa el servicio avanzado "Sheets" si el proyecto lo tiene; si no, llama a la
+   misma API por UrlFetchApp (no hay que activar nada). Si la API falla, se anota 6 h y la
+   app lee con SpreadsheetApp como antes. */
 const APP_USAR_API = true;
 
 function app_conApi() {
-  return APP_USAR_API && typeof Sheets !== "undefined";
+  return APP_USAR_API && (typeof Sheets !== "undefined" || !CacheService.getScriptCache().get("api_mala"));
 }
 
 function app_col(n) { let s = ""; for (n++; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + (n - 1) % 26) + s; return s; }
 
+// Valores de varios rangos de un Sheet (lista de filas por rango). opts: valueRenderOption, dateTimeRenderOption.
+function app_valores(id, rangos, opts) {
+  opts = opts || {};
+  if (typeof Sheets !== "undefined") {
+    const o = { ranges: rangos };
+    Object.keys(opts).forEach(function (k) { o[k] = opts[k]; });
+    return (Sheets.Spreadsheets.Values.batchGet(id, o).valueRanges || []).map(function (v) { return v.values || []; });
+  }
+  const qs = rangos.map(function (r) { return "ranges=" + encodeURIComponent(r); })
+    .concat(Object.keys(opts).map(function (k) { return k + "=" + encodeURIComponent(opts[k]); })).join("&");
+  const res = UrlFetchApp.fetch("https://sheets.googleapis.com/v4/spreadsheets/" + id + "/values:batchGet?" + qs,
+    { headers: { Authorization: "Bearer " + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
+  if (res.getResponseCode() !== 200) {
+    CacheService.getScriptCache().put("api_mala", String(res.getResponseCode()), 21600);
+    throw new Error("API Sheets " + res.getResponseCode() + ": " + res.getContentText().slice(0, 200));
+  }
+  return (JSON.parse(res.getContentText()).valueRanges || []).map(function (v) { return v.values || []; });
+}
+
 function app_leerApi(rangos) {
-  const r = Sheets.Spreadsheets.Values.batchGet(SpreadsheetApp.getActive().getId(),
-    { ranges: rangos, valueRenderOption: "FORMATTED_VALUE" });
-  return (r.valueRanges || []).map(function (v) { return v.values || []; });
+  return app_valores(SpreadsheetApp.getActive().getId(), rangos, { valueRenderOption: "FORMATTED_VALUE" });
 }
 
 // "08/10/2026" → Date a la medianoche de Lima (lo mismo que devuelve getValues).
@@ -269,7 +297,6 @@ function app_hojaApi(base) {
 /* Prueba desde el editor: compara la cola leída con la API y sin ella (debe salir igual). */
 function app_probarApi() {
   const llave = Object.keys(JSON.parse(PropertiesService.getScriptProperties().getProperty("APP_LLAVES") || "{}"))[0];
-  if (typeof Sheets === "undefined") { Logger.log("Falta el servicio Sheets: Servicios → + → Google Sheets API → Agregar."); return; }
   const cache = CacheService.getScriptCache();
   const a = app_getCola(llave, "2026", []);
   a.cola.forEach(function (x) { cache.remove("r2026" + x.fila); });
@@ -287,9 +314,12 @@ function app_guardar(llave, base, fila, numero, estado, obs, fpFecha, fpHora, in
   const asesora = app_asesora(llave);
   if (APP_BASES.indexOf(base) < 0) throw new Error("Base no habilitada: " + base);
   if (APP_ESTADOS.indexOf(estado) < 0) throw new Error("Estado no válido.");
+  // Si ya es socio puede marcarse CLIENTE sin llamar (se verifica aquí, no en el celular).
+  const sinLlamar = estado === "CLIENTE" && !(Number(intentos) > 0) && cob_esSocio(numero);
   const r = ll_registrar({
     base: base, fila: Number(fila), telefono: numero, asesora: asesora, estado: estado,
-    observacion: obs || "", fechaFp: fpFecha || "", horaFp: fpHora || "",
+    sinLlamar: sinLlamar,
+    observacion: (sinLlamar ? "🟢 Ya es socio (sin llamar) " : "") + (obs || ""), fechaFp: fpFecha || "", horaFp: fpHora || "",
     intentos: Number(intentos) || 0, segundos: Number(segundos) || 0
   });
   const cache = CacheService.getScriptCache();
@@ -307,7 +337,8 @@ function app_guardar(llave, base, fila, numero, estado, obs, fpFecha, fpHora, in
 function app_diagnostico() {
   const llaves = JSON.parse(app_props().getProperty("APP_LLAVES") || "{}");
   const k = Object.keys(llaves)[0];
-  Logger.log("Servicio Sheets (lectura rápida): " + (app_conApi() ? "SÍ ✅" : "NO ❌ → Servicios → + → Google Sheets API"));
+  CacheService.getScriptCache().remove("api_mala");
+  Logger.log("Lectura rápida: " + (typeof Sheets !== "undefined" ? "servicio Sheets ✅" : "por UrlFetchApp (sin servicio Sheets)"));
   Logger.log("Candado: " + (app_props().getProperty("APP_PIN") ? "encendido" : "apagado") + " · links: " + Object.keys(llaves).length);
   if (!k) { Logger.log("❌ No hay links: ejecuta app_verLinks."); return; }
   const paso = function (nombre, fn) {

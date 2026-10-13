@@ -199,11 +199,11 @@ function ll_contarBases(asesora) {
 // Tiempo mínimo fuera de la app (en el marcador) para poder marcar cada resultado.
 // Una llamada que no contestan timbra ~25-40 s; una conversación dura más.
 const LL_MIN_SEG = { "APAGADO": 0, "NO CONTESTO": 15, "CORTO": 15,
-                     "CONTESTO": 40, "AGENDADO": 40, "CLIENTE": 40, "DESCARTADO": 40, "OTRA CIUDAD": 40 };
+                     "CONTESTO": 30, "AGENDADO": 30, "CLIENTE": 30, "DESCARTADO": 30, "OTRA CIUDAD": 30 };
 
 function ll_registrar(d) {
   if (!d.fila || !d.estado) throw new Error("Faltan datos de la llamada");
-  if (d.segundos != null) {          // viene de la app del celular: se exige haber llamado
+  if (d.segundos != null && !d.sinLlamar) {   // viene de la app del celular: se exige haber llamado (salvo socio ya inscrito)
     const min = LL_MIN_SEG[String(d.estado).trim().toUpperCase()] || 0;
     if (!(Number(d.intentos) > 0)) throw new Error("Primero toca 📞 Llamar.");
     if (Number(d.segundos) < min) throw new Error("Para marcar " + d.estado + " la llamada debe durar al menos " + min + " s.");

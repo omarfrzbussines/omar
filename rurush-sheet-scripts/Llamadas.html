@@ -42,6 +42,9 @@
   .est small { display:block; font-size:11px; color:var(--mut); margin-top:2px; }
   .guardar { width:100%; margin-top:16px; background:var(--red); color:#fff; border:0; border-radius:14px; padding:16px; font-size:17px; font-weight:700; }
   .guardar:disabled { opacity:.45; }
+  .socio { margin-top:10px; padding:10px 12px; border-radius:10px; background:#12391f; color:#7ee2a0; font-size:14px; }
+  .socio.exsocio { background:#2a2a2a; color:#ccc; }
+  .socio button { display:block; width:100%; margin-top:8px; padding:10px; border:0; border-radius:8px; background:#1f7a3f; color:#fff; font-size:15px; font-weight:600; }
   .saltar { width:100%; margin-top:8px; background:none; border:0; color:var(--mut); padding:10px; font-size:14px; }
   .toast { position:fixed; left:16px; right:16px; bottom:16px; background:#2c2c2e; color:#fff; padding:12px 14px; border-radius:12px; font-size:14px; display:none; z-index:20; }
   .toast.err { background:#5c1f1f; }
@@ -82,6 +85,7 @@
 
 <script>
 // id de ESTE celular (se crea una vez y queda guardado en el navegador) → candado por celular
+// OJO: dentro de textos `...` escribir https:\/\/ y no la doble barra: Google la toma como comentario y la app no arranca.
 const DISP = (() => { try { let d = localStorage.getItem('rr_disp'); if (!d) { d = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()) + Date.now()).replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 32); localStorage.setItem('rr_disp', d); } return d; } catch (e) { return ''; } })();
 const LLAVE = <?!= JSON.stringify(llave) ?> + '|' + DISP;
 const ASESORA = <?!= JSON.stringify(asesora) ?>;
@@ -148,7 +152,7 @@ function traer(reset) {
 const actual = () => cola[idx];
 
 // Tiempo mínimo en el marcador para poder marcar cada resultado (igual que en el servidor).
-const MIN_SEG = { 'APAGADO': 0, 'NO CONTESTO': 15, 'CORTO': 15, 'CONTESTO': 40, 'AGENDADO': 40, 'CLIENTE': 40, 'DESCARTADO': 40, 'Otra Ciudad': 40 };
+const MIN_SEG = { 'APAGADO': 0, 'NO CONTESTO': 15, 'CORTO': 15, 'CONTESTO': 30, 'AGENDADO': 30, 'CLIENTE': 30, 'DESCARTADO': 30, 'Otra Ciudad': 30 };
 let llamada = { fila: null, intentos: 0, fueraMs: 0, salio: null, toco: 0, wa: 0 };
 const segundos = () => Math.round(llamada.fueraMs / 1000);
 const mmss = (s) => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
@@ -195,6 +199,10 @@ function pintarMarcador() {
     `<div class="m"><b>${Math.max(cola.length - idx, 0)}</b>en tu cola</div>`;
 }
 
+// Socio con plan vigente (vence hoy o después): se puede marcar CLIENTE sin llamar. Vencido = ex-socio.
+const hoyIso = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const socioVigente = (s) => !!(s.vence && s.vence >= hoyIso());
+const datosSocio = (s) => (s.plan ? ' · ' + esc(s.plan) : '') + (s.vence ? ' · ' + (socioVigente(s) ? 'vence ' : 'venció ') + esc(s.vence.slice(8, 10) + '/' + s.vence.slice(5, 7) + '/' + s.vence.slice(2, 4)) : '') + (s.asesor ? ' · ' + esc(s.asesor) : '');
 function pintar() {
   const p = actual();
   estado = null;
@@ -212,9 +220,12 @@ function pintar() {
       <div class="meta"><span class="tag">${p.ronda}ª llamada</span>${p.dia ? `<span class="tag">lead del ${esc(p.dia)}</span>` : ''}${p.origen ? `<span class="tag">${esc(p.origen)}</span>` : ''}</div>
       <div class="acciones">
         <a class="llamar" id="llamar" href="tel:+51${p.numero}">📞 Llamar</a>
-        <a class="wacall" id="wacall" href="https://wa.me/51${p.numero}" target="_blank">📲 WhatsApp</a>
-        <a class="wa" href="https://wa.me/51${p.numero}" target="_blank">💬</a>
+        <a class="wacall" id="wacall" href="https:\/\/wa.me/51${p.numero}" target="_blank">📲 WhatsApp</a>
+        <a class="wa" href="https:\/\/wa.me/51${p.numero}" target="_blank">💬</a>
       </div>
+      ${p.socio ? (socioVigente(p.socio)
+        ? `<div class="socio">🟢 <b>YA ES SOCIO</b>${datosSocio(p.socio)}<button id="esSocio">✅ Marcar CLIENTE sin llamar</button></div>`
+        : `<div class="socio exsocio">⚪ <b>EX-SOCIO</b>${datosSocio(p.socio)}<br>Su plan ya venció: llámalo para que regrese.</div>`) : ''}
       <div class="medidor" id="medidor"></div>
     </div>
     ${hist}
@@ -238,6 +249,7 @@ function pintar() {
   // Llamada por WhatsApp: abre el chat (la asesora toca el 📞 de WhatsApp) y cuenta igual que una timbrada.
   $('#wacall').onclick = () => { llamada.intentos++; llamada.wa = (llamada.wa || 0) + 1; llamada.toco = Date.now(); guardarLlamada(); actualizarBotones(); };
   actualizarBotones();
+  if ($('#esSocio')) $('#esSocio').onclick = () => { estado = 'CLIENTE'; guardar(); };
   $('#saltar').onclick = () => { idx++; pintar(); revisarCola(); guardarLocal(); };
   window.scrollTo(0, 0);
 }
@@ -291,7 +303,7 @@ function traerCobros() {
 function filaCobro(c) {
   const f = c.dias < 0 ? `<div class="f atr">atrasado ${-c.dias} d · ${fechaCorta(c.fecha)}</div>`
     : c.dias === 0 ? '<div class="f hoy">HOY</div>' : `<div class="f">${fechaCorta(c.fecha)} · en ${c.dias} d</div>`;
-  const tel = c.celular ? `<a href="https://wa.me/51${c.celular}" target="_blank">💬 WhatsApp</a><a href="tel:+51${c.celular}">📞 Llamar</a>` : '<span></span><span></span>';
+  const tel = c.celular ? `<a href="https:\/\/wa.me/51${c.celular}" target="_blank">💬 WhatsApp</a><a href="tel:+51${c.celular}">📞 Llamar</a>` : '<span></span><span></span>';
   const ok = `<button class="ok" data-f="${c.fila}">✓ Cobrado</button>`;
   return `<div class="cobro"><div class="arriba"><div class="d"><div class="n">${esc(c.nombre || 'Cód. ' + c.codigo)}</div>
     <div class="s">Cód. ${esc(c.codigo)}${c.plan ? ' · ' + esc(c.plan) : ''}${c.notas ? ' · ' + esc(c.notas) : ''}</div>${diasSA(c.diasSA)}</div>
@@ -423,10 +435,9 @@ function pantallaPin(r) {
   };
 }
 if (!DISP) $('#main').innerHTML = '<div class="vacio">⚠️ Este navegador no guarda datos (¿modo incógnito?). Ábrelo en Chrome normal.</div>';
-else google.script.run
-  .withSuccessHandler((r) => { if (r.ok) iniciar(); else pantallaPin(r); })
-  .withFailureHandler((e) => { $('#main').innerHTML = `<div class="vacio">⚠️ ${esc(e.message || e)}</div>`; })
-  .app_estadoCelular(LLAVE);
+// Pide la cola de una vez (una vuelta menos al servidor): si el celular no está autorizado,
+// traer() recibe CELULAR_NO_AUTORIZADO y muestra la pantalla del PIN.
+else iniciar();
 </script>
 </body>
 </html>
