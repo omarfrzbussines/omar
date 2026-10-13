@@ -293,7 +293,7 @@ function dg_sinCita(pin, q) {
   dg_pin(pin);
   const nombre = String(q.nombre || '').trim(), obs = String(q.obs || '').trim();
   let tel = nu_tel(q.tel);
-  if (!q.pid && nombre.length < 5) throw new Error('Escribe nombre y apellido del socio.');
+  if (!q.pid && (nombre.split(/\s+/).length < 2 || /^(socio|cliente|nuevo|nueva|prueba)\b/i.test(nombre))) throw new Error('Escribe el nombre y apellido reales del socio (no "Socio" ni "Cliente").');
   if (!q.pid && !tel) throw new Error('Escribe el celular del socio (9 dígitos, empieza con 9): así no se crea una ficha repetida.');
   if (obs.length < 3) throw new Error('Escribe la observación de la evaluación.');
   return dg_lock(() => {

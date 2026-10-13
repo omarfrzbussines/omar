@@ -74,6 +74,7 @@ function nu_citas(desde, hasta, hechas) {
       '&start_date=' + nu_mas(desde, -1) + '&end_date=' + nu_mas(hasta, 2));
     (j.data || []).forEach((a) => {
       if (!a.due_date) return;
+      if (!/nutri/i.test(a.subject || '')) return;          // solo citas de nutrición (no Free Pass / FP)
       const t = (a.due_time || '05:00').slice(0, 5);
       const l = new Date(Date.parse(a.due_date + 'T' + t + ':00Z') - 5 * 3600e3);
       const fecha = l.toISOString().slice(0, 10);
