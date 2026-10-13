@@ -21,8 +21,14 @@ const ASESORAS = {
 function doGet(e) {
   const p = (e && e.parameter) || {};
   const props = PropertiesService.getScriptProperties();
-  const llave = props.getProperty('HOY_LLAVE');
-  if (!llave || p.k !== llave) return p.accion ? hoy_json_({ ok: false, error: 'Link no válido.' }) : ContentService.createTextOutput('Link no válido.');
+  let llave = props.getProperty('HOY_LLAVE');
+  // Primera vez (o "?reenviar=1", máx. 1 por hora): el link y el PIN se mandan SOLO al correo de Omar.
+  if (!llave || (p.reenviar && !CacheService.getScriptCache().get('hoy_reenvio'))) {
+    CacheService.getScriptCache().put('hoy_reenvio', '1', 3600);
+    hoy_enviarLink_();
+    return ContentService.createTextOutput('Listo: el link de RURUSH Hoy y el PIN llegaron al correo de Omar.');
+  }
+  if (p.k !== llave) return p.accion ? hoy_json_({ ok: false, error: 'Link no válido.' }) : ContentService.createTextOutput('Link no válido.');
   if (p.accion === 'estado') return hoy_json_({ ok: hoy_celularOk_(p.d, p.h) });
   if (p.accion === 'activar') return hoy_json_(hoy_activar_(p.d, p.h, p.pin, p.modelo));
   if (!hoy_celularOk_(p.d, p.h)) return ContentService.createTextOutput('Celular no autorizado.');
@@ -61,11 +67,24 @@ function hoy_activar_(d, h, pin, modelo) {
   return { ok: true };
 }
 
-/** Ejecutar desde el editor: crea la llave y el PIN si no existen y muestra el link y el celular activado. */
-function hoy_verLink() {
+function hoy_crearLlave_() {
   const p = PropertiesService.getScriptProperties();
   if (!p.getProperty('HOY_LLAVE')) p.setProperty('HOY_LLAVE', Utilities.getUuid().replace(/-/g, '').slice(0, 24));
   if (!p.getProperty('HOY_PIN')) p.setProperty('HOY_PIN', String(Math.floor(100000 + Math.random() * 900000)));
+  return p;
+}
+function hoy_enviarLink_() {
+  const p = hoy_crearLlave_();
+  const link = 'https://omarfrzbussines.github.io/omar/rurush-hoy/?k=' + p.getProperty('HOY_LLAVE');
+  MailApp.sendEmail(DV_CORREO, '🔐 RURUSH Hoy: tu link y PIN',
+    'Link de RURUSH Hoy (pantalla completa):\n' + link + '\n\nPIN para activar tu celular: ' + p.getProperty('HOY_PIN') +
+    '\n\n1) Abre el link en Safari del celular.\n2) Compartir → Agregar a pantalla de inicio.\n3) Abre el ícono y escribe el PIN.\n\n' +
+    'Solo funciona en el celular que actives. No compartas este correo.');
+}
+
+/** Ejecutar desde el editor: crea la llave y el PIN si no existen y muestra el link y el celular activado. */
+function hoy_verLink() {
+  const p = hoy_crearLlave_();
   Logger.log('Link (pantalla completa) → https://omarfrzbussines.github.io/omar/rurush-hoy/?k=' + p.getProperty('HOY_LLAVE'));
   Logger.log('PIN para activar tu celular → ' + p.getProperty('HOY_PIN'));
   const c = JSON.parse(p.getProperty('HOY_CEL') || 'null');
