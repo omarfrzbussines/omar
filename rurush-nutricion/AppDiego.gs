@@ -138,9 +138,33 @@ function dg_crearCita(sh, pid, nombre, tel, fecha, hora, nota) {
 
 /* ================= funciones que llama la app ================= */
 
+/* Trae a la hoja las citas de nutrición de Pipedrive (hoy y próximos 14 días) que todavía no están,
+   así la agenda no depende de que corra la sincronización de la hoja. Busca por act_id: nunca duplica. */
+function dg_traerCitas_(sh) {
+  const hoy = nu_hoy(), ya = {};
+  dg_leer(sh).forEach((f) => { if (f.act) ya[f.act] = 1; });
+  const nuevas = nu_citas(hoy, nu_mas(hoy, 14), false)
+    .filter((c) => !ya[String(c.id)] && !/^(DUPLICADO|CANCELADA|PRUEBA|NO VINO)/i.test(c.asunto));
+  if (!nuevas.length) return 0;
+  return dg_lock(() => {
+    const ya2 = {}; dg_leer(sh).forEach((f) => { if (f.act) ya2[f.act] = 1; });
+    let n = 0;
+    nuevas.forEach((c) => {
+      if (ya2[String(c.id)]) return;
+      const nombre = c.nombre || String(c.asunto).split(' / ')[0].replace(/^Nutrición — /, '');
+      dg_nuevaFila(sh, { FECHA: c.fecha, HORA: c.hora, SOCIO: nombre, ESTADO: 'PENDIENTE', HECHO: false, INBODY: false,
+                         AGENDAR: false, ACT: Number(c.id), PID: c.pid ? Number(c.pid) : '' });
+      n++;
+    });
+    return n;
+  });
+}
+
 function dg_datos(pin) {
   dg_pin(pin);
-  const sh = dg_hoja(), filas = dg_leer(sh);
+  const sh = dg_hoja();
+  try { dg_traerCitas_(sh); } catch (e) { /* si Pipedrive no responde, se muestra lo que ya hay en la hoja */ }
+  const filas = dg_leer(sh);
   const tels = {};
   const rg = sh.getParent().getSheetByName(DG_REAG);
   if (rg && rg.getLastRow() > 1) rg.getRange(2, 1, rg.getLastRow() - 1, 16).getDisplayValues().forEach((r) => {
