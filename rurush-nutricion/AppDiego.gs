@@ -109,17 +109,17 @@ function dg_validarCita(fecha, hora, pid, excepto) {
   if (fecha <= hoy) throw new Error('Hoy no se agenda: elige una fecha desde mañana.');
   if (NU_DIAS_DIEGO.indexOf(nu_dow(fecha)) < 0) throw new Error('Diego atiende solo martes y miércoles. El ' + nu_lab(fecha) + ' no hay consulta.');
   if (NU_HORAS.indexOf(hora) < 0) throw new Error('Elige una hora de la lista (8:00 a 10:30 am o 5:00 a 7:30 pm).');
-  const citas = nu_citas(fecha, fecha, false).concat(nu_citas(fecha, fecha, true));
+  const citas = nu_citasRango(fecha, fecha);
   const choque = citas.filter((c) => c.hora === hora && String(c.id) !== String(excepto))[0];
   if (choque) throw new Error('Esa hora ya está ocupada (' + (choque.nombre || choque.asunto) + '). Libres ese día: ' + dg_libresTxt(fecha, excepto));
   if (pid) {
-    const otra = nu_citas(hoy, nu_mas(hoy, 90), false).filter((c) => c.pid === String(pid) && String(c.id) !== String(excepto) && c.ms > Date.now())[0];
+    const otra = nu_citasDe(pid).filter((c) => !c.done && !/^(DUPLICADO|CANCELADA|PRUEBA)/i.test(c.asunto) && String(c.id) !== String(excepto) && c.ms > Date.now())[0];
     if (otra) throw new Error('Este socio ya tiene una cita el ' + nu_lab(otra.fecha) + ' a las ' + nu_horaTxt(otra.hora) + '. Reagenda esa en lugar de crear otra.');
   }
 }
 function dg_libresLista(fecha, excepto) {
   const ocup = {};
-  nu_citas(fecha, fecha, false).concat(nu_citas(fecha, fecha, true)).forEach((c) => { if (String(c.id) !== String(excepto)) ocup[c.hora] = 1; });
+  nu_citasRango(fecha, fecha).forEach((c) => { if (String(c.id) !== String(excepto)) ocup[c.hora] = 1; });
   return NU_HORAS.filter((h) => !ocup[h]);
 }
 function dg_libresTxt(fecha, excepto) { const l = dg_libresLista(fecha, excepto); return l.length ? l.map(nu_horaTxt).join(', ') : 'ninguna'; }
