@@ -115,7 +115,7 @@ var DEMO = !(window.google && google.script && google.script.run);
 var DIAS=["domingo","lunes","martes","miércoles","jueves","viernes","sábado"], DCORTO=["dom","lun","mar","mié","jue","vie","sáb"];
 var MES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
 var DIR="Av. Larco 1164, Víctor Larco (al costado de Mass)";
-var S={pin:"",asesora:"",ini:null,tel:"",fichas:null,sel:null,nuevo:null,parecidos:[],fecha:"",libres:null,hora:"",nota:"",mover:false,busy:"",err:"",done:null};
+var S={pin:"",asesora:"",ini:null,q:"",modo:"",tel:"",fichas:null,sel:null,nuevo:null,parecidos:[],fecha:"",libres:null,hora:"",nota:"",mover:false,busy:"",err:"",done:null};
 try{S.asesora=localStorage.getItem("rv_asesora")||"";}catch(e){}
 
 function $(s,r){return (r||document).querySelector(s);}
@@ -168,10 +168,10 @@ function render(){
   bind();
 }
 function vPaso1(){
-  return '<section class="card step"><h2><span class="n">1</span>Celular del socio</h2>'+
-    '<form class="row" id="fb"><input class="big" type="tel" id="tel" inputmode="numeric" maxlength="12" placeholder="9XX XXX XXX" value="'+esc(S.tel)+'">'+
+  return '<section class="card step"><h2><span class="n">1</span>Buscar socio</h2>'+
+    '<form class="row" id="fb"><input class="big" type="text" id="tel" maxlength="60" autocomplete="off" placeholder="Celular, DNI o nombre" value="'+esc(S.q)+'">'+
     '<button class="btn primary"'+(S.busy==="buscar"?' disabled':'')+'>'+(S.busy==="buscar"?'<span class="spin"></span> Buscando':'Buscar')+'</button></form>'+
-    '<div class="help">Sin correo: la cita se guarda directo en la ficha del socio.</div>'+(S.err&&!S.fichas?'<div class="err">'+esc(S.err)+'</div>':'')+'</section>';
+    '<div class="help">Escribe el celular (lo más seguro), el DNI o el nombre y apellido. Sin correo: la cita va directo a la ficha del socio.</div>'+(S.err&&!S.fichas?'<div class="err">'+esc(S.err)+'</div>':'')+'</section>';
 }
 function fichaHtml(f,sel){
   var tag=f.estado==="activo"?'<span class="tag activo">ACTIVO</span>':f.estado==="inactivo"?'<span class="tag inactivo">INACTIVO</span>':'<span class="tag sin">SIN MEMBRESÍA REGISTRADA</span>';
@@ -193,12 +193,12 @@ function vPaso2(){
     '<div class="person sel"><div class="hd"><div class="av">'+esc(ini(S.nuevo.nombre||"+"))+'</div><div style="flex:1"><h3>'+esc(S.nuevo.nombre||"Nuevo socio")+'</h3><div class="meta"><span>Cel: <b>'+esc(S.tel)+'</b></span><span>DNI: <b>'+esc(S.nuevo.dni||"—")+'</b></span></div></div></div></div>'+
     '<div><button class="btn ghost sm" id="otra">Volver</button></div>';}
   else{
-    if(S.fichas.length){h+='<div class="help">'+(S.fichas.length>1?'Este celular está en '+S.fichas.length+' fichas. Elige la correcta:':'Encontré esta ficha con ese celular:')+'</div>';
+    if(S.fichas.length){h+='<div class="help">'+(S.fichas.length>1?(S.modo==="nombre"?'Encontré '+S.fichas.length+' personas con ese nombre. Elige la correcta:':'Hay '+S.fichas.length+' fichas con ese '+(S.modo==="dni"?'DNI':'celular')+'. Elige la correcta:'):'Encontré esta ficha:')+'</div>';
       S.fichas.forEach(function(f){h+=fichaHtml(f,false);});
       h+='<div class="help">¿No es ninguna? Crea la ficha nueva abajo.</div>';}
-    else h+='<div class="alert warn">No hay nadie con el celular '+esc(S.tel)+' en Pipedrive. Escribe sus datos para crearlo.</div>';
-    var n=S.form||{};
-    h+='<form id="fn" style="display:flex;flex-direction:column;gap:12px"><div class="grid2"><div class="field"><label for="nom">Nombre y apellido</label><input type="text" id="nom" value="'+esc(n.nombre||"")+'" placeholder="Ej. Ana Ruiz Paz" autocomplete="off"></div>'+
+    else h+='<div class="alert warn">No encontré a nadie con '+(S.modo==="tel"?'el celular ':S.modo==="dni"?'el DNI ':'el nombre ')+'"'+esc(S.q)+'" en Pipedrive.'+(S.modo==="nombre"?' Prueba con el celular o el DNI, o créalo abajo.':' Escribe sus datos para crearlo.')+'</div>';
+    var n=S.form||{nombre:S.modo==="nombre"?S.q:"",dni:S.modo==="dni"?S.q.replace(/\D/g,""):"",cel:S.tel};
+    h+='<form id="fn" style="display:flex;flex-direction:column;gap:12px">'+(S.modo==="tel"?'':'<div class="field"><label for="ncel">Celular</label><input type="tel" id="ncel" inputmode="numeric" maxlength="12" value="'+esc(n.cel||"")+'" placeholder="9XX XXX XXX"></div>')+'<div class="grid2"><div class="field"><label for="nom">Nombre y apellido</label><input type="text" id="nom" value="'+esc(n.nombre||"")+'" placeholder="Ej. Ana Ruiz Paz" autocomplete="off"></div>'+
       '<div class="field"><label for="dni">DNI <span class="help">(opcional)</span></label><input type="text" id="dni" inputmode="numeric" maxlength="9" value="'+esc(n.dni||"")+'" placeholder="8 números"></div></div>'+
       (S.parecidos.length?'<div class="alert warn">¿Ya existe con otro celular? Si es alguno de estos, tócalo (se le agrega este celular):<div class="list" style="margin-top:8px">'+
         S.parecidos.map(function(p){return '<button type="button" class="res" data-ver="'+esc(p.pid)+'"><b>'+esc(p.nombre)+'</b><span class="help">'+esc(p.tels.join(" · ")||"sin celular")+'</span></button>';}).join("")+'</div></div>':'')+
@@ -221,6 +221,7 @@ function vPaso3(){
     }
   }
   if(S.hora){
+    if(S.sel&&!(S.sel.tels||[]).length)h+='<div class="field"><label for="cel3">Celular del socio</label><input type="tel" id="cel3" inputmode="numeric" maxlength="12" value="'+esc(S.tel)+'" placeholder="9XX XXX XXX"><div class="help">Esta ficha no tiene celular: se le agregará.</div></div>';
     h+='<div class="field"><label for="nota">Nota para Diego <span class="help">(opcional)</span></label><input type="text" id="nota" value="'+esc(S.nota)+'" placeholder="Ej. viene por bajar de peso, tiene InBody anterior"></div>'+
       '<div class="alert ok" style="font-weight:500">'+(S.mover?'Mover la cita de ':'Agendar a ')+'<b>'+esc(p.nombre)+'</b> el <b>'+esc(lab(S.fecha))+'</b> a las <b>'+esc(hTxt(S.hora))+'</b>'+(S.nuevo?' (ficha nueva)':'')+'.</div>'+
       (S.err?'<div class="err">'+esc(S.err)+'</div>':'')+
@@ -241,23 +242,28 @@ function vDone(){
 }
 
 /* ---------- acciones ---------- */
-function reset(){S.tel="";S.fichas=null;S.sel=null;S.nuevo=null;S.parecidos=[];S.form=null;S.fecha="";S.libres=null;S.hora="";S.nota="";S.mover=false;S.err="";S.done=null;}
+// al elegir una ficha encontrada por DNI o nombre, se usa su celular (si no tiene, se pide en el paso 3)
+function elegir(f){S.sel=f;if(S.modo!=="tel")S.tel=(f.tels||[])[0]||"";}
+function reset(){S.tel="";S.q="";S.modo="";S.fichas=null;S.sel=null;S.nuevo=null;S.parecidos=[];S.form=null;S.fecha="";S.libres=null;S.hora="";S.nota="";S.mover=false;S.err="";S.done=null;}
 function bind(){
   var on=function(sel,ev,fn){var e=$(sel);if(e)e[ev]=fn;};
   on("#salir","onclick",function(){reset();pinScreen();});
-  on("#fb","onsubmit",function(e){e.preventDefault();var t=telOk($("#tel").value);S.err="";
-    if(!t){S.tel=$("#tel").value;S.fichas=null;S.err="Escribe el celular de 9 dígitos (empieza con 9).";return render();}
-    reset();S.tel=t;S.busy="buscar";render();
-    call("rv_buscarTel",t).then(function(r){S.busy="";S.fichas=r.fichas;if(r.fichas.length===1&&!r.fichas[0].mezclada)S.sel=r.fichas[0];render();},
+  on("#fb","onsubmit",function(e){e.preventDefault();var q=$("#tel").value.trim();S.err="";
+    if(q.length<3){S.q=q;S.fichas=null;S.err="Escribe el celular, el DNI o el nombre y apellido.";return render();}
+    reset();S.q=q;S.busy="buscar";render();
+    call("rv_buscar",q).then(function(r){S.busy="";S.fichas=r.fichas;S.modo=r.modo;S.tel=r.tel||"";
+      if(r.fichas.length===1&&!r.fichas[0].mezclada&&r.modo!=="nombre")elegir(r.fichas[0]);render();},
       function(e){S.busy="";if(e.message!=="PIN"){S.err=e.message;render();}});});
-  document.querySelectorAll("[data-sel]").forEach(function(b){b.onclick=function(){S.sel=S.fichas.filter(function(f){return f.pid===b.dataset.sel;})[0];S.err="";render();};});
+  document.querySelectorAll("[data-sel]").forEach(function(b){b.onclick=function(){elegir(S.fichas.filter(function(f){return f.pid===b.dataset.sel;})[0]);S.err="";render();};});
   document.querySelectorAll("[data-ver]").forEach(function(b){b.onclick=function(){S.busy="nuevo";render();
-    call("rv_ver",b.dataset.ver).then(function(f){S.busy="";S.sel=f;S.parecidos=[];render();},function(e){S.busy="";S.err=e.message;render();});};});
+    call("rv_ver",b.dataset.ver).then(function(f){S.busy="";S.sel=f;if(S.form&&telOk(S.form.cel))S.tel=telOk(S.form.cel);S.parecidos=[];render();},function(e){S.busy="";S.err=e.message;render();});};});
   on("#otra","onclick",function(){S.sel=null;S.nuevo=null;S.mover=false;S.fecha="";S.hora="";S.libres=null;S.err="";render();});
   on("#mover","onclick",function(){S.mover=true;render();});
   on("#nomover","onclick",function(){S.mover=false;S.fecha="";S.hora="";render();});
   on("#fn","onsubmit",function(e){e.preventDefault();
-    var n=$("#nom").value.trim().replace(/\s+/g," "),dn=$("#dni").value.replace(/\D/g,"");S.form={nombre:n,dni:dn};S.err="";
+    var n=$("#nom").value.trim().replace(/\s+/g," "),dn=$("#dni").value.replace(/\D/g,""),nc=$("#ncel")?$("#ncel").value:S.tel;S.form={nombre:n,dni:dn,cel:nc};S.err="";
+    if(!telOk(nc)){S.err="Escribe el celular del socio (9 dígitos, empieza con 9): sin celular no se crea la ficha.";return render();}
+    S.tel=telOk(nc);
     if(n.split(" ").filter(function(w){return w.length>=2;}).length<2||/^(socio|cliente|nuevo|nueva|prueba)\b/i.test(n)){S.err="Escribe nombre y apellido reales (no \"Socio\" ni \"Cliente\").";return render();}
     if(dn&&!/^\d{8,9}$/.test(dn)){S.err="El DNI debe tener 8 números. Si no lo tienes, déjalo vacío.";return render();}
     if(S.revisado===n+"|"+dn){S.nuevo={nombre:n,dni:dn};S.parecidos=[];return render();}   // ya vio los parecidos y confirmó que es nuevo
@@ -270,7 +276,8 @@ function bind(){
     call("rv_libres",f).then(function(l){if(S.fecha===f){S.libres=l;render();}},function(e){S.err=e.message;S.libres=[];render();});};});
   document.querySelectorAll("[data-h]").forEach(function(b){b.onclick=function(){S.hora=b.dataset.h;S.err="";render();var n=$("#nota");if(n)n.focus();};});
   on("#nota","oninput",function(e){S.nota=e.target.value;});
-  on("#ok","onclick",function(){var p=persona();S.busy="ok";S.err="";render();
+  on("#cel3","oninput",function(e){S.tel=telOk(e.target.value);});
+  on("#ok","onclick",function(){var p=persona();if(!S.tel){S.err="Escribe el celular del socio (9 dígitos).";return render();}S.busy="ok";S.err="";render();
     var q={pid:S.sel?S.sel.pid:"",nombre:p.nombre,tel:S.tel,dni:S.nuevo?S.nuevo.dni:"",fecha:S.fecha,hora:S.hora,asesora:S.asesora,nota:S.nota};
     if(S.mover&&S.sel&&S.sel.prox)q.mover=S.sel.prox.act;
     call("rv_agendar",q).then(function(r){S.busy="";call("rv_inicio").then(function(x){S.ini=x;S.iniAt=Date.now();});r.nombre=r.nombre||p.nombre;r.movida=!!q.mover;S.done=r;render();window.scrollTo(0,0);},
@@ -286,9 +293,9 @@ function demo(fn,a){
   var hoy=new Date(),z=function(n){return(n<10?"0":"")+n;},iso=function(x){return x.getFullYear()+"-"+z(x.getMonth()+1)+"-"+z(x.getDate());};
   if(fn==="rv_inicio"){var f=[],x=new Date();for(var i=1;i<=28;i++){x=new Date(hoy.getFullYear(),hoy.getMonth(),hoy.getDate()+i);if(x.getDay()===2||x.getDay()===3)f.push(iso(x));}
     return {hoy:iso(hoy),fechas:f,horas:["08:00","08:30","09:00","09:30","10:00","10:30","17:00","17:30","18:00","18:30","19:00","19:30"]};}
-  if(fn==="rv_buscarTel"){var t=a[0];if(t==="999999999")return {tel:t,fichas:[]};
-    if(t==="988888888")return {tel:t,fichas:[{pid:"2",nombre:"Ejemplo Luis Paz",dni:"70123456",org:"ALUMNOS ACTIVOS",estado:"activo",tels:[t],evaluaciones:2,ultima:"2026-09-15",prox:{act:"77",fecha:S.ini.fechas[1],hora:"18:00"}}]};
-    return {tel:t,fichas:[{pid:"1",nombre:"Ejemplo Ana Ruiz Paz",dni:"72345678",org:"ALUMNOS ACTIVOS",estado:"activo",tels:[t],evaluaciones:1,ultima:"2026-08-20",prox:null}]};}
+  if(fn==="rv_buscar"){var t=a[0];if(/^[a-z]/i.test(t))return {modo:"nombre",q:t,tel:"",fichas:[{pid:"1",nombre:"Ejemplo Ana Ruiz Paz",dni:"72345678",org:"ALUMNOS ACTIVOS",estado:"activo",tels:["912345678"],evaluaciones:1,ultima:"2026-08-20",prox:null},{pid:"5",nombre:"Ejemplo Ana Ruiz Soto",dni:"",org:"",estado:"",tels:[],evaluaciones:0,ultima:"",prox:null}]};if(t==="999999999")return {modo:"tel",tel:t,fichas:[]};
+    if(t==="988888888")return {modo:"tel",tel:t,fichas:[{pid:"2",nombre:"Ejemplo Luis Paz",dni:"70123456",org:"ALUMNOS ACTIVOS",estado:"activo",tels:[t],evaluaciones:2,ultima:"2026-09-15",prox:{act:"77",fecha:S.ini.fechas[1],hora:"18:00"}}]};
+    return {modo:"tel",tel:t,fichas:[{pid:"1",nombre:"Ejemplo Ana Ruiz Paz",dni:"72345678",org:"ALUMNOS ACTIVOS",estado:"activo",tels:[t],evaluaciones:1,ultima:"2026-08-20",prox:null}]};}
   if(fn==="rv_parecidos")return /ana/i.test(a[0])?[{pid:"1",nombre:"Ejemplo Ana Ruiz Paz",tels:["912345678"]}]:[];
   if(fn==="rv_ver")return {pid:a[0],nombre:"Ejemplo Ana Ruiz Paz",dni:"72345678",org:"ALUMNOS INACTIVOS",estado:"inactivo",tels:["912345678"],evaluaciones:3,ultima:"2026-05-02",prox:null};
   if(fn==="rv_libres")return ["08:00","09:00","09:30","10:30","17:00","18:30","19:00"];
