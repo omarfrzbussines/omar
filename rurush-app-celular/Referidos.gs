@@ -41,15 +41,15 @@ function getReferidos(forzar) {
 
 /* RURUSH Hoy — 📞 Llamadas: totales que arma el 📊 Dashboard de llamadas (pestaña oculta _DASH_DATOS
    de BASE DE DATOS LEADS RFC, se actualiza cada hora). Filas: mes, asesora, base, día (0=dom), hora,
-   estado, llamadas, suma duración, n duración, suma timbradas, n timbradas. Solo lectura. */
+   estado, llamadas, suma duración, n duración, suma timbradas, n timbradas, fecha (yyyy-MM-dd). Solo lectura. */
 function getLlamadasDash(forzar) {
   const cache = CacheService.getScriptCache();
   if (!forzar) { const c = cache.get('llamdash'); if (c) return JSON.parse(c); }
-  const v = Sheets.Spreadsheets.Values.batchGet(LEADS_ID, { ranges: ["'_DASH_DATOS'!A2:K"], valueRenderOption: 'UNFORMATTED_VALUE' })
+  const v = Sheets.Spreadsheets.Values.batchGet(LEADS_ID, { ranges: ["'_DASH_DATOS'!A2:L"], valueRenderOption: 'UNFORMATTED_VALUE' })
     .valueRanges[0].values || [];
   const res = { filas: v.filter(function (f) { return f[0]; }).map(function (f) {
     return [String(f[0]), String(f[1]), String(f[2]), Number(f[3]), Number(f[4]), String(f[5]), Number(f[6]) || 0,
-            Number(f[7]) || 0, Number(f[8]) || 0, Number(f[9]) || 0, Number(f[10]) || 0];
+            Number(f[7]) || 0, Number(f[8]) || 0, Number(f[9]) || 0, Number(f[10]) || 0, String(f[11] || '')];
   }) };
   try { cache.put('llamdash', JSON.stringify(res), 600); } catch (e) {}
   return res;

@@ -336,7 +336,7 @@ function seccionReferidos() {
 
 /* ---------- 📞 Llamadas (📊 Dashboard de llamadas del Sheet de leads) ---------- */
 let LL = (() => { try { return JSON.parse(localStorage.getItem('rr_lldash') || 'null'); } catch (e) { return null; } })();
-let llCargando = false, llFresco = false, LL_MES = null, LL_ABIERTO = false;
+let llCargando = false, llFresco = false, LL_MES = null, LL_DIA = '', LL_ABIERTO = false;
 const LL_NO = ['NO CONTESTO', 'APAGADO'], LL_DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 function cargarLlamadas() {
   if (llCargando) return; llCargando = true;
@@ -351,7 +351,8 @@ function seccionLlamadas() {
   if (LL.error) return `<h2>📞 Llamadas</h2><div class="err">⚠️ ${esc(LL.error)}</div>`;
   const meses = [...new Set(LL.filas.map((f) => f[0]))].sort().reverse();
   if (LL_MES == null) LL_MES = meses.includes(D.fecha.slice(0, 7)) ? D.fecha.slice(0, 7) : (meses[0] || '');
-  const delMes = LL.filas.filter((f) => LL_MES === '' || f[0] === LL_MES);
+  // un día elegido manda sobre el mes
+  const delMes = LL.filas.filter((f) => LL_DIA ? f[11] === LL_DIA : (LL_MES === '' || f[0] === LL_MES));
   const filas = delMes.filter((f) => ase === 'TODAS' || norm(f[1]) === norm(ase));
   const sum = (arr) => { const t = { n: 0, c: 0, ag: 0, cl: 0, ds: 0, dn: 0 };
     arr.forEach((f) => { t.n += f[6]; if (!LL_NO.includes(f[5])) t.c += f[6]; if (f[5] === 'AGENDADO') t.ag += f[6]; if (f[5] === 'CLIENTE') t.cl += f[6]; t.ds += f[7]; t.dn += f[8]; });
@@ -361,7 +362,10 @@ function seccionLlamadas() {
   const barra = (label, t, max, extra) => `<div class="row"><div class="main"><div class="t">${label} <small style="color:var(--mut)">${t.n} llamadas · ${t.ag} agend.${extra || ''}</small></div>
     <div class="bar"><i style="width:${max ? Math.round(p(t.c, t.n) * 100 / max) : 0}%"></i></div></div><div class="t">${p(t.c, t.n)}%</div></div>`;
   let h = `<details id="llBox" class="desp" ${LL_ABIERTO ? 'open' : ''}><summary>📞 Llamadas <small>${T.n} · ${p(T.c, T.n)}% contestan${llCargando ? ' · actualizando…' : ''}</small></summary>
-    <select class="sel" id="llMes"><option value="">📅 Todos los meses</option>${meses.map((m) => `<option value="${m}" ${m === LL_MES ? 'selected' : ''}>📅 ${nomMes(m)}</option>`).join('')}</select>
+    <select class="sel" id="llMes"><option value="">📅 Todos los meses</option>${meses.map((m) => `<option value="${m}" ${m === LL_MES && !LL_DIA ? 'selected' : ''}>📅 ${nomMes(m)}</option>`).join('')}</select>
+    <div style="display:flex;gap:8px;margin-top:8px"><input type="date" class="sel" id="llDia" value="${LL_DIA}" max="${D.fecha}">
+    ${LL_DIA ? '<button class="sel" id="llDiaX" style="width:auto">✕ Mes</button>' : ''}</div>
+    ${LL_DIA ? `<div class="sub">Viendo solo el ${fm(LL_DIA)}${LL_DIA === D.fecha ? ' (hoy: se actualiza cada hora)' : ''}</div>` : ''}
     <div class="grid">
     <div class="kpi"><div class="n">${T.n}</div><div class="l">llamadas</div></div>
     <div class="kpi"><div class="n">${p(T.c, T.n)}%</div><div class="l">contestan (${T.c})</div></div>
@@ -464,7 +468,9 @@ function pintar() {
   if (iF) { iF.onchange = cambioIng; iM.onchange = cambioIng; }
   const rm = $('#refMes'); if (rm) rm.onchange = () => { RF_MES = rm.value; pintar(); };
   const rb = $('#refBox'); if (rb) rb.ontoggle = () => { RF_ABIERTO = rb.open; };
-  const lm = $('#llMes'); if (lm) lm.onchange = () => { LL_MES = lm.value; pintar(); };
+  const lm = $('#llMes'); if (lm) lm.onchange = () => { LL_MES = lm.value; LL_DIA = ''; pintar(); };
+  const ld = $('#llDia'); if (ld) ld.onchange = () => { LL_DIA = ld.value; if (LL_DIA) LL_MES = LL_DIA.slice(0, 7); pintar(); };
+  const lx = $('#llDiaX'); if (lx) lx.onclick = () => { LL_DIA = ''; pintar(); };
   const lb = $('#llBox'); if (lb) lb.ontoggle = () => { LL_ABIERTO = lb.open; };
 }
 

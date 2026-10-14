@@ -41,7 +41,7 @@ function dash_actualizar() {
         const hora = min >= 0 ? Math.floor(min / 60) : -1;
         const dur = dash_segundos_(ro.duracion >= 0 ? fila[ro.duracion] : "");
         const tim = ro.timbrada >= 0 ? Number(fila[ro.timbrada]) || 0 : 0;
-        const k = [mes, asesora, base, f.getUTCDay(), hora, estado].join("|");
+        const k = [mes, asesora, base, f.getUTCDay(), hora, estado, f.toISOString().slice(0, 10)].join("|");
         const a = agg[k] || (agg[k] = [0, 0, 0, 0, 0]);
         a[0]++;
         if (dur > 0) { a[1] += dur; a[2]++; }
@@ -52,15 +52,16 @@ function dash_actualizar() {
 
   const filas = Object.keys(agg).map(function (k) {
     const p = k.split("|");
-    return [p[0], p[1], p[2], Number(p[3]), Number(p[4]), p[5]].concat(agg[k]);
+    return [p[0], p[1], p[2], Number(p[3]), Number(p[4]), p[5]].concat(agg[k], [p[6]]);
   });
   let d = ss.getSheetByName(DASH_DATOS);
   if (!d) { d = ss.insertSheet(DASH_DATOS); d.hideSheet(); }
   d.clearContents();
   d.getRange("A:C").setNumberFormat("@");
   d.getRange("F:F").setNumberFormat("@");
-  d.getRange(1, 1, 1, 11).setValues([["MES", "ASESORA", "BASE", "DIA", "HORA", "ESTADO", "N", "DUR_SUM", "DUR_N", "TIMB_SUM", "TIMB_N"]]);
-  if (filas.length) d.getRange(2, 1, filas.length, 11).setValues(filas);
+  d.getRange("L:L").setNumberFormat("@");
+  d.getRange(1, 1, 1, 12).setValues([["MES", "ASESORA", "BASE", "DIA", "HORA", "ESTADO", "N", "DUR_SUM", "DUR_N", "TIMB_SUM", "TIMB_N", "FECHA"]]);
+  if (filas.length) d.getRange(2, 1, filas.length, 12).setValues(filas);
 
   let h = ss.getSheetByName(DASH_HOJA);
   if (!h) h = dash_armar_(ss);
