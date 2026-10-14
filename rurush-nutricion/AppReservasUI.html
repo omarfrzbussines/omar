@@ -179,6 +179,7 @@ function fichaHtml(f,sel){
     '<div class="meta"><span>'+tag+'</span><span>DNI: <b>'+esc(f.dni||"—")+'</b></span><span>Cel: <b>'+esc((f.tels||[]).join(" · ")||"—")+'</b></span></div>'+
     '<div class="meta" style="margin-top:4px"><span>Evaluaciones: <b>'+(f.evaluaciones||0)+'</b></span><span>Última: <b>'+ddmm(f.ultima)+'</b></span>'+(f.org?'<span>'+esc(f.org)+'</span>':'')+'</div></div>'+
     (sel?'':'<button class="btn sm primary" data-sel="'+esc(f.pid)+'">Es esta persona</button>')+'</div>'+
+    (f.sinFicha?'<div class="alert ok">Alumno activo en AppsFit sin ficha en Pipedrive: se le crea su ficha al confirmar la reserva.</div>':'')+
     (f.mezclada?'<div class="alert bad">Esta ficha tiene muchos celulares (puede estar mezclada con otras personas). Revisa que el nombre sea el correcto antes de agendar.</div>':'')+
     (f.prox&&sel?'<div class="alert warn">Ya tiene cita el '+esc(lab(f.prox.fecha))+' a las '+esc(hTxt(f.prox.hora))+'. '+
       (S.mover?'Elige abajo la nueva fecha: se moverá esa misma cita.':'No se le puede poner otra.')+

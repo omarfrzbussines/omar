@@ -42,11 +42,14 @@ function nu_tel(v) {
   if (/^(\d)\1{7,}/.test(t.slice(1)) || /^9(12345678|87654321|00000000)$/.test(t)) return '';   // 999999999, 911111111…: números de relleno
   return /^9\d{8}$/.test(t) ? t : '';
 }
-// ¿dos nombres son de la misma persona? (comparten una palabra de 3+ letras, sin tildes; un nombre sin letras no se compara)
+// ¿dos nombres son de la misma persona? El NOMBRE de pila tiene que coincidir: un familiar comparte el apellido
+// (Joaquín Benites Guzmán ≠ Sandra Guzmán). Un nombre sin letras ("+51...") no se compara.
 function nu_mismoNombre(a, b) {
-  const w = (x) => nu_sinTildes(x).split(/\s+/).filter((p) => p.length >= 3);
+  const w = (x) => nu_sinTildes(String(x || '').replace(/,/g, ' ')).split(/\s+/).filter((p) => p.length >= 3);
   const A = w(a), Bw = w(b);
-  return !A.length || !Bw.length || A.some((p) => Bw.some((q) => p === q || (p.length >= 4 && q.length >= 4 && (p.indexOf(q) >= 0 || q.indexOf(p) >= 0))));   // @jhordylara ~ Jhordy Lara
+  if (!A.length || !Bw.length) return true;
+  const igual = (p, q) => p === q || (p.length >= 4 && q.length >= 4 && (p.indexOf(q) >= 0 || q.indexOf(p) >= 0));   // @jhordylara ~ jhordy
+  return Bw.some((q) => igual(A[0], q)) || A.some((p) => igual(Bw[0], p));
 }
 function nu_nombre(v) {
   const w = String(v || '').replace(/,/g, ' ').trim().split(/\s+/)[0] || '';
@@ -98,7 +101,7 @@ function nu_pdAll(paths) {
 // socios con membresía vigente: copia de AppsFit (AppsFit.gs) o, de respaldo, la hoja '3. BASE DE SOCIOS'. Guardado en caché hasta la próxima actualización.
 // { fin: { celular: 'yyyy-MM-dd' vencimiento }, nom: [[nombre sin tildes, celular], ...] }
 function nu_base() {
-  const c = CacheService.getScriptCache(), k = 'nu_base3_' + nu_hoy();
+  const c = CacheService.getScriptCache(), k = 'nu_base4_' + nu_hoy();
   const g = c.get(k); if (g) return JSON.parse(g);
   const fin = {}, nom = [], hoy = nu_hoy();
   // 1º la copia de AppsFit en vivo (AppsFit.gs, se actualiza cada hora); si no hay, la hoja BASE DE SOCIOS
@@ -108,13 +111,23 @@ function nu_base() {
     const t = nu_tel(r[2]), f = nu_iso(r[7]);
     if (!t || !(f >= hoy)) return;
     if (!fin[t] || f > fin[t]) fin[t] = f;
-    nom.push([nu_sinTildes(r[1]), t, String(r[0] || '').trim()]);   // [nombre, celular, código AppsFit]
+    nom.push([nu_sinTildes(r[1]), t, String(r[0] || '').trim(), String(r[1] || '').trim(), f]);   // [nombre sin tildes, celular, código, nombre, fin]
   });
   const o = { fin: fin, nom: nom };
   try { c.put(k, JSON.stringify(o), 21600); } catch (e) { /* muy grande para el caché: se relee la próxima vez */ }
   return o;
 }
 function nu_vigentes() { return nu_base().fin; }
+// ¿esta persona tiene plan vigente? (por celular Y nombre: un familiar con el mismo celular no cuenta) → fecha de fin o ''
+function nu_esVigente(tels, nombre) {
+  let fin = '';
+  nu_base().nom.forEach((x) => { if (tels.indexOf(x[1]) >= 0 && (!nombre || nu_mismoNombre(x[3], nombre)) && x[4] > fin) fin = x[4]; });
+  return fin;
+}
+function nu_titulo(n) {
+  n = String(n || '').replace(/,/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+  return n.split(' ').map((w, i) => (i && /^(de|del|la|las|los|y)$/.test(w)) ? w : w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
 function nu_sinTildes(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zñ0-9 ]/g, ' '); }
 // fichas de Pipedrive de los socios VIGENTES cuyo nombre en AppsFit contiene todas las palabras buscadas
 // (con apellidos comunes Pipedrive devuelve solo 30 de cientos y los activos pueden quedar fuera)
@@ -122,17 +135,22 @@ function nu_buscarVigentes(q, yaTels) {
   const cod = String(q || '').trim().replace(/^#/, '');
   const pal = nu_sinTildes(q).split(/\s+/).filter((w) => w.length >= 2);
   if (!pal.length && !/^\d{1,4}$/.test(cod)) return [];
-  const tels = nu_base().nom.filter((x) => /^\d{1,4}$/.test(cod) ? x[2] === cod : pal.every((w) => x[0].indexOf(w) >= 0)).map((x) => x[1])
-    .filter((t, i, l) => l.indexOf(t) === i && !(yaTels && yaTels[t])).slice(0, 6);   // solo los que Pipedrive no trajo
-  if (!tels.length) return [];
+  const socios = nu_base().nom.filter((x) => /^\d{1,4}$/.test(cod) ? x[2] === cod : pal.every((w) => x[0].indexOf(w) >= 0))
+    .filter((x, i, l) => l.findIndex((y) => y[2] === x[2]) === i).slice(0, 6);
+  if (!socios.length) return [];
   const out = [];
-  nu_pdAll(tels.map((t) => '/persons/search?limit=5&fields=phone&term=' + t)).forEach((j, i) =>
-    (((j.data || {}).items) || []).filter((it) => (it.item.phones || []).map(nu_tel).indexOf(tels[i]) >= 0).forEach((it) => out.push(it)));
+  nu_pdAll(socios.map((x) => '/persons/search?limit=5&fields=phone&term=' + x[1])).forEach((j, i) => {
+    const x = socios[i];
+    // solo la ficha de ESTA persona: el celular puede ser de un familiar (Joaquín Benites usa el de Sandra Guzmán)
+    const suyas = (((j.data || {}).items) || []).filter((it) => (it.item.phones || []).map(nu_tel).indexOf(x[1]) >= 0 && nu_mismoNombre(it.item.name, x[3]));
+    if (suyas.length) suyas.forEach((it) => { if (!(yaTels && (it.item.phones || []).some((p) => yaTels[nu_tel(p)]))) out.push(it); });
+    else out.push({ item: { id: 'af:' + x[2], name: nu_titulo(x[3]) + ' (sin ficha)', phones: [x[1]], organization: null } });   // activo en AppsFit sin ficha en Pipedrive
+  });
   return out;
 }
 // orden de búsqueda: 0 vigente en AppsFit · 1 organización ALUMNOS ACTIVOS en Pipedrive · 2 sin dato · 3 INACTIVO
-function nu_nivel(tels, org, vig) {
-  if (tels.some((t) => vig[t])) return 0;
+function nu_nivel(tels, org, vig, nombre) {
+  if (nu_esVigente(tels, nombre)) return 0;
   org = String(org || '');
   return /INACTIV/i.test(org) ? 3 : (/ACTIV/i.test(org) ? 1 : 2);
 }

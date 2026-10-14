@@ -24,11 +24,16 @@ function rv_titulo(n) { return String(n || '').trim().replace(/\s+/g, ' ').toLow
 
 // fichas completas (lo que la asesora ve antes de agendar). Todas las lecturas van en paralelo:
 // 2 por persona (datos + actividades) en una sola espera, sin recorrer la agenda completa.
-function rv_fichas(pids) {
-  if (!pids.length) return [];
+function rv_fichas(pids, sinFicha) {
+  // activos de AppsFit sin ficha en Pipedrive ('af:código'): se muestran para crear su ficha al agendar
+  const af = pids.filter((p) => /^af:/.test(p)).map((p) => (sinFicha || {})[p]).filter(Boolean).map((it) => ({
+    pid: String(it.item.id), nombre: it.item.name.replace(/\s*\(sin ficha\)$/, ''), dni: '', org: '', estado: 'activo', sinFicha: true,
+    vence: nu_esVigente(it.item.phones, ''), tels: it.item.phones, mezclada: false, prox: null, ultima: '', evaluaciones: 0, url: '' }));
+  pids = pids.filter((p) => !/^af:/.test(p));
+  if (!pids.length) return af;
   let vig = {}; try { vig = nu_vigentes(); } catch (e) { /* sin la base de AppsFit */ }
   const js = nu_pdAll(pids.reduce((l, id) => l.concat(['/persons/' + id, '/persons/' + id + '/activities?limit=500']), []));
-  return pids.map((id, i) => {
+  return af.concat(pids.map((id, i) => {
     const p = js[2 * i].data, citas = (js[2 * i + 1].data || []).map(nu_cita).filter(Boolean);
     const tels = (p.phone || []).map((x) => nu_tel(x.value)).filter((t, k, l) => t && l.indexOf(t) === k);
     const prox = citas.filter((c) => !c.done && c.ms > Date.now() && !/^(DUPLICADO|CANCELADA|PRUEBA)/i.test(c.asunto)).sort((a, b) => a.ms - b.ms)[0] || null;
@@ -36,14 +41,14 @@ function rv_fichas(pids) {
     const org = p.org_name || (p.org_id && p.org_id.name) || '';
     return {
       pid: String(p.id), nombre: p.name, dni: String(p[RV_DNI] || ''), org: org,
-      estado: tels.some((t) => vig[t]) ? 'activo' : (/INACTIV/i.test(org) ? 'inactivo' : (/ACTIV/i.test(org) ? 'activo' : '')),
-      vence: tels.map((t) => vig[t]).filter(Boolean).sort().pop() || '',
+      estado: nu_esVigente(tels, p.name) ? 'activo' : (/INACTIV/i.test(org) ? 'inactivo' : (/ACTIV/i.test(org) ? 'activo' : '')),
+      vence: nu_esVigente(tels, p.name),
       tels: tels.slice(0, 4), mezclada: tels.length > 3,
       prox: prox ? { act: String(prox.id), fecha: prox.fecha, hora: prox.hora } : null,
       ultima: hechas.map((c) => c.fecha).sort().pop() || '', evaluaciones: hechas.length,
       url: 'https://rurushfitnessclub.pipedrive.com/person/' + p.id
     };
-  });
+  }));
 }
 // horas libres de varios días con UNA sola lectura de la agenda
 function rv_libresDe(fechas) {
@@ -73,13 +78,14 @@ function rv_buscar(pin, q) {
   q = String(q || '').trim();
   const tel = nu_tel(q), num = q.replace(/[\s.-]/g, '');
   let modo, pids;
+  const sinFicha = {}, guarda = (l) => { l.forEach((it) => { if (/^af:/.test(String(it.item.id))) sinFicha[it.item.id] = it; }); return l; };
   if (tel) {
     modo = 'tel';
     const items = ((nu_pd('/persons/search?limit=10&fields=phone&term=' + tel).data || {}).items) || [];
     pids = items.filter((it) => (it.item.phones || []).map(nu_tel).indexOf(tel) >= 0).map((it) => String(it.item.id));
   } else if (/^#?\d{1,4}$/.test(q)) {   // código de AppsFit (ej. 1025)
     modo = 'nombre';
-    pids = nu_buscarVigentes(q, {}).map((it) => String(it.item.id));
+    pids = guarda(nu_buscarVigentes(q, {})).map((it) => String(it.item.id));
   } else if (/^\d{8,9}$/.test(num)) {
     modo = 'dni';
     const items = ((nu_pd('/persons/search?limit=5&exact_match=true&fields=custom_fields&term=' + num).data || {}).items) || [];
@@ -88,17 +94,17 @@ function rv_buscar(pin, q) {
     modo = 'nombre';
     const base = nu_mejores(((nu_pd('/persons/search?limit=30&fields=name&term=' + encodeURIComponent(q)).data || {}).items) || []), yaTels = {};
     base.forEach((it) => (it.item.phones || []).forEach((p) => { const t = nu_tel(p); if (t) yaTels[t] = 1; }));
-    let extra = []; try { extra = nu_buscarVigentes(q, yaTels); } catch (e) { /* sin la base de AppsFit */ }
+    let extra = []; try { extra = guarda(nu_buscarVigentes(q, yaTels)); } catch (e) { /* sin la base de AppsFit */ }
     const ya = {};
     const items = extra.concat(base)
       .filter((it) => !ya[it.item.id] && (ya[it.item.id] = 1));
     let vig = {}; try { vig = nu_vigentes(); } catch (e) { /* sin la base se ordena por organización */ }
-    const niv = (it) => nu_nivel((it.item.phones || []).map(nu_tel).filter(String), it.item.organization && it.item.organization.name, vig);
+    const niv = (it) => nu_nivel((it.item.phones || []).map(nu_tel).filter(String), it.item.organization && it.item.organization.name, vig, it.item.name.replace(/\s*\(sin ficha\)$/, ''));
     pids = items.map((it) => [niv(it), String(it.item.id)]).sort((a, b) => a[0] - b[0]).map((x) => x[1]);   // activos primero
   } else {
     throw new Error('Escribe el celular (9 dígitos), el DNI (8 números) o el nombre y apellido.');
   }
-  return { modo: modo, q: q, tel: tel, dni: modo === 'dni' ? num : '', fichas: rv_fichas(pids.slice(0, 12)) };
+  return { modo: modo, q: q, tel: tel, dni: modo === 'dni' ? num : '', fichas: rv_fichas(pids.slice(0, 12), sinFicha) };
 }
 function rv_buscarTel(pin, t) { return rv_buscar(pin, t); }
 
@@ -152,15 +158,13 @@ function rv_agendar(pin, q) {
   }
 
   return dg_lock(() => {
-    let pid = q.pid ? String(q.pid) : '', creada = false, nombre;
+    let pid = q.pid && !/^af:/.test(String(q.pid)) ? String(q.pid) : '', creada = false, nombre;   // af: = activo de AppsFit sin ficha
     if (!pid) {
-      nombre = rv_titulo(q.nombre);
+      nombre = rv_titulo(String(q.nombre || '').replace(/\s*\(sin ficha\)$/, ''));
       if (!rv_nombreOk(nombre)) throw new Error('Escribe nombre y apellido reales del socio (no "Socio" ni "Cliente").');
       const hit = ((((nu_pd('/persons/search?limit=10&fields=phone&term=' + tel).data || {}).items) || [])
-        .filter((it) => (it.item.phones || []).map(nu_tel).indexOf(tel) >= 0))[0];
-      if (hit && !nu_mismoNombre(hit.item.name, nombre))
-        throw new Error('El celular ' + tel + ' ya está en la ficha de "' + hit.item.name + '". Revisa el número o busca al socio por su nombre.');
-      if (hit) pid = String(hit.item.id);
+        .filter((it) => (it.item.phones || []).map(nu_tel).indexOf(tel) >= 0 && nu_mismoNombre(it.item.name, nombre)))[0];
+      if (hit) pid = String(hit.item.id);   // misma persona; si el celular es de un familiar, se crea su propia ficha
     }
     // validar ANTES de crear nada
     dg_validarCita(fecha, hora, pid || null, null);
