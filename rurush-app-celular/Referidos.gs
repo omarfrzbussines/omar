@@ -51,6 +51,7 @@ function getLlamadasDash(forzar) {
     return [String(f[0]), String(f[1]), String(f[2]), Number(f[3]), Number(f[4]), String(f[5]), Number(f[6]) || 0,
             Number(f[7]) || 0, Number(f[8]) || 0, Number(f[9]) || 0, Number(f[10]) || 0, String(f[11] || '')];
   }) };
-  try { cache.put('llamdash', JSON.stringify(res), 600); } catch (e) {}
+  // sin la columna FECHA (datos de una versión anterior) no se guarda: se vuelve a leer apenas se rehagan
+  if (res.filas.some(function (f) { return f[11]; })) { try { cache.put('llamdash', JSON.stringify(res), 300); } catch (e) {} }
   return res;
 }

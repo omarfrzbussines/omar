@@ -479,7 +479,7 @@ document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
   document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('on', x === b));
   pintar(); window.scrollTo(0, 0);
 });
-$('#refresh').onclick = () => { if (tab === 'cb') { CB = null; cargarCobros(); pintar(); return; } if (tab === 'sm') { SM = null; cargarSemanal(true); pintar(); return; } if (VD != null || tab === 'vd') { VD = null; cargarVentasDia(true); } cargar(true); if (tab === 'hoy') { cargarReferidos(true); if (ING.mes || (ING.fecha && ING.fecha !== D.fecha)) cargarIngresos(); } if (E || tab === 'eq') { E = null; cargarEquipo(false); } };
+$('#refresh').onclick = () => { if (tab === 'cb') { CB = null; cargarCobros(); pintar(); return; } if (tab === 'sm') { SM = null; cargarSemanal(true); pintar(); return; } if (VD != null || tab === 'vd') { VD = null; cargarVentasDia(true); } cargar(true); if (tab === 'hoy') { cargarReferidos(true); cargarLlamadas(); if (ING.mes || (ING.fecha && ING.fecha !== D.fecha)) cargarIngresos(); } if (E || tab === 'eq') { E = null; cargarEquipo(false); } };
 cargar(false);
 </script>
 </body>
