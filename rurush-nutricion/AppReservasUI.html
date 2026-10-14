@@ -174,7 +174,7 @@ function vPaso1(){
     '<div class="help">Escribe el celular (lo más seguro), el DNI o el nombre y apellido. Sin correo: la cita va directo a la ficha del socio.</div>'+(S.err&&!S.fichas?'<div class="err">'+esc(S.err)+'</div>':'')+'</section>';
 }
 function fichaHtml(f,sel){
-  var tag=f.estado==="activo"?'<span class="tag activo">ACTIVO</span>':f.estado==="inactivo"?'<span class="tag inactivo">INACTIVO</span>':'<span class="tag sin">SIN MEMBRESÍA REGISTRADA</span>';
+  var tag=f.estado==="activo"?'<span class="tag activo">ALUMNO ACTIVO'+(f.vence?' · vence '+ddmm(f.vence):'')+'</span>':f.estado==="inactivo"?'<span class="tag inactivo">ALUMNO INACTIVO</span>':'<span class="tag sin">SIN MEMBRESÍA REGISTRADA</span>';
   return '<div class="person'+(sel?' sel':'')+'"><div class="hd"><div class="av">'+esc(ini(f.nombre))+'</div><div style="flex:1;min-width:0"><h3>'+esc(f.nombre)+'</h3>'+
     '<div class="meta"><span>'+tag+'</span><span>DNI: <b>'+esc(f.dni||"—")+'</b></span><span>Cel: <b>'+esc((f.tels||[]).join(" · ")||"—")+'</b></span></div>'+
     '<div class="meta" style="margin-top:4px"><span>Evaluaciones: <b>'+(f.evaluaciones||0)+'</b></span><span>Última: <b>'+ddmm(f.ultima)+'</b></span>'+(f.org?'<span>'+esc(f.org)+'</span>':'')+'</div></div>'+
