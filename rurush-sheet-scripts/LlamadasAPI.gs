@@ -113,10 +113,13 @@ function ll_estructura(hoja) {
     rondas.push(ro);
   }
 
+  // DIA = fecha del lead, solo si está ANTES de la 1ª llamada (si no, "FECHA" sería la de la llamada)
+  const primera = rondas.length ? Math.min(rondas[0].asesor >= 0 ? rondas[0].asesor : 999, rondas[0].estado) : 999;
+  const antes = function (c) { return c >= 0 && c < primera ? c : -1; };
   return {
     head: head, ancho: ancho, numero: numero, nombre: col("NOMBRE"), rondas: rondas,
     origen: col("ORIGEN") >= 0 ? col("ORIGEN") : col("MEDIO"),
-    dia: col("DIA") >= 0 ? col("DIA") : col("FECHA"),
+    dia: antes(col("DIA")) >= 0 ? col("DIA") : antes(col("FECHA")),
     membresia: col("MENBRESIA") >= 0 ? col("MENBRESIA") : col("MEMBRESIA")
   };
 }
@@ -131,6 +134,8 @@ function ll_traerCola(base, asesora, limite) {
   if (ultima <= LL_FILA_HEADER) return [];
 
   const datos = hoja.getRange(LL_FILA_HEADER + 1, 1, ultima - LL_FILA_HEADER, est.ancho).getValues();
+  const tels = hoja.getRange(LL_FILA_HEADER + 1, est.numero + 1, ultima - LL_FILA_HEADER, 1).getDisplayValues();
+  datos.forEach(function (f, i) { f[est.numero] = tels[i][0]; });
   const yo = String(asesora || "").trim().toUpperCase();
   const salida = [];
 
@@ -196,11 +201,11 @@ function ll_contarBases(asesora) {
 // Tiempo mínimo fuera de la app (en el marcador) para poder marcar cada resultado.
 // Una llamada que no contestan timbra ~25-40 s; una conversación dura más.
 const LL_MIN_SEG = { "APAGADO": 0, "NO CONTESTO": 15, "CORTO": 15,
-                     "CONTESTO": 40, "AGENDADO": 40, "CLIENTE": 40, "DESCARTADO": 40, "OTRA CIUDAD": 40 };
+                     "CONTESTO": 30, "AGENDADO": 30, "CLIENTE": 30, "DESCARTADO": 30, "OTRA CIUDAD": 30 };
 
 function ll_registrar(d) {
   if (!d.fila || !d.estado) throw new Error("Faltan datos de la llamada");
-  if (d.segundos != null) {          // viene de la app del celular: se exige haber llamado
+  if (d.segundos != null && !d.sinLlamar && !d.sinMinimo) {   // viene de la app del celular: se exige haber llamado (salvo socio ya inscrito)
     const min = LL_MIN_SEG[String(d.estado).trim().toUpperCase()] || 0;
     if (!(Number(d.intentos) > 0)) throw new Error("Primero toca 📞 Llamar.");
     if (Number(d.segundos) < min) throw new Error("Para marcar " + d.estado + " la llamada debe durar al menos " + min + " s.");
@@ -211,21 +216,34 @@ function ll_registrar(d) {
     const hoja = SpreadsheetApp.getActive().getSheetByName(d.base);
     if (!hoja) throw new Error("No existe la pestaña " + d.base);
     const est = ll_estructura(hoja);
-    const fila = hoja.getRange(d.fila, 1, 1, est.ancho).getValues()[0];
+    const filaPedida = d.fila;
+    let fila = ll_leerFila(hoja, est, d.fila);
 
-    // Si alguien ordenó o insertó filas mientras la asesora llamaba, ya no es la misma persona.
+    // Si alguien ordenó, insertó o borró filas mientras la asesora llamaba, la persona ya no está en
+    // esa fila: se la busca por su celular y, si aparece una sola vez, se guarda en su fila nueva.
     if (d.telefono && ll_limpiarTel(fila[est.numero]) !== ll_limpiarTel(d.telefono)) {
-      throw new Error("La fila cambió en el Sheet. Refresca la cola y vuelve a intentar.");
+      const tel = ll_limpiarTel(d.telefono), n = hoja.getLastRow();
+      // se lee el texto que se ve: si la columna quedó con formato de fecha, getValues da "Invalid Date"
+      const col = n > LL_FILA_HEADER ? hoja.getRange(LL_FILA_HEADER + 1, est.numero + 1, n - LL_FILA_HEADER, 1).getDisplayValues() : [];
+      const hallados = [];
+      col.forEach(function (r, i) { if (ll_limpiarTel(r[0]) === tel) hallados.push(LL_FILA_HEADER + 1 + i); });
+      if (hallados.length !== 1) throw new Error("La fila cambió en «" + d.base + "» (fila " + filaPedida + ")" + (hallados.length ? " (el número está repetido)" : " (ya no encuentro ese número)") + ". Toca 🔄 y vuelve a intentar." +
+        " [diag: col " + est.numero + "=" + est.head[est.numero] + ", leí «" + fila[est.numero] + "» (" + typeof fila[est.numero] + "), última " + n + ", hoja " + hoja.getName() + "/" + hoja.getParent().getId().slice(0, 6) + ", buscadas " + col.length + "]");
+      d.fila = hallados[0];
+      fila = ll_leerFila(hoja, est, d.fila);
     }
     const libre = ll_rondaLibre(est, fila);
     if (libre < 0) throw new Error("Esta persona ya tiene las 6 llamadas registradas.");
 
     const ro = est.rondas[libre];
+    // Prueba (link OMAR): pasó todas las verificaciones reales; no se escribe nada.
+    if (d.simular) return { simulado: true, fila: d.fila, ronda: libre + 1, movida: d.fila !== filaPedida };
     const ahora = new Date();
     const hoy = Utilities.formatDate(ahora, "America/Lima", "dd/MM/yyyy");
     const estado = String(d.estado).trim().toUpperCase() === "OTRA CIUDAD" ? "Otra Ciudad" : String(d.estado).toUpperCase();
     const set = function (c, v) { if (c >= 0) hoja.getRange(d.fila, c + 1).setValue(v); };
 
+    if (ro.asesor >= 0) ll_permitirEnLista(hoja.getRange(d.fila, ro.asesor + 1), String(d.asesora || "").toUpperCase());
     set(ro.asesor, String(d.asesora || "").toUpperCase());
     set(ro.fecha, hoy);
     set(ro.hora, ll_horaDeLista(ahora));
@@ -244,7 +262,7 @@ function ll_registrar(d) {
       if (d.horaFp) set(ro.fpHora, d.horaFp);
     }
     SpreadsheetApp.flush();
-    if (estado === "AGENDADO" && typeof procesarFilaFP === "function" && hoja.getName() === SHEET_NAME) {
+    if (estado === "AGENDADO" && typeof procesarFilaFP === "function" && BASES_FP.indexOf(hoja.getName()) >= 0) {
       try { procesarFilaFP(hoja, d.fila); } catch (err) { console.error("procesarFilaFP: " + err); }
     }
     return { fila: d.fila, ronda: libre + 1, fecha: hoy };
@@ -273,6 +291,23 @@ function ll_duracion(seg) {
 function ll_fechaTexto(f) {
   const m = String(f).match(/^(\d{4})-(\d{2})-(\d{2})$/);
   return m ? m[3] + "/" + m[2] + "/" + m[1] : String(f);
+}
+
+// Si la celda tiene una lista desplegable estricta que no incluye ese nombre (p. ej. "OMAR" o una
+// asesora nueva), se agrega el nombre a la lista de ESA celda; si no, setValue falla y no se guarda.
+function ll_permitirEnLista(rango, nombre) {
+  const v = rango.getDataValidation();
+  if (!nombre || !v || v.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) return;
+  const crit = v.getCriteriaValues(), lista = crit[0] || [];
+  if (lista.some(function (x) { return String(x).trim().toUpperCase() === nombre; })) return;
+  rango.setDataValidation(v.copy().requireValueInList(lista.concat([nombre]), crit[1] !== false).build());
+}
+
+// Una fila con el celular tal como se ve en el Sheet (no se rompe si NUMERO tiene formato de fecha).
+function ll_leerFila(hoja, est, n) {
+  const fila = hoja.getRange(n, 1, 1, est.ancho).getValues()[0];
+  if (est.numero >= 0) fila[est.numero] = hoja.getRange(n, est.numero + 1).getDisplayValue();
+  return fila;
 }
 
 function ll_limpiarTel(v) {

@@ -1,7 +1,9 @@
 /* RURUSH Hoy — dashboard para el celular de Omar.
    App web de Apps Script: los tokens de Apps Fit y Pipedrive viven en las
-   Propiedades del script (nunca en el celular) y solo Omar puede abrirla
-   (appsscript.json → access: MYSELF).
+   Propiedades del script (nunca en el celular) y solo Omar puede abrirla, y SOLO en su celular:
+   acceso "cualquier usuario" (para verla a pantalla completa desde rurush-hoy en GitHub Pages)
+   pero doGet exige la llave (HOY_LLAVE) y el celular activado con el PIN (HOY_PIN). Si falta
+   algo responde texto plano: la página de la app (y sus funciones) no se entrega. Ver hoy_verLink.
 
    Misma lógica que el dashboard de la extensión "RURUSH — Panel Operativo". */
 
@@ -16,11 +18,77 @@ const ASESORAS = {
   valeria22: 'VALERIA', gustavo: 'GUSTAVO', erik: 'ERIK'
 };
 
-function doGet() {
+function doGet(e) {
+  const p = (e && e.parameter) || {};
+  const props = PropertiesService.getScriptProperties();
+  let llave = props.getProperty('HOY_LLAVE');
+  // Primera vez (o "?reenviar=1", máx. 1 por hora): el link y el PIN se mandan SOLO al correo de Omar.
+  if (!llave || (p.reenviar && !CacheService.getScriptCache().get('hoy_reenvio'))) {
+    CacheService.getScriptCache().put('hoy_reenvio', '1', 3600);
+    hoy_enviarLink_();
+    return ContentService.createTextOutput('Listo: el link de RURUSH Hoy y el PIN llegaron al correo de Omar.');
+  }
+  if (p.k !== llave) return p.accion ? hoy_json_({ ok: false, error: 'Link no válido.' }) : ContentService.createTextOutput('Link no válido.');
+  if (p.accion === 'estado') return hoy_json_({ ok: hoy_celularOk_(p.d, p.h) });
+  if (p.accion === 'activar') return hoy_json_(hoy_activar_(p.d, p.h, p.pin, p.modelo));
+  if (!hoy_celularOk_(p.d, p.h)) return ContentService.createTextOutput('Celular no autorizado.');
   return HtmlService.createHtmlOutputFromFile('Index')
     .setTitle('RURUSH Hoy')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1')
-    .setFaviconUrl('https://em-content.zobj.net/source/apple/391/fire_1f525.png');
+    .setFaviconUrl('https://em-content.zobj.net/source/apple/391/fire_1f525.png')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+/* ---------- candado: llave + un solo celular (el de Omar) ----------
+   La página rurush-hoy (GitHub Pages) manda d = id guardado en el celular y h = huella del celular
+   (modelo/pantalla/idioma). Si el navegador pierde el id, se reconoce por la huella. */
+function hoy_json_(o) {
+  return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
+}
+function hoy_celularOk_(d, h) {
+  const props = PropertiesService.getScriptProperties();
+  const c = JSON.parse(props.getProperty('HOY_CEL') || 'null');
+  if (!c) return false;
+  if (d && c.id === d) return true;
+  if (h && c.huella === h && /^[a-z0-9]{16,}$/.test(String(d || ''))) {
+    c.id = d; props.setProperty('HOY_CEL', JSON.stringify(c));
+    return true;
+  }
+  return false;
+}
+function hoy_activar_(d, h, pin, modelo) {
+  if (!/^[a-z0-9]{16,}$/.test(String(d || ''))) return { ok: false, error: 'No se pudo identificar este celular.' };
+  const cache = CacheService.getScriptCache(), fallos = Number(cache.get('hoy_pinfail') || 0);
+  if (fallos >= 5) return { ok: false, error: 'Demasiados intentos. Espera 15 minutos.' };
+  const props = PropertiesService.getScriptProperties(), PIN = props.getProperty('HOY_PIN');
+  if (!PIN || String(pin || '').trim() !== PIN) { cache.put('hoy_pinfail', String(fallos + 1), 900); return { ok: false, error: 'PIN incorrecto.' }; }
+  props.setProperty('HOY_CEL', JSON.stringify({ id: d, huella: String(h || ''), modelo: String(modelo || '').slice(0, 80),
+    desde: Utilities.formatDate(new Date(), 'America/Lima', 'dd/MM/yyyy HH:mm') }));
+  return { ok: true };
+}
+
+function hoy_crearLlave_() {
+  const p = PropertiesService.getScriptProperties();
+  if (!p.getProperty('HOY_LLAVE')) p.setProperty('HOY_LLAVE', Utilities.getUuid().replace(/-/g, '').slice(0, 24));
+  if (!p.getProperty('HOY_PIN')) p.setProperty('HOY_PIN', String(Math.floor(100000 + Math.random() * 900000)));
+  return p;
+}
+function hoy_enviarLink_() {
+  const p = hoy_crearLlave_();
+  const link = 'https://omarfrzbussines.github.io/omar/rurush-hoy/?k=' + p.getProperty('HOY_LLAVE');
+  MailApp.sendEmail(DV_CORREO, '🔐 RURUSH Hoy: tu link y PIN',
+    'Link de RURUSH Hoy (pantalla completa):\n' + link + '\n\nPIN para activar tu celular: ' + p.getProperty('HOY_PIN') +
+    '\n\n1) Abre el link en Safari del celular.\n2) Compartir → Agregar a pantalla de inicio.\n3) Abre el ícono y escribe el PIN.\n\n' +
+    'Solo funciona en el celular que actives. No compartas este correo.');
+}
+
+/** Ejecutar desde el editor: crea la llave y el PIN si no existen y muestra el link y el celular activado. */
+function hoy_verLink() {
+  const p = hoy_crearLlave_();
+  Logger.log('Link (pantalla completa) → https://omarfrzbussines.github.io/omar/rurush-hoy/?k=' + p.getProperty('HOY_LLAVE'));
+  Logger.log('PIN para activar tu celular → ' + p.getProperty('HOY_PIN'));
+  const c = JSON.parse(p.getProperty('HOY_CEL') || 'null');
+  Logger.log('Celular activado: ' + (c ? c.desde + ' · ' + c.modelo : 'ninguno todavía'));
 }
 
 /* ---------- utilidades ---------- */
@@ -143,6 +211,54 @@ const esFP = (a) => /^\s*(FP\b|FREE\s*PASS)/i.test(a.asunto);
 
 /* ---------- dashboard ---------- */
 
+// Ingresos de DATOS_ORIGEN_<MES> por asesora: { ASESORA: { t: total, c: { categoría: monto } } }.
+// mes = true → todo el mes de "iso"; si no, solo ese día. Sin la fila TOTAL DÍA.
+const HOY_CATS = ['Referidos', 'Redes', 'Cerca/visitó', 'Cobros', 'Renovaciones', 'Ampliaciones'];
+// Todo el mes de una vez y en caché: { "yyyy-MM-dd": { ASESORA: { t, c } } }. El mes en curso se
+// guarda 2 min (y 🔄 lo renueva); los meses pasados, 1 h. Así cambiar de día es instantáneo.
+function hoy_ingresosMes_(ym, forzar) {
+  const cache = CacheService.getScriptCache(), key = 'ing_' + ym;
+  if (!forzar) { const c = cache.get(key); if (c) return JSON.parse(c); }
+  const r = Sheets.Spreadsheets.Values.batchGet(DV_ID, {
+    ranges: ["'DATOS_ORIGEN_" + MESES[Number(ym.slice(5, 7)) - 1] + "'!C1:J800"], valueRenderOption: 'UNFORMATTED_VALUE'
+  });
+  const out = {};
+  (r.valueRanges[0].values || []).forEach(function (f) {
+    if (typeof f[0] !== 'number') return;
+    const fecha = dv_serialAIso(f[0]);
+    if (fecha.slice(0, 7) !== ym) return;
+    const n = dv_nom(f[1]);
+    if (!n || n === 'TOTAL DIA') return;
+    for (let c = 2; c <= 7; c++) {
+      const m = dv_num(f[c]);
+      if (!m) continue;
+      const dia = out[fecha] || (out[fecha] = {}), x = dia[n] || (dia[n] = { t: 0, c: {} });
+      x.t += m; x.c[HOY_CATS[c - 2]] = (x.c[HOY_CATS[c - 2]] || 0) + m;
+    }
+  });
+  try { cache.put(key, JSON.stringify(out), ym === fechaLima(0).slice(0, 7) ? 120 : 3600); } catch (e) {}
+  return out;
+}
+function hoy_ingresos_(iso, mes, forzar) {
+  const porDia = hoy_ingresosMes_(iso.slice(0, 7), forzar);
+  if (!mes) return porDia[iso] || {};
+  const out = {};
+  Object.keys(porDia).forEach(function (d) {
+    Object.keys(porDia[d]).forEach(function (n) {
+      const x = out[n] || (out[n] = { t: 0, c: {} }), y = porDia[d][n];
+      x.t += y.t;
+      Object.keys(y.c).forEach(function (c) { x.c[c] = (x.c[c] || 0) + y.c[c]; });
+    });
+  });
+  return out;
+}
+/** Desde el celular: ingresos de un día ("yyyy-MM-dd") o de su mes completo. */
+function getIngresos(iso, mes) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(iso || ''))) throw new Error('Fecha no válida.');
+  try { return { fecha: iso, mes: !!mes, datos: hoy_ingresos_(iso, !!mes) }; }
+  catch (e) { throw new Error('No encontré la hoja DATOS_ORIGEN_' + MESES[Number(iso.slice(5, 7)) - 1] + '.'); }
+}
+
 function getDashboard(forzar) {
   const cache = CacheService.getScriptCache();
   if (!forzar) {
@@ -186,6 +302,10 @@ function getDashboard(forzar) {
   } catch (e) {
     res.errores.push('Pipedrive: ' + e.message);
   }
+
+  // Venta de hoy: la misma fuente que el cuadro diario (DATOS_ORIGEN), no el "Pago" de Apps Fit
+  // (que queda en 0 cuando el pago no se registró allí).
+  try { res.ingresosHoy = hoy_ingresos_(hoy, false, forzar); } catch (e) { res.errores.push('Ventas (DATOS_ORIGEN): ' + e.message); }
 
   try { cache.put('dash', JSON.stringify(res), 300); } catch (e) { /* >100 KB: sin caché */ }
   return res;

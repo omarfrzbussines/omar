@@ -10,16 +10,103 @@
  */
 
 const APP_ASESORAS = ["MONICA", "DANNA", "LAURA"];
-const APP_BASES = ["2026"];
+// Link de prueba de Omar: ve una cola real pero NO guarda nada ni reserva personas a las asesoras.
+const APP_PRUEBA = "OMAR";
+// Bases que se pueden llamar desde el celular (en este orden aparecen en el selector).
+const APP_BASES = ["2026", "FP 2026 NI", "2025", "FPS 2025", "FPS NA 2026", "DIARIO 🔥", "EXAL2025", "INACTIVOS", "INASISTENCIAS", "ACTIVOS", "2024"];
 const APP_ESTADOS = ["CONTESTO", "NO CONTESTO", "CORTO", "APAGADO", "AGENDADO", "CLIENTE", "DESCARTADO", "Otra Ciudad"];
 const APP_TAM_COLA = 30;
 const APP_RESERVA_SEG = 30 * 60;   // lo que se le muestra a una asesora no le sale a otra por 30 min
 
-function app_asesora(k) {
-  const llaves = JSON.parse(PropertiesService.getScriptProperties().getProperty("APP_LLAVES") || "{}");
-  const a = llaves[String(k || "")];
+/* ---------- candado por celular ----------
+   Cada link (llave) queda amarrado a UN celular. El celular se activa una sola vez con el PIN de Omar
+   (Propiedad del script APP_PIN). Si la propiedad APP_PIN no existe, el candado está apagado.
+   El celular manda "llave|idDelCelular"; el id se crea al azar y vive en ese navegador. */
+function app_props() { return PropertiesService.getScriptProperties(); }
+function app_celulares() { return JSON.parse(app_props().getProperty("APP_CELULARES") || "{}"); }
+
+// Solo la llave (para abrir la página).
+function app_asesoraLlave(k) {
+  const llaves = JSON.parse(app_props().getProperty("APP_LLAVES") || "{}");
+  const a = llaves[String(k || "").split("|")[0]];
   if (!a) throw new Error("Link no válido. Pídele a Omar tu link de acceso.");
   return a;
+}
+// Llave + celular (para leer la cola y guardar llamadas). El celular manda "llave|id|huella".
+// El id vive en el navegador y a veces se pierde (al publicar una versión nueva de la app o al
+// borrar datos): entonces se reconoce el celular por su huella (modelo, pantalla, idioma) y
+// se le guarda el id nuevo, sin pedir el PIN otra vez.
+function app_asesora(k) {
+  const a = app_asesoraLlave(k);
+  if (!app_props().getProperty("APP_PIN")) return a;          // candado apagado
+  const p = String(k || "").split("|"), disp = p[1] || "", huella = p[2] || "";
+  const cel = app_celulares()[a];
+  if (cel && disp && cel.id === disp) {
+    if (huella && !cel.huella) app_actualizarCel(a, { huella: huella });
+    return a;
+  }
+  if (cel && huella && cel.huella === huella && /^[a-z0-9]{16,}$/.test(disp)) {
+    app_actualizarCel(a, { id: disp });
+    return a;
+  }
+  throw new Error("CELULAR_NO_AUTORIZADO: este link solo funciona en el celular activado de " + a + ".");
+}
+function app_actualizarCel(a, cambios) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) return;
+  try {
+    const c = app_celulares();
+    if (!c[a]) return;
+    Object.keys(cambios).forEach(function (x) { c[a][x] = cambios[x]; });
+    app_props().setProperty("APP_CELULARES", JSON.stringify(c));
+  } finally { lock.releaseLock(); }
+}
+// La página pregunta al abrir si este celular está autorizado.
+function app_estadoCelular(k) {
+  const a = app_asesoraLlave(k);
+  try { app_asesora(k); return { ok: true }; } catch (e) {
+    const cel = app_celulares()[a];
+    return { ok: false, asesora: a, tiene: !!cel, desde: cel ? cel.desde : "" };
+  }
+}
+// Omar escribe el PIN en el celular de la asesora: ese celular queda como el único autorizado (reemplaza al anterior).
+function app_activarCelular(k, pin, modelo) {
+  const a = app_asesoraLlave(k);
+  const disp = String(k || "").split("|")[1] || "";
+  if (!/^[a-z0-9]{16,}$/.test(disp)) throw new Error("No se pudo identificar este celular.");
+  const cache = CacheService.getScriptCache(), kf = "pinfail" + a;
+  const fallos = Number(cache.get(kf) || 0);
+  if (fallos >= 5) throw new Error("Demasiados intentos. Espera 15 minutos.");
+  const PIN = app_props().getProperty("APP_PIN");
+  if (!PIN || String(pin || "").trim() !== PIN.trim()) {
+    cache.put(kf, String(fallos + 1), 900);
+    throw new Error("PIN incorrecto.");
+  }
+  const lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    const c = app_celulares();
+    c[a] = { id: disp, huella: String(k || "").split("|")[2] || "", desde: Utilities.formatDate(new Date(), "America/Lima", "dd/MM/yyyy HH:mm"), modelo: String(modelo || "").slice(0, 80) };
+    app_props().setProperty("APP_CELULARES", JSON.stringify(c));
+  } finally { lock.releaseLock(); }
+  return { ok: true };
+}
+/** Ejecutar desde el editor: muestra el link de CADA asesora y crea solo el que falte
+ *  (no cambia los links que ya existen, a diferencia de app_crearLlaves). */
+function app_verLinks() {
+  const llaves = JSON.parse(app_props().getProperty("APP_LLAVES") || "{}");
+  const url = ScriptApp.getService().getUrl();
+  APP_ASESORAS.concat([APP_PRUEBA]).forEach(function (a) {
+    let k = Object.keys(llaves).filter(function (x) { return llaves[x] === a; })[0];
+    if (!k) { k = Utilities.getUuid().replace(/-/g, "").slice(0, 20); llaves[k] = a; Logger.log("(nuevo) " + a); }
+    Logger.log(a + " → " + url + "?k=" + k);
+  });
+  app_props().setProperty("APP_LLAVES", JSON.stringify(llaves));
+}
+/** Ejecutar desde el editor para ver qué celular tiene cada asesora. */
+function app_verCelulares() {
+  const c = app_celulares();
+  Logger.log("Candado " + (app_props().getProperty("APP_PIN") ? "ENCENDIDO" : "APAGADO (falta la propiedad APP_PIN)"));
+  APP_ASESORAS.forEach(function (a) { Logger.log(a + ": " + (c[a] ? "activado " + c[a].desde + " · " + c[a].modelo : "SIN CELULAR (nadie puede usar su link)")); });
 }
 
 /** Ejecutar UNA vez después de implementar (y cuando quieras cambiar los links).
@@ -37,17 +124,20 @@ function app_crearLlaves() {
 
 function app_doGet(e) {
   let asesora;
-  try { asesora = app_asesora(e.parameter.k); } catch (err) {
+  try { asesora = app_asesoraLlave(e.parameter.k); } catch (err) {
     return HtmlService.createHtmlOutput('<p style="font:18px sans-serif;padding:24px">' + err.message + "</p>")
-      .addMetaTag("viewport", "width=device-width, initial-scale=1");
+      .addMetaTag("viewport", "width=device-width, initial-scale=1")
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
   const t = HtmlService.createTemplateFromFile("Llamadas");
   t.asesora = asesora;
   t.llave = e.parameter.k;
+  t.bases = APP_BASES;
   return t.evaluate()
     .setTitle("RURUSH Llamadas · " + asesora)
     .addMetaTag("viewport", "width=device-width, initial-scale=1, maximum-scale=1")
-    .setFaviconUrl("https://em-content.zobj.net/source/apple/391/telephone-receiver_1f4de.png");
+    .setFaviconUrl("https://em-content.zobj.net/source/apple/391/telephone-receiver_1f4de.png")
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);   // para abrirla a pantalla completa desde rurush-llamadas (GitHub Pages)
 }
 
 /** Última fila con NÚMERO (no getLastRow: hay columnas prellenadas hasta el fondo). */
@@ -73,11 +163,24 @@ function app_contadorHoy(asesora) {
  *  Fuera: cerrados, 6 llamadas, llamados hoy, los que lleva otra asesora, reservados. */
 const APP_BLOQUE = 1200;
 
-function app_getCola(llave, base, excluir, sinApi) {
+function app_getCola(llave, base, excluir, sinApi, como) {
+  try {
+    if (!sinApi && app_conApi()) {
+      try { return app_getCola_(llave, base, excluir, true, como); }
+      catch (e) { if (!/^API Sheets/.test(e.message)) throw e; }   // la API falló: se lee como antes
+    }
+    return app_getCola_(llave, base, excluir, false, como);
+  } catch (e) {
+    if (!/CELULAR_NO_AUTORIZADO/.test(e.message)) app_logError(llave, "cargar cola", base, "", "", "", e);
+    throw e;
+  }
+}
+function app_getCola_(llave, base, excluir, api, como) {
   const t0 = Date.now();
-  const asesora = app_asesora(llave);
+  const quien = app_asesora(llave);
+  // El link de prueba puede ver la cola de una asesora ("ver como"), sin reservarle a nadie.
+  const asesora = quien === APP_PRUEBA && APP_ASESORAS.indexOf(como) >= 0 ? como : quien;
   if (APP_BASES.indexOf(base) < 0) throw new Error("Base no habilitada: " + base);
-  const api = !sinApi && app_conApi();
   const hoja = api ? app_hojaApi(base) : SpreadsheetApp.getActive().getSheetByName(base);
   const est = ll_estructura(hoja);
   const ultima = api ? hoja.ultimaFila(est) : app_ultimaFila(hoja, est);
@@ -91,6 +194,7 @@ function app_getCola(llave, base, excluir, sinApi) {
   for (let fin = ultima; fin > LL_FILA_HEADER; fin -= APP_BLOQUE) {
     const ini = Math.max(LL_FILA_HEADER + 1, fin - APP_BLOQUE + 1);
     const datos = api ? hoja.filas(est, ini, fin) : hoja.getRange(ini, 1, fin - ini + 1, est.ancho).getValues();
+    if (!api) { const t = hoja.getRange(ini, est.numero + 1, fin - ini + 1, 1).getDisplayValues(); datos.forEach(function (f, i) { f[est.numero] = t[i][0]; }); }
     leidas += datos.length;
     const bloque = [];
     for (let i = datos.length - 1; i >= 0; i--) {
@@ -133,13 +237,25 @@ function app_getCola(llave, base, excluir, sinApi) {
 
   nuevos.sort(function (a, c) { return c.diaIso.localeCompare(a.diaIso) || c.fila - a.fila; });
   seguimiento.sort(function (a, c) { return a.ultFecha.localeCompare(c.ultFecha); });
-  const cola = nuevos.concat(seguimiento).slice(0, APP_TAM_COLA);
+  // ⏰ llamar luego: las que ya tocan van primero; las que están programadas no salen antes de su hora
+  let luego = { ahora: [], despues: [], todas: [] };
+  try { luego = app_luegoPara_(asesora); } catch (e) { console.error("luego: " + e); }
+  const programada = {};
+  luego.todas.forEach(function (p) { programada[p.base + ":" + p.fila] = true; });
+  const primero = [];
+  luego.ahora.forEach(function (p) { try { const x = app_luegoItem_(p, api); if (x) primero.push(x); } catch (e) { console.error("luego item: " + e); } });
+  const cola = primero.concat(nuevos.concat(seguimiento).filter(function (x) { return !programada[base + ":" + x.fila]; })).slice(0, APP_TAM_COLA);
+  // ¿ya es socio? (BASE DE SOCIOS). Si falla, la cola sale igual, sin el aviso.
+  let socios = {};
+  try { socios = cob_sociosPorTel(); } catch (e) {}
+  cola.forEach(function (x) { if (socios[x.numero]) x.socio = socios[x.numero]; });
   const res = {};
-  cola.forEach(function (x) { res["r" + base + x.fila] = asesora; });
-  if (cola.length) cache.putAll(res, APP_RESERVA_SEG);
+  cola.forEach(function (x) { res["r" + (x.base || base) + x.fila] = asesora; });
+  if (cola.length && quien !== APP_PRUEBA) cache.putAll(res, APP_RESERVA_SEG);
 
   return {
-    asesora: asesora, cola: cola, hoy: app_contadorHoy(asesora), estados: APP_ESTADOS, horas: LL_HORAS,
+    asesora: asesora, cola: cola, hoy: app_contadorHoy(asesora), estados: APP_ESTADOS.concat([APP_LUEGO]), horas: LL_HORAS,
+    programadas: luego.despues,
     pendientes: null, leidas: leidas, ms: Date.now() - t0, api: api
   };
 }
@@ -147,20 +263,38 @@ function app_getCola(llave, base, excluir, sinApi) {
 /* ---------- lectura rápida con la API de Sheets ----------
    SpreadsheetApp espera a que el Sheet recalcule (RESUMEN, etc.) antes de cada lectura:
    en RURUSH Hoy eso eran 6-15 s por consulta. La API de Sheets devuelve los valores ya
-   calculados. Se activa sola cuando el proyecto tiene el servicio avanzado "Sheets"
-   (Servicios → + → Google Sheets API); sin él, la app sigue leyendo como antes. */
+   calculados. Usa el servicio avanzado "Sheets" si el proyecto lo tiene; si no, llama a la
+   misma API por UrlFetchApp (no hay que activar nada). Si la API falla, se anota 6 h y la
+   app lee con SpreadsheetApp como antes. */
 const APP_USAR_API = true;
 
 function app_conApi() {
-  return APP_USAR_API && typeof Sheets !== "undefined";
+  return APP_USAR_API && (typeof Sheets !== "undefined" || !CacheService.getScriptCache().get("api_mala"));
 }
 
 function app_col(n) { let s = ""; for (n++; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + (n - 1) % 26) + s; return s; }
 
+// Valores de varios rangos de un Sheet (lista de filas por rango). opts: valueRenderOption, dateTimeRenderOption.
+function app_valores(id, rangos, opts) {
+  opts = opts || {};
+  if (typeof Sheets !== "undefined") {
+    const o = { ranges: rangos };
+    Object.keys(opts).forEach(function (k) { o[k] = opts[k]; });
+    return (Sheets.Spreadsheets.Values.batchGet(id, o).valueRanges || []).map(function (v) { return v.values || []; });
+  }
+  const qs = rangos.map(function (r) { return "ranges=" + encodeURIComponent(r); })
+    .concat(Object.keys(opts).map(function (k) { return k + "=" + encodeURIComponent(opts[k]); })).join("&");
+  const res = UrlFetchApp.fetch("https://sheets.googleapis.com/v4/spreadsheets/" + id + "/values:batchGet?" + qs,
+    { headers: { Authorization: "Bearer " + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
+  if (res.getResponseCode() !== 200) {
+    CacheService.getScriptCache().put("api_mala", String(res.getResponseCode()), 21600);
+    throw new Error("API Sheets " + res.getResponseCode() + ": " + res.getContentText().slice(0, 200));
+  }
+  return (JSON.parse(res.getContentText()).valueRanges || []).map(function (v) { return v.values || []; });
+}
+
 function app_leerApi(rangos) {
-  const r = Sheets.Spreadsheets.Values.batchGet(SpreadsheetApp.getActive().getId(),
-    { ranges: rangos, valueRenderOption: "FORMATTED_VALUE" });
-  return (r.valueRanges || []).map(function (v) { return v.values || []; });
+  return app_valores(SpreadsheetApp.getActive().getId(), rangos, { valueRenderOption: "FORMATTED_VALUE" });
 }
 
 // "08/10/2026" → Date a la medianoche de Lima (lo mismo que devuelve getValues).
@@ -203,7 +337,6 @@ function app_hojaApi(base) {
 /* Prueba desde el editor: compara la cola leída con la API y sin ella (debe salir igual). */
 function app_probarApi() {
   const llave = Object.keys(JSON.parse(PropertiesService.getScriptProperties().getProperty("APP_LLAVES") || "{}"))[0];
-  if (typeof Sheets === "undefined") { Logger.log("Falta el servicio Sheets: Servicios → + → Google Sheets API → Agregar."); return; }
   const cache = CacheService.getScriptCache();
   const a = app_getCola(llave, "2026", []);
   a.cola.forEach(function (x) { cache.remove("r2026" + x.fila); });
@@ -217,15 +350,39 @@ function app_probarApi() {
   }
 }
 
-function app_guardar(llave, base, fila, numero, estado, obs, fpFecha, fpHora, intentos, segundos) {
+function app_guardar(llave, base, fila, numero, estado, obs, fpFecha, fpHora, intentos, segundos, luego, nombre) {
+  try {
+    return app_guardar_(llave, base, fila, numero, estado, obs, fpFecha, fpHora, intentos, segundos, luego, nombre);
+  } catch (e) {
+    app_logError(llave, "guardar", base, fila, numero, estado, e);
+    throw e;
+  }
+}
+function app_guardar_(llave, base, fila, numero, estado, obs, fpFecha, fpHora, intentos, segundos, luego, nombre) {
   const asesora = app_asesora(llave);
   if (APP_BASES.indexOf(base) < 0) throw new Error("Base no habilitada: " + base);
+  // ⏰ "llámame más tarde": se guarda como CONTESTO con la hora en la observación y queda programada
+  let msLuego = 0;
+  if (estado === APP_LUEGO) {
+    msLuego = Number(luego) || 0;
+    if (!(Number(intentos) > 0)) throw new Error("Primero toca 📞 Llamar.");
+    if (!(msLuego > Date.now() - 5 * 60000)) throw new Error("Elige una hora que todavía no pasó.");
+    if (msLuego > Date.now() + 30 * 864e5) throw new Error("Elige una hora dentro de los próximos 30 días.");
+    estado = "CONTESTO";
+    obs = "⏰ Volver a llamar " + app_luegoTexto_(msLuego) + (obs ? " · " + obs : "");
+  }
   if (APP_ESTADOS.indexOf(estado) < 0) throw new Error("Estado no válido.");
+  // Si ya es socio puede marcarse CLIENTE sin llamar (se verifica aquí, no en el celular).
+  const sinLlamar = estado === "CLIENTE" && !(Number(intentos) > 0) && cob_esSocio(numero);
   const r = ll_registrar({
     base: base, fila: Number(fila), telefono: numero, asesora: asesora, estado: estado,
-    observacion: obs || "", fechaFp: fpFecha || "", horaFp: fpHora || "",
+    sinLlamar: sinLlamar,   // el link OMAR también guarda de verdad (sale "OMAR" como asesor)
+    sinMinimo: msLuego > 0,  // "llámame luego" suele ser una llamada corta
+    observacion: (sinLlamar ? "🟢 Ya es socio (sin llamar) " : "") + (obs || ""), fechaFp: fpFecha || "", horaFp: fpHora || "",
     intentos: Number(intentos) || 0, segundos: Number(segundos) || 0
   });
+  try { app_luegoGuardar_(asesora, base, r.fila || Number(fila), numero, nombre, msLuego, msLuego ? String(obs).replace(/^⏰ Volver a llamar [^·]*(· )?/, "") : ""); }
+  catch (e) { if (msLuego) throw new Error("Se guardó como CONTESTO pero no se pudo programar la hora: " + e.message); console.error("luego: " + e); }
   const cache = CacheService.getScriptCache();
   cache.remove("r" + base + fila);
   // contador de hoy (para el marcador de la app)
@@ -234,4 +391,161 @@ function app_guardar(llave, base, fila, numero, estado, obs, fpFecha, fpHora, in
   c[estado] = (c[estado] || 0) + 1;
   cache.put(k, JSON.stringify(c), 21600);
   return r;
+}
+
+/* ---------- registro de errores (pestaña LOG APP LLAMADAS) ----------
+   Cada error de la app (al guardar o al cargar la cola) queda anotado con la hora, la asesora,
+   la base, la fila, el celular y el mensaje exacto. Omar lo ve con 🛠 en su link de prueba. */
+const APP_LOG = "LOG APP LLAMADAS";
+function app_logError(llave, accion, base, fila, numero, estado, e) {
+  try {
+    let quien = "";
+    try { quien = app_asesoraLlave(llave); } catch (x) { quien = "link no válido"; }
+    const ss = SpreadsheetApp.getActive();
+    let h = ss.getSheetByName(APP_LOG);
+    if (!h) {
+      h = ss.insertSheet(APP_LOG);
+      h.appendRow(["FECHA", "HORA", "ASESORA", "ACCIÓN", "BASE", "FILA", "CELULAR", "ESTADO", "ERROR"]);
+      h.setFrozenRows(1);
+    }
+    const ahora = new Date();
+    h.appendRow([Utilities.formatDate(ahora, "America/Lima", "dd/MM/yyyy"), Utilities.formatDate(ahora, "America/Lima", "HH:mm:ss"),
+      quien, accion, base || "", fila || "", numero ? "'" + numero : "", estado || "", String((e && e.message) || e).slice(0, 300)]);
+  } catch (x) { console.error("app_logError: " + x); }
+}
+/** Solo el link de prueba: últimos errores (más nuevos primero). */
+function app_errores(llave) {
+  if (app_asesora(llave) !== APP_PRUEBA) throw new Error("Solo para Omar.");
+  const h = SpreadsheetApp.getActive().getSheetByName(APP_LOG);
+  if (!h || h.getLastRow() < 2) return [];
+  const n = Math.min(40, h.getLastRow() - 1);
+  return h.getRange(h.getLastRow() - n + 1, 1, n, 9).getDisplayValues().reverse()
+    .map(function (f) { return { fecha: f[0], hora: f[1], asesora: f[2], accion: f[3], base: f[4], fila: f[5], celular: f[6], estado: f[7], error: f[8] }; });
+}
+
+/** Ejecutar desde el editor cuando la app "se queda cargando": mide cada paso que hace el celular
+ *  y muestra en el registro cuál falla o cuál tarda. No escribe nada. */
+function app_diagnostico() {
+  const llaves = JSON.parse(app_props().getProperty("APP_LLAVES") || "{}");
+  const k = Object.keys(llaves)[0];
+  CacheService.getScriptCache().remove("api_mala");
+  Logger.log("Lectura rápida: " + (typeof Sheets !== "undefined" ? "servicio Sheets ✅" : "por UrlFetchApp (sin servicio Sheets)"));
+  Logger.log("Candado: " + (app_props().getProperty("APP_PIN") ? "encendido" : "apagado") + " · links: " + Object.keys(llaves).length);
+  if (!k) { Logger.log("❌ No hay links: ejecuta app_verLinks."); return; }
+  const paso = function (nombre, fn) {
+    const t0 = Date.now();
+    try { const r = fn(); Logger.log("✅ " + nombre + ": " + ((Date.now() - t0) / 1000).toFixed(1) + " s" + (r ? " · " + r : "")); }
+    catch (e) { Logger.log("❌ " + nombre + " (" + ((Date.now() - t0) / 1000).toFixed(1) + " s): " + e.message); }
+  };
+  const cache = CacheService.getScriptCache();
+  paso("cola 2026 (" + llaves[k] + ")", function () { return app_getColaDiag_(llaves[k], "2026"); });
+  paso("cobros (" + llaves[k] + ")", function () {
+    cache.remove("cobl_" + cob_norm(llaves[k]));
+    const l = cob_pendientesDe(cob_leerCola(), cob_norm(llaves[k]), null);
+    return l.length + " pendientes";
+  });
+}
+// Igual que app_getCola pero sin pedir el celular (solo para el diagnóstico); libera las reservas que crea.
+function app_getColaDiag_(asesora, base) {
+  const llaves = JSON.parse(app_props().getProperty("APP_LLAVES") || "{}");
+  const k = Object.keys(llaves).filter(function (x) { return llaves[x] === asesora; })[0];
+  const pin = app_props().getProperty("APP_PIN");
+  const cel = app_celulares()[asesora];
+  const r = app_getCola(k + "|" + (pin && cel ? cel.id : ""), base, []);
+  const cache = CacheService.getScriptCache();
+  r.cola.forEach(function (x) { cache.remove("r" + base + x.fila); });
+  return r.cola.length + " personas · " + r.leidas + " filas leídas · " + (r.api ? "con API" : "SIN API (lento)");
+}
+
+/* ---------- ⏰ LLAMAR LUEGO (pestaña LLAMAR LUEGO) ----------
+   El cliente pide "llámame a las 6": la llamada se guarda como CONTESTO con la nota y queda
+   programada aquí. A la hora sale primera en la cola de la asesora que lo atendió; si en
+   APP_LUEGO_LIBRE_MIN no lo llamó, le sale a cualquier asesora. Al volver a llamarlo
+   (guardar cualquier resultado) la programación queda HECHA. */
+const APP_LUEGO = "LLAMAR LUEGO";
+const APP_LUEGO_LIBRE_MIN = 30;
+const APP_LUEGO_COLS = ["CREADO", "ASESORA", "BASE", "FILA", "CELULAR", "NOMBRE", "LLAMAR A LAS", "NOTA", "ESTADO", "MS"];
+
+function app_luegoHoja_(crear) {
+  const ss = SpreadsheetApp.getActive();
+  let h = ss.getSheetByName(APP_LUEGO);
+  if (!h && crear) {
+    h = ss.insertSheet(APP_LUEGO);
+    h.appendRow(APP_LUEGO_COLS);
+    h.setFrozenRows(1);
+  }
+  return h;
+}
+
+// Programaciones pendientes [{row, asesora, base, fila, numero, nombre, texto, nota, ms}] (caché 60 s).
+function app_luegoPendientes_(fresco) {
+  const cache = CacheService.getScriptCache();
+  if (!fresco) { const c = cache.get("luego"); if (c) return JSON.parse(c); }
+  const h = app_luegoHoja_(false);
+  const out = [];
+  if (h && h.getLastRow() > 1) {
+    h.getRange(2, 1, h.getLastRow() - 1, APP_LUEGO_COLS.length).getDisplayValues().forEach(function (f, i) {
+      if (String(f[8]).trim() !== "PENDIENTE") return;
+      out.push({ row: i + 2, asesora: f[1], base: f[2], fila: Number(f[3]), numero: ll_limpiarTel(f[4]), nombre: f[5],
+        texto: f[6], nota: f[7], ms: Number(String(f[9]).replace(/\D/g, "")) });
+    });
+  }
+  cache.put("luego", JSON.stringify(out), 60);
+  return out;
+}
+
+// Para la cola: las que ya tocan (ahora) y las que vienen de esta asesora (despues).
+function app_luegoPara_(asesora) {
+  const now = Date.now(), ahora = [], despues = [];
+  app_luegoPendientes_(false).forEach(function (p) {
+    const mia = p.asesora === asesora;
+    if (p.ms <= now && (mia || now >= p.ms + APP_LUEGO_LIBRE_MIN * 60000)) ahora.push(p);
+    else if (mia && p.ms > now) despues.push({ ms: p.ms, texto: p.texto, nombre: p.nombre, numero: p.numero });
+  });
+  ahora.sort(function (a, b) { return a.ms - b.ms; });
+  despues.sort(function (a, b) { return a.ms - b.ms; });
+  return { ahora: ahora, despues: despues, todas: app_luegoPendientes_(false) };
+}
+
+// Arma el item de la cola para una programación que ya toca (lee su fila para el historial).
+function app_luegoItem_(p, api) {
+  const hoja = api ? app_hojaApi(p.base) : SpreadsheetApp.getActive().getSheetByName(p.base);
+  if (!hoja) return null;
+  const est = ll_estructura(hoja);
+  const fila = api ? hoja.filas(est, p.fila, p.fila)[0] : ll_leerFila(hoja, est, p.fila);
+  const libre = ll_rondaLibre(est, fila);
+  if (libre < 0) return null;
+  const hechas = ll_historial(est, fila);
+  return {
+    fila: p.fila, base: p.base, numero: p.numero, nombre: p.nombre || String(fila[est.nombre] || "").trim(),
+    dia: "", diaIso: "", origen: "", ronda: libre + 1,
+    rondas: hechas.map(function (h) { return { n: h.n, asesor: h.asesor, fecha: h.fecha.slice(0, 5), estado: h.estado, obs: h.obs }; }),
+    ultFecha: "", luego: { texto: p.texto, nota: p.nota, asesora: p.asesora }
+  };
+}
+
+// Al guardar una llamada: cierra lo pendiente de esa persona y, si pidió "llamar luego", lo programa.
+function app_luegoGuardar_(asesora, base, fila, numero, nombre, ms, nota) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const tel = ll_limpiarTel(numero);
+    const pend = app_luegoPendientes_(true).filter(function (p) { return p.base === base && p.numero === tel; });
+    const ahora = new Date();
+    if (!pend.length && !ms) return;
+    const h = app_luegoHoja_(true);
+    const marca = "HECHO " + Utilities.formatDate(ahora, "America/Lima", "dd/MM HH:mm") + " " + asesora;
+    pend.forEach(function (p) { h.getRange(p.row, 9).setValue(marca); });
+    if (ms) {
+      h.appendRow([Utilities.formatDate(ahora, "America/Lima", "dd/MM/yyyy HH:mm"), asesora, base, fila, "'" + tel, nombre || "",
+        app_luegoTexto_(ms), nota || "", "PENDIENTE", ms]);
+    }
+    CacheService.getScriptCache().remove("luego");
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function app_luegoTexto_(ms) {
+  return Utilities.formatDate(new Date(ms), "America/Lima", "dd/MM h:mm a").replace("AM", "am").replace("PM", "pm");
 }

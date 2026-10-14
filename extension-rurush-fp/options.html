@@ -22,7 +22,23 @@
 
   <h3>Módulos</h3>
   <p class="hint">🧪 Simulación arma los mensajes y los muestra en el ícono 🔥, pero NO los envía. Pasa a 📤 Envío real cuando lo hayas revisado, y pausa la rutina de Claude que reemplaza.</p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0">
+    <button type="button" id="modoFP" style="margin:0;background:#c62828">🔥 Modo: solo Free Pass</button>
+    <button type="button" id="modoNU" style="margin:0;background:#2e7d32">🥗 Modo: solo Nutrición</button>
+  </div>
+  <p class="hint" id="modoHint">Apaga los módulos del otro tipo. Los que quedan encendidos mantienen su modo (si estaban apagados pasan a 🧪 Simulación). Luego dale Guardar.</p>
   <table id="mods" style="width:100%;border-collapse:collapse"></table>
+
+  <h3>Chats de anuncios (Facebook / Instagram)</h3>
+  <p class="hint">Cada 30 min (8:00–21:00) toma los leads nuevos de Pipedrive, abre su chat y, si muestra la tarjeta "Anuncio de facebook · Ver detalles": llena el campo Video (por la miniatura) y pone esta etiqueta de WhatsApp Business (créala una vez a mano). Si el chat estaba sin leer, lo deja sin leer.</p>
+  <div class="grid">
+    <div><label>Modo</label><select id="fbAdsModo"><option value="sim">🧪 Simulación</option><option value="real">📤 Etiquetar</option><option value="off">Apagado</option></select></div>
+    <div style="grid-column: span 2"><label>Etiqueta</label><input type="text" id="fbAdsEtiqueta"></div>
+  </div>
+  <label>Videos por aprender <span class="hint">(llegaron leads con una miniatura que no conoce: elige cuál video es y se llena a todos esos leads)</span></label>
+  <div id="porAprender" class="hint">—</div>
+  <label>Videos aprendidos <span class="hint">(miniatura → campo Video de Pipedrive · si uno quedó mal, bórralo y la próxima vez se vuelve a preguntar)</span></label>
+  <div id="videos" class="hint">—</div>
 
   <div class="grid">
     <div><label>Recordatorio mañana: hora</label><input type="number" id="mananaHora" min="6" max="12"></div>
@@ -52,6 +68,12 @@
   <input type="file" id="img" accept="image/jpeg,image/png">
   <div style="margin-top:8px"><img id="imgPrev" style="max-width:220px;display:none;border-radius:6px"></div>
   <button id="imgDel" type="button" style="display:none;background:#eee;color:#1c1c1c;margin-top:6px">Quitar imagen</button>
+
+  <h3>Nutrición (seguimiento 11:30)</h3>
+  <label>Link del Apps Script de NUTRICIÓN <span class="hint">(termina en /exec)</span></label>
+  <input type="text" id="nutriUrl">
+  <label>Llave de NUTRICIÓN <span class="hint">(la muestra nu_instalar en el registro)</span></label>
+  <input type="password" id="nutriLlave" autocomplete="off">
 
   <button id="save">Guardar</button><span id="ok"></span>
   <script src="options.js"></script>

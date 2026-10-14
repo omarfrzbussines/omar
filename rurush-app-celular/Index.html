@@ -39,7 +39,7 @@
   .vacio { color:var(--mut); padding:14px 12px; font-size:13px; }
   .err { background:#3d1b1b; color:#ff8a80; border-radius:12px; padding:10px 12px; margin-bottom:12px; font-size:13px; }
   nav { position:fixed; bottom:0; left:0; right:0; display:flex; background:#161618; border-top:1px solid var(--line); padding-bottom:env(safe-area-inset-bottom); }
-  nav button { flex:1; background:none; border:0; color:var(--mut); padding:10px 0 12px; font-size:12px; }
+  nav button { flex:1; background:none; border:0; color:var(--mut); padding:10px 0 12px; font-size:11px; }
   nav button span { display:block; font-size:20px; }
   nav button.on { color:var(--tx); }
   .cargando { text-align:center; color:var(--mut); padding:60px 0; }
@@ -52,6 +52,17 @@
   .mini { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:10px; }
   .mini div { background:var(--bg); border-radius:10px; padding:8px; } .mini b { display:block; font-size:18px; } .mini span { color:var(--mut); font-size:11px; }
   .alerta { background:#3d2a12; color:#ffb74d; border-radius:10px; padding:7px 10px; font-size:12px; margin-top:8px; }
+  .desp { margin:18px 0 8px; }
+  .desp > summary { list-style:none; cursor:pointer; font-size:17px; font-weight:700; padding:12px 14px; border-radius:12px; background:var(--card); }
+  .desp > summary::-webkit-details-marker { display:none; }
+  .desp > summary::after { content:'▾'; float:right; color:var(--mut); }
+  .desp[open] > summary::after { content:'▴'; }
+  .desp > summary small { font-weight:400; color:var(--mut); font-size:13px; margin-left:6px; }
+  .desp[open] > summary { margin-bottom:10px; }
+  .sel { width:100%; background:var(--card); color:var(--tx); border:1px solid var(--line); border-radius:10px; padding:9px 10px; font-size:14px; margin:2px 0 12px; }
+  .kpi.rojo .n { color:#ff8a80; } .kpi.verde .n { color:var(--grn); }
+  .monto { text-align:right; flex:none; } .monto b { display:block; } .monto span { font-size:11px; color:var(--mut); }
+  .monto span.atr { color:#ff8a80; font-weight:600; } .monto span.hoy { color:#ffcc00; font-weight:600; }
   .mas { display:block; width:100%; background:none; border:0; border-top:1px solid var(--line); color:var(--or); padding:11px; font-size:13px; }
 </style>
 </head>
@@ -69,6 +80,9 @@
   <button data-tab="fp"><span>🎟️</span>Free Pass</button>
   <button data-tab="ret"><span>🔥</span>Retención</button>
   <button data-tab="eq"><span>👥</span>Equipo</button>
+  <button data-tab="vd"><span>📈</span>Ventas</button>
+  <button data-tab="sm"><span>🗓️</span>Semana</button>
+  <button data-tab="cb"><span>💰</span>Cobros</button>
 </nav>
 
 <script>
@@ -88,6 +102,24 @@ function cargar(forzar) {
     .withSuccessHandler((d) => { D = d; pintar(); })
     .withFailureHandler((e) => { $('#main').innerHTML = `<div class="err">${esc(e.message || e)}</div>`; $('#sub').textContent = 'Error'; })
     .getDashboard(!!forzar);
+}
+
+let VD = null, vdCargando = false;
+function cargarVentasDia(forzar) {
+  vdCargando = true;
+  google.script.run
+    .withSuccessHandler((html) => { VD = html; vdCargando = false; if (tab === 'vd') pintar(); })
+    .withFailureHandler((e) => { VD = `<div class="err">⚠️ ${esc(e.message || e)}</div>`; vdCargando = false; if (tab === 'vd') pintar(); })
+    .getVentasDia(!!forzar);
+}
+
+let SM = null, smCargando = false;
+function cargarSemanal(forzar) {
+  smCargando = true;
+  google.script.run
+    .withSuccessHandler((html) => { SM = html; smCargando = false; if (tab === 'sm') pintar(); })
+    .withFailureHandler((e) => { SM = `<div class="err">⚠️ ${esc(e.message || e)}</div>`; smCargando = false; if (tab === 'sm') pintar(); })
+    .getSemanal(!!forzar);
 }
 
 function cargarEquipo(forzar) {
@@ -122,7 +154,7 @@ function pintarEquipo() {
   }
   const L = E.llamadas;
   if (L) {
-    h += `<h2>📞 Llamadas <small>base 2026</small></h2>
+    h += `<h2>📞 Llamadas <small>todas las bases</small></h2>
       <div class="seg">${[['hoy', 'Hoy'], ['semana', 'Semana'], ['mes', 'Mes']].map(([k, t]) => `<button data-p="${k}" class="${k === periodo ? 'on' : ''}">${t}</button>`).join('')}</div>`;
     const P = L[periodo] || {};
     const tot = Object.values(P).reduce((t, s) => t + s.n, 0);
@@ -144,10 +176,67 @@ function pintarEquipo() {
           <div><b>${pct(s.agend, s.n)}%</b><span>llamada → FP</span></div>
         </div>
         ${periodo === 'hoy' && s.primera != null ? `<div class="d">🕘 Primera ${hora12(s.primera)} · última ${hora12(s.ultima)}</div>` : ''}
+        ${s.bases ? `<div class="d">📂 ${Object.entries(s.bases).sort((a, b) => b[1] - a[1]).map(([b, n]) => `${esc(b)} <b>${n}</b>`).join(' · ')}</div>` : ''}
         ${al.map((x) => `<div class="alerta">${x}</div>`).join('')}</div>`;
     }).join('') || `<div class="list"><div class="vacio">Sin llamadas ${periodo === 'hoy' ? 'hoy' : periodo === 'semana' ? 'esta semana' : 'este mes'}.</div></div>`;
   }
   if (E.generado) h += `<div class="sub" style="margin-top:6px">Equipo actualizado ${esc(E.generado)} · cargó en ${E.seg} s</div>`;
+  return h;
+}
+
+/* ---------- 💰 Cobros (pestaña 2. COLA RENOVAR de VENTAS RETENCIÓN) ---------- */
+let CB = null, cbCargando = false, mesCb = '';
+function cargarCobros() {
+  if (cbCargando) return; cbCargando = true;
+  google.script.run
+    .withSuccessHandler((r) => { CB = r; cbCargando = false; if (tab === 'cb') pintar(); })
+    .withFailureHandler((e) => { CB = { error: e.message || String(e) }; cbCargando = false; if (tab === 'cb') pintar(); })
+    .getCobros();
+}
+const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const nomMes = (ym) => MESES[Number(ym.slice(5, 7)) - 1] + ' ' + ym.slice(0, 4);
+const sum = (a) => a.reduce((t, c) => t + c.monto, 0);
+const filaCobro = (c) => {
+  const sa = c.diasSA == null ? '' : `<span class="tag ${c.diasSA >= 15 ? 'urg' : c.diasSA >= 8 ? 'frio' : 'ok'}">🏃 ${c.diasSA === 0 ? 'vino hoy' : c.diasSA + ' d sin asistir'}</span>`;
+  const f = c.cobrado ? `<span>✅ ${fm(c.fecha)}</span>` : c.dias < 0 ? `<span class="atr">atrasado ${-c.dias} d</span>` : c.dias === 0 ? '<span class="hoy">HOY</span>' : `<span>${fm(c.fecha)} · en ${c.dias} d</span>`;
+  return `<div class="row"><div class="main"><div class="t">${esc(c.nombre || 'Cód. ' + c.codigo)}</div>
+    <div class="d">Cód. ${esc(c.codigo)}${ase === 'TODAS' ? ' · ' + esc(c.asesora) : ''}${c.dias < 0 && !c.cobrado ? ' · ' + fm(c.fecha) : ''} ${sa}</div></div>
+    <div class="monto"><b>${soles(c.monto)}</b>${f}</div>${wa(c.tel)}</div>`;
+};
+function pintarCobros() {
+  if (!CB) { if (!cbCargando) cargarCobros(); return '<div class="cargando">Cargando cobros…</div>'; }
+  if (CB.error) return `<div class="err">⚠️ ${esc(CB.error)}</div>`;
+  const hoyMes = CB.hoy.slice(0, 7);
+  if (!mesCb) mesCb = hoyMes;
+  const todos = CB.lista.filter(deAse);
+  const meses = [...new Set(CB.lista.map((c) => c.fecha.slice(0, 7)).concat(hoyMes))].sort().reverse();
+  const delMes = todos.filter((c) => c.fecha.slice(0, 7) === mesCb);
+  const cobrados = delMes.filter((c) => c.cobrado), pend = delMes.filter((c) => !c.cobrado);
+  const atrasados = todos.filter((c) => !c.cobrado && c.dias < 0);
+  const proy = sum(delMes), cob = sum(cobrados);
+  let h = `<select class="sel" id="mesCb">${meses.map((m) => `<option value="${m}" ${m === mesCb ? 'selected' : ''}>📅 ${nomMes(m)}${m === hoyMes ? ' (este mes)' : ''}</option>`).join('')}</select>
+    <div class="grid">
+      <div class="kpi big"><div class="n">${soles(cob)} <span style="font-size:15px;color:var(--mut);font-weight:400">de ${soles(proy)}</span></div>
+        <div class="bar"><i style="width:${pct(cob, proy)}%"></i></div><div class="l">${pct(cob, proy)}% cobrado de lo proyectado en ${nomMes(mesCb)}${ase === 'TODAS' ? '' : ' · ' + esc(ase)}</div></div>
+      <div class="kpi verde"><div class="n">${soles(cob)}</div><div class="l">✅ ya cobrado (${cobrados.length})</div></div>
+      <div class="kpi"><div class="n">${soles(proy - cob)}</div><div class="l">⏳ falta cobrar (${pend.length})</div></div>
+      <div class="kpi rojo big"><div class="n">${soles(sum(atrasados))}</div><div class="l">⚠️ atrasado, todos los meses (${atrasados.length})</div></div>
+    </div>`;
+  if (ase === 'TODAS') {
+    const porAse = {};
+    delMes.forEach((c) => { const a = porAse[c.asesora] = porAse[c.asesora] || { p: 0, c: 0, n: 0 }; a.p += c.monto; a.n++; if (c.cobrado) a.c += c.monto; });
+    atrasados.forEach((c) => { const a = porAse[c.asesora] = porAse[c.asesora] || { p: 0, c: 0, n: 0 }; a.atr = (a.atr || 0) + c.monto; });
+    h += `<h2>Por asesora <small>${nomMes(mesCb)}</small></h2>` + Object.keys(porAse).sort((a, b) => porAse[b].p - porAse[a].p).map((k) => {
+      const a = porAse[k];
+      return `<div class="ase"><div class="top"><span class="nom">${esc(k)}</span><span class="pc">${pct(a.c, a.p)}%</span></div>
+        <div class="mini"><div><b>${soles(a.p)}</b><span>proyectado</span></div><div><b style="color:var(--grn)">${soles(a.c)}</b><span>cobrado</span></div><div><b>${soles(a.p - a.c)}</b><span>falta</span></div></div>
+        ${a.atr ? `<div class="alerta">⚠️ ${soles(a.atr)} atrasado (todos los meses)</div>` : ''}</div>`;
+    }).join('');
+  }
+  h += `<h2>⚠️ Atrasados <small>${atrasados.length} · ${soles(sum(atrasados))}</small></h2>` + lista(atrasados, filaCobro, 'Nada atrasado 👌', 10);
+  h += `<h2>⏳ Por cobrar en ${nomMes(mesCb)} <small>${pend.length} · ${soles(sum(pend))}</small></h2>` + lista(pend, filaCobro, 'Nada pendiente este mes.', 20);
+  h += `<h2>✅ Cobrados en ${nomMes(mesCb)} <small>${cobrados.length} · ${soles(cob)}</small></h2>` + lista(cobrados.slice().reverse(), filaCobro, 'Todavía nada cobrado.', 10);
+  h += `<div class="sub" style="margin-top:10px">Cobros actualizados ${esc(CB.generado)} · cargó en ${CB.seg} s · mismos números que el cuadro de COLA RENOVAR</div>`;
   return h;
 }
 
@@ -179,6 +268,72 @@ const filaFP = (a) => `<div class="row"><div class="hora">${esc(a.hora || '—')
   <div class="t">${esc(a.persona)}${a.hecha ? '<span class="tag ok">asistió</span>' : ''}</div>
   <div class="d">${esc(a.asunto)}</div></div>${wa(a.tel)}</div>`;
 
+/* ---------- 💵 Ingresos por día o mes (DATOS_ORIGEN, igual que el cuadro diario) ---------- */
+let ING = { fecha: '', mes: false, r: null, cargando: false };
+function cargarIngresos() {
+  ING.fecha = ING.fecha || D.fecha; ING.r = null; ING.cargando = true;
+  google.script.run
+    .withSuccessHandler((r) => { ING.r = r; ING.cargando = false; if (tab === 'hoy') pintar(); })
+    .withFailureHandler((e) => { ING.r = { error: e.message || String(e) }; ING.cargando = false; if (tab === 'hoy') pintar(); })
+    .getIngresos(ING.fecha, ING.mes);
+}
+function seccionIngresos() {
+  const f = ING.fecha || D.fecha;
+  const datos = !ING.mes && f === D.fecha ? D.ingresosHoy : (ING.r && !ING.r.error ? ING.r.datos : null);
+  const filas = Object.entries(datos || {}).filter(([n]) => ase === 'TODAS' || n === norm(ase)).sort((p, q) => q[1].t - p[1].t);
+  const total = filas.reduce((t, [, a]) => t + a.t, 0);
+  let h = `<h2>💵 Ingresos ${ING.mes ? 'del mes' : f === D.fecha ? 'de hoy' : 'del ' + fm(f)} <small>${datos ? soles(total) : ''}</small></h2>
+    <div style="display:flex;gap:8px"><input type="date" class="sel" id="ingF" value="${f}" max="${D.fecha}">
+    <select class="sel" id="ingM"><option value="dia">Día</option><option value="mes" ${ING.mes ? 'selected' : ''}>Mes completo</option></select></div>`;
+  if (ING.r && ING.r.error) return h + `<div class="err">⚠️ ${esc(ING.r.error)}</div>`;
+  if (!datos) return h + `<div class="list"><div class="vacio">Cargando…</div></div>`;
+  return h + lista(filas, ([n, a]) => `<div class="row"><div class="main"><div class="t">${esc(n)}</div>
+    <div class="d">${Object.entries(a.c).map(([c, m]) => esc(c) + ' ' + soles(m)).join(' · ')}</div></div><div class="t">${soles(a.t)}</div></div>`,
+    'No hay ingresos registrados.');
+}
+
+/* ---------- 🎁 Referidos (pestaña REFERIDOS de VENTAS RETENCIÓN) ----------
+   Se muestra al instante lo guardado en el celular y se actualiza por detrás una vez por sesión. */
+let RF = (() => { try { return JSON.parse(localStorage.getItem('rr_ref') || 'null'); } catch (e) { return null; } })();
+let rfCargando = false, rfFresco = false, RF_MES = '', RF_ABIERTO = false;   // la sección empieza cerrada
+function cargarReferidos(forzar) {
+  if (rfCargando) return; rfCargando = true;
+  google.script.run
+    .withSuccessHandler((r) => { RF = r; rfCargando = false; rfFresco = true; try { localStorage.setItem('rr_ref', JSON.stringify(r)); } catch (e) {} if (tab === 'hoy') pintar(); })
+    .withFailureHandler((e) => { rfCargando = false; rfFresco = true; if (!RF) RF = { error: e.message || String(e) }; if (tab === 'hoy') pintar(); })
+    .getReferidos(!!forzar);
+}
+function seccionReferidos() {
+  if (!rfFresco && !rfCargando) setTimeout(() => cargarReferidos(false), 0);
+  if (!RF) return `<h2>🎁 Referidos</h2><div class="list"><div class="vacio">Cargando…</div></div>`;
+  if (RF.error) return `<h2>🎁 Referidos</h2><div class="err">⚠️ ${esc(RF.error)}</div>`;
+  const mia = (x) => ase === 'TODAS' || norm(x) === norm(ase);
+  const esIns = (x) => /INSCRIT|CONVERT|MATRICUL/.test(x.estado);
+  const meses = [...new Set(RF.registro.map((x) => x.mes).filter(Boolean))].sort().reverse();
+  const regs = RF.registro.filter((x) => mia(x.asesora) && (RF_MES === '' || (RF_MES === 'SF' ? !x.mes : x.mes === RF_MES)));
+  const ins = regs.filter(esIns).length, cont = regs.filter((x) => x.estado !== 'PENDIENTE').length;
+  const pend = regs.filter((x) => !esIns(x) && !/DESCART|NO INTERES/.test(x.estado));
+  let h = `<details id="refBox" class="desp" ${RF_ABIERTO ? 'open' : ''}><summary>🎁 Referidos <small>${regs.length} · ${pend.length} por contactar${rfCargando ? ' · actualizando…' : ''}</small></summary>
+    <select class="sel" id="refMes"><option value="">📅 Todos los meses</option>${meses.map((m) => `<option value="${m}" ${m === RF_MES ? 'selected' : ''}>📅 ${nomMes(m)}</option>`).join('')}
+    <option value="SF" ${RF_MES === 'SF' ? 'selected' : ''}>Sin fecha de captura</option></select>
+    <div class="grid">
+    <div class="kpi"><div class="n">${regs.length}</div><div class="l">referidos</div></div>
+    <div class="kpi"><div class="n">${cont}</div><div class="l">contactados</div></div>
+    <div class="kpi"><div class="n">${ins}</div><div class="l">inscritos</div></div>
+    <div class="kpi"><div class="n">${regs.length ? Math.round(ins * 100 / regs.length) : 0}%</div><div class="l">conversión</div></div></div>`;
+  // por asesora: lo del mes elegido + la meta mensual de la hoja
+  const por = {};
+  regs.forEach((x) => { const p = por[x.asesora] || (por[x.asesora] = { n: 0, i: 0 }); p.n++; if (esIns(x)) p.i++; });
+  const metas = {}; (RF.metas || []).forEach((m) => { metas[norm(m.asesora)] = m; });
+  const filas = Object.entries(por).sort((p, q) => q[1].n - p[1].n);
+  h += lista(filas, ([n, p]) => { const m = metas[norm(n)];
+    return `<div class="row"><div class="main"><div class="t">${esc(n)}</div><div class="d">${p.n} referidos · ${p.i} inscritos${m ? ` · meta del mes ${esc(m.meta)} ref / ${esc(m.metaIns)} ins` : ''}</div></div></div>`; }, 'Sin referidos en este periodo.');
+  h += `<h2>Referidos por contactar <small>${pend.length}</small></h2>` + lista(pend, (x) => `<div class="row"><div class="main">
+    <div class="t">${esc(x.referido || 'Sin nombre')}</div><div class="d">de ${esc(x.alumno)} · ${esc(x.asesora)} · ${esc(x.estado)}${x.fecha ? ' · ' + esc(x.fecha) : ''}${x.notas ? ' · ' + esc(x.notas) : ''}</div></div>${wa(x.tel)}</div>`,
+    'Nada pendiente 👌');
+  return h + '</details>';
+}
+
 function pintar() {
   if (!D) return;
   pintarChips();
@@ -202,9 +357,10 @@ function pintar() {
       <div class="kpi"><div class="n">${pct(d30, n)}%</div><div class="l">vino en 30 días</div></div>
       <div class="kpi"><div class="n" style="color:var(--ice)">${riesgo}</div><div class="l">🔥 en riesgo (+10 días)</div></div>
       <div class="kpi"><div class="n">${ins.length}</div><div class="l">inscritos hoy</div></div>
-      <div class="kpi"><div class="n">${soles(ins.reduce((t, x) => t + x.pago, 0))}</div><div class="l">venta de hoy</div></div>
+      <div class="kpi"><div class="n">${soles(D.ingresosHoy ? Object.keys(D.ingresosHoy).filter((n) => ase === 'TODAS' || n === norm(ase)).reduce((t, n) => t + D.ingresosHoy[n].t, 0) : ins.reduce((t, x) => t + x.pago, 0))}</div><div class="l">venta de hoy</div></div>
     </div>`;
     if (nunca) h += `<div class="sub" style="margin-bottom:10px">${nunca} socios activos nunca registraron asistencia.</div>`;
+    h += seccionIngresos() + seccionReferidos();
     h += `<h2>Inscritos hoy <small>${ins.length}</small></h2>` + lista(ins, (x) =>
       `<div class="row"><div class="main"><div class="t">${esc(x.nombre)}</div><div class="d">${esc(x.plan)} · ${soles(x.pago)} · ${esc(x.asesora)}</div></div>${wa(x.tel)}</div>`, 'Todavía nadie hoy.');
   }
@@ -223,6 +379,15 @@ function pintar() {
   }
 
   if (tab === 'eq') h = pintarEquipo();
+  if (tab === 'cb') h = pintarCobros();
+  if (tab === 'vd') {
+    if (VD == null) { if (!vdCargando) cargarVentasDia(false); h = '<div class="cargando">Cargando cuadro de ventas…</div>'; }
+    else h = VD;
+  }
+  if (tab === 'sm') {
+    if (SM == null) { if (!smCargando) cargarSemanal(false); h = '<div class="cargando">Cargando informe semanal… (si es la primera vez tarda ~1 min)</div>'; }
+    else h = SM;
+  }
 
   if (tab === 'ret') {
     const riesgo = socios.filter((s) => s.sinVenir == null || s.sinVenir > 10)
@@ -241,6 +406,12 @@ function pintar() {
 
   $('#main').innerHTML = h;
   document.querySelectorAll('.seg button').forEach((b) => b.onclick = () => { periodo = b.dataset.p; pintar(); });
+  const mc = $('#mesCb'); if (mc) mc.onchange = () => { mesCb = mc.value; pintar(); };
+  const iF = $('#ingF'), iM = $('#ingM');
+  const cambioIng = () => { ING.fecha = iF.value || D.fecha; ING.mes = iM.value === 'mes'; if (ING.mes || ING.fecha !== D.fecha) cargarIngresos(); else { ING.r = null; } pintar(); };
+  if (iF) { iF.onchange = cambioIng; iM.onchange = cambioIng; }
+  const rm = $('#refMes'); if (rm) rm.onchange = () => { RF_MES = rm.value; pintar(); };
+  const rb = $('#refBox'); if (rb) rb.ontoggle = () => { RF_ABIERTO = rb.open; };
 }
 
 document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
@@ -248,7 +419,7 @@ document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
   document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('on', x === b));
   pintar(); window.scrollTo(0, 0);
 });
-$('#refresh').onclick = () => { cargar(true); if (E || tab === 'eq') { E = null; cargarEquipo(false); } };
+$('#refresh').onclick = () => { if (tab === 'cb') { CB = null; cargarCobros(); pintar(); return; } if (tab === 'sm') { SM = null; cargarSemanal(true); pintar(); return; } if (VD != null || tab === 'vd') { VD = null; cargarVentasDia(true); } cargar(true); if (tab === 'hoy') { cargarReferidos(true); if (ING.mes || (ING.fecha && ING.fecha !== D.fecha)) cargarIngresos(); } if (E || tab === 'eq') { E = null; cargarEquipo(false); } };
 cargar(false);
 </script>
 </body>
