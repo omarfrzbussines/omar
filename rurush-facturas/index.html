@@ -1029,7 +1029,7 @@ document.addEventListener('click', async (ev) => {
   if (t.dataset.comp != null) { F.comprobante = t.dataset.comp; return pintar(); }
   if (t.dataset.metodo != null) { F.metodo = t.dataset.metodo; return pintar(); }
   if (t.id === 'guardar') { t.disabled = true; try { await guardar(); } catch (e) { t.disabled = false; toast('❌ ' + e.message, 5000); } return; }
-  if (t.id === 'reintentar') { permitirLogin = true; return procesarCola(); }
+  if (t.id === 'reintentar') { permitirLogin = true; try { await cargarConfig(); BASE_FOTOS = null; Object.keys(MES_CACHE).forEach((k) => delete MES_CACHE[k]); } catch (e) { /* sin internet */ } return procesarCola(); }
   if (t.id === 'cGuardar') return guardarAjustes();
   if (t.id === 'cCopiar') {
     const link = location.origin + location.pathname + '?carpeta=' + encodeURIComponent($('#cCarpeta').value.trim() || carpetaConf());
@@ -1135,6 +1135,8 @@ $('#cam').addEventListener('change', agregarFotos);
 $('#gal').addEventListener('change', agregarFotos);
 
 window.addEventListener('online', procesarCola);
+// Con la app abierta, lo pendiente se reintenta solo cada 2 minutos.
+setInterval(() => { if (document.visibilityState === 'visible') procesarCola(); }, 120000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') procesarCola(); });
 
 /* ---------- arranque ---------- */
