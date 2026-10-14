@@ -98,14 +98,14 @@ function nu_pdAll(paths) {
 // socios con membresía vigente en AppsFit (hoja '3. BASE DE SOCIOS'). Guardado 6 h (la base se actualiza una vez al día).
 // { fin: { celular: 'yyyy-MM-dd' vencimiento }, nom: [[nombre sin tildes, celular], ...] }
 function nu_base() {
-  const c = CacheService.getScriptCache(), k = 'nu_base2_' + nu_hoy();
+  const c = CacheService.getScriptCache(), k = 'nu_base3_' + nu_hoy();
   const g = c.get(k); if (g) return JSON.parse(g);
   const fin = {}, nom = [], hoy = nu_hoy();
   (Sheets.Spreadsheets.Values.get(NU_BASE_ID, "'3. BASE DE SOCIOS'!B6:I1000").values || []).forEach((r) => {
     const t = nu_tel(r[2]), f = nu_iso(r[7]);
     if (!t || !(f >= hoy)) return;
     if (!fin[t] || f > fin[t]) fin[t] = f;
-    nom.push([nu_sinTildes(r[1]), t]);
+    nom.push([nu_sinTildes(r[1]), t, String(r[0] || '').trim()]);   // [nombre, celular, código AppsFit]
   });
   const o = { fin: fin, nom: nom };
   try { c.put(k, JSON.stringify(o), 21600); } catch (e) { /* muy grande para el caché: se relee la próxima vez */ }
@@ -116,9 +116,10 @@ function nu_sinTildes(s) { return String(s || '').toLowerCase().normalize('NFD')
 // fichas de Pipedrive de los socios VIGENTES cuyo nombre en AppsFit contiene todas las palabras buscadas
 // (con apellidos comunes Pipedrive devuelve solo 30 de cientos y los activos pueden quedar fuera)
 function nu_buscarVigentes(q, yaTels) {
+  const cod = String(q || '').trim().replace(/^#/, '');
   const pal = nu_sinTildes(q).split(/\s+/).filter((w) => w.length >= 2);
-  if (!pal.length) return [];
-  const tels = nu_base().nom.filter((x) => pal.every((w) => x[0].indexOf(w) >= 0)).map((x) => x[1])
+  if (!pal.length && !/^\d{1,4}$/.test(cod)) return [];
+  const tels = nu_base().nom.filter((x) => /^\d{1,4}$/.test(cod) ? x[2] === cod : pal.every((w) => x[0].indexOf(w) >= 0)).map((x) => x[1])
     .filter((t, i, l) => l.indexOf(t) === i && !(yaTels && yaTels[t])).slice(0, 6);   // solo los que Pipedrive no trajo
   if (!tels.length) return [];
   const out = [];
