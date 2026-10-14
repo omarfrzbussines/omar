@@ -155,9 +155,18 @@ function appsfitClientes(typeDate, desde, hasta, reintento) {
 /* ---------- Pipedrive ---------- */
 
 function pd(path) {
-  const r = UrlFetchApp.fetch(PIPEDRIVE_BASE + path, {
-    headers: { 'x-api-token': token('PIPEDRIVE_TOKEN') }, muteHttpExceptions: true
-  });
+  // "Dirección no disponible" / timeouts son cortes de red pasajeros de Google: se reintenta 2 veces
+  let r;
+  for (let i = 0; ; i++) {
+    try {
+      r = UrlFetchApp.fetch(PIPEDRIVE_BASE + path, { headers: { 'x-api-token': token('PIPEDRIVE_TOKEN') }, muteHttpExceptions: true });
+      if (r.getResponseCode() >= 500 && i < 2) { Utilities.sleep(800 * (i + 1)); continue; }
+      break;
+    } catch (e) {
+      if (i >= 2) throw new Error('Pipedrive no respondió (corte de red). Toca 🔄 en un momento.');
+      Utilities.sleep(800 * (i + 1));
+    }
+  }
   let j = null;
   try { j = JSON.parse(r.getContentText()); } catch (e) { /* sin JSON */ }
   if (r.getResponseCode() !== 200 || (j && j.success === false)) {
