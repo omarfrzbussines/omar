@@ -86,6 +86,43 @@ function nu_pdAll(paths) {
       return j;
     });
 }
+// socios con membresía vigente en AppsFit (hoja '3. BASE DE SOCIOS'). Guardado 10 min.
+// { fin: { celular: 'yyyy-MM-dd' vencimiento }, nom: [[nombre sin tildes, celular], ...] }
+function nu_base() {
+  const c = CacheService.getScriptCache(), k = 'nu_base_' + nu_hoy();
+  const g = c.get(k); if (g) return JSON.parse(g);
+  const fin = {}, nom = [], hoy = nu_hoy();
+  (Sheets.Spreadsheets.Values.get(NU_BASE_ID, "'3. BASE DE SOCIOS'!B6:I1000").values || []).forEach((r) => {
+    const t = nu_tel(r[2]), f = nu_iso(r[7]);
+    if (!t || !(f >= hoy)) return;
+    if (!fin[t] || f > fin[t]) fin[t] = f;
+    nom.push([nu_sinTildes(r[1]), t]);
+  });
+  const o = { fin: fin, nom: nom };
+  try { c.put(k, JSON.stringify(o), 600); } catch (e) { /* muy grande para el caché: se relee la próxima vez */ }
+  return o;
+}
+function nu_vigentes() { return nu_base().fin; }
+function nu_sinTildes(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zñ0-9 ]/g, ' '); }
+// fichas de Pipedrive de los socios VIGENTES cuyo nombre en AppsFit contiene todas las palabras buscadas
+// (con apellidos comunes Pipedrive devuelve solo 30 de cientos y los activos pueden quedar fuera)
+function nu_buscarVigentes(q) {
+  const pal = nu_sinTildes(q).split(/\s+/).filter((w) => w.length >= 2);
+  if (!pal.length) return [];
+  const tels = nu_base().nom.filter((x) => pal.every((w) => x[0].indexOf(w) >= 0)).map((x) => x[1])
+    .filter((t, i, l) => l.indexOf(t) === i).slice(0, 6);
+  if (!tels.length) return [];
+  const out = [];
+  nu_pdAll(tels.map((t) => '/persons/search?limit=5&fields=phone&term=' + t)).forEach((j, i) =>
+    (((j.data || {}).items) || []).filter((it) => (it.item.phones || []).map(nu_tel).indexOf(tels[i]) >= 0).forEach((it) => out.push(it)));
+  return out;
+}
+// orden de búsqueda: 0 vigente en AppsFit · 1 organización ALUMNOS ACTIVOS en Pipedrive · 2 sin dato · 3 INACTIVO
+function nu_nivel(tels, org, vig) {
+  if (tels.some((t) => vig[t])) return 0;
+  org = String(org || '');
+  return /INACTIV/i.test(org) ? 3 : (/ACTIV/i.test(org) ? 1 : 2);
+}
 // resultados de /persons/search: solo los del mejor nivel de coincidencia
 function nu_mejores(items) {
   const top = items.reduce((m, it) => Math.max(m, it.result_score || 0), 0);

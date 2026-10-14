@@ -310,10 +310,16 @@ function dg_buscar(pin, q) {
   const tel = nu_tel(q);
   // Pipedrive corta al azar entre resultados del mismo puntaje: se piden 30 y se quitan los que solo se parecen ("Clara" al buscar "lara")
   const j = nu_pd('/persons/search?limit=30&fields=' + (tel ? 'phone' : 'name') + '&term=' + encodeURIComponent(tel || q));
-  return nu_mejores((j.data || {}).items || []).slice(0, 15).map((it) => ({
-    pid: String(it.item.id), nombre: it.item.name,
-    tels: (it.item.phones || []).map(nu_tel).filter(String).slice(0, 3)
-  })).filter((p) => p.tels.length <= 3);   // fichas con muchos teléfonos son fichas mezcladas: no se ofrecen
+  let vig = {}; try { vig = nu_vigentes(); } catch (e) { /* sin la base de AppsFit se ordena solo por organización */ }
+  let extra = []; if (!tel) try { extra = nu_buscarVigentes(q); } catch (e) { /* sin la base de AppsFit */ }
+  const ya = {};
+  return extra.concat(nu_mejores((j.data || {}).items || [])).filter((it) => !ya[it.item.id] && (ya[it.item.id] = 1)).map((it) => {
+    const tels = (it.item.phones || []).map(nu_tel).filter((t, k, l) => t && l.indexOf(t) === k);
+    const nivel = nu_nivel(tels, it.item.organization && it.item.organization.name, vig);
+    return { pid: String(it.item.id), nombre: it.item.name, tels: tels.slice(0, 3), n: tels.length, nivel: nivel,
+             vence: (tels.map((t) => vig[t]).filter(Boolean).sort().pop()) || '' };
+  }).filter((p) => p.n <= 3)                // fichas con muchos teléfonos son fichas mezcladas: no se ofrecen
+    .sort((a, b) => a.nivel - b.nivel).slice(0, 15);   // socios activos primero
 }
 
 /* 🚶 Sin cita: el socio llegó sin reserva y Diego ya lo evaluó */
