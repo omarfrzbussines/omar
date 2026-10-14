@@ -134,6 +134,8 @@ function ll_traerCola(base, asesora, limite) {
   if (ultima <= LL_FILA_HEADER) return [];
 
   const datos = hoja.getRange(LL_FILA_HEADER + 1, 1, ultima - LL_FILA_HEADER, est.ancho).getValues();
+  const tels = hoja.getRange(LL_FILA_HEADER + 1, est.numero + 1, ultima - LL_FILA_HEADER, 1).getDisplayValues();
+  datos.forEach(function (f, i) { f[est.numero] = tels[i][0]; });
   const yo = String(asesora || "").trim().toUpperCase();
   const salida = [];
 
@@ -215,19 +217,20 @@ function ll_registrar(d) {
     if (!hoja) throw new Error("No existe la pestaña " + d.base);
     const est = ll_estructura(hoja);
     const filaPedida = d.fila;
-    let fila = hoja.getRange(d.fila, 1, 1, est.ancho).getValues()[0];
+    let fila = ll_leerFila(hoja, est, d.fila);
 
     // Si alguien ordenó, insertó o borró filas mientras la asesora llamaba, la persona ya no está en
     // esa fila: se la busca por su celular y, si aparece una sola vez, se guarda en su fila nueva.
     if (d.telefono && ll_limpiarTel(fila[est.numero]) !== ll_limpiarTel(d.telefono)) {
       const tel = ll_limpiarTel(d.telefono), n = hoja.getLastRow();
-      const col = n > LL_FILA_HEADER ? hoja.getRange(LL_FILA_HEADER + 1, est.numero + 1, n - LL_FILA_HEADER, 1).getValues() : [];
+      // se lee el texto que se ve: si la columna quedó con formato de fecha, getValues da "Invalid Date"
+      const col = n > LL_FILA_HEADER ? hoja.getRange(LL_FILA_HEADER + 1, est.numero + 1, n - LL_FILA_HEADER, 1).getDisplayValues() : [];
       const hallados = [];
       col.forEach(function (r, i) { if (ll_limpiarTel(r[0]) === tel) hallados.push(LL_FILA_HEADER + 1 + i); });
       if (hallados.length !== 1) throw new Error("La fila cambió en «" + d.base + "» (fila " + filaPedida + ")" + (hallados.length ? " (el número está repetido)" : " (ya no encuentro ese número)") + ". Toca 🔄 y vuelve a intentar." +
         " [diag: col " + est.numero + "=" + est.head[est.numero] + ", leí «" + fila[est.numero] + "» (" + typeof fila[est.numero] + "), última " + n + ", hoja " + hoja.getName() + "/" + hoja.getParent().getId().slice(0, 6) + ", buscadas " + col.length + "]");
       d.fila = hallados[0];
-      fila = hoja.getRange(d.fila, 1, 1, est.ancho).getValues()[0];
+      fila = ll_leerFila(hoja, est, d.fila);
     }
     const libre = ll_rondaLibre(est, fila);
     if (libre < 0) throw new Error("Esta persona ya tiene las 6 llamadas registradas.");
@@ -287,6 +290,13 @@ function ll_duracion(seg) {
 function ll_fechaTexto(f) {
   const m = String(f).match(/^(\d{4})-(\d{2})-(\d{2})$/);
   return m ? m[3] + "/" + m[2] + "/" + m[1] : String(f);
+}
+
+// Una fila con el celular tal como se ve en el Sheet (no se rompe si NUMERO tiene formato de fecha).
+function ll_leerFila(hoja, est, n) {
+  const fila = hoja.getRange(n, 1, 1, est.ancho).getValues()[0];
+  if (est.numero >= 0) fila[est.numero] = hoja.getRange(n, est.numero + 1).getDisplayValue();
+  return fila;
 }
 
 function ll_limpiarTel(v) {

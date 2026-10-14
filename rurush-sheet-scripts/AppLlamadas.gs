@@ -194,6 +194,7 @@ function app_getCola_(llave, base, excluir, api, como) {
   for (let fin = ultima; fin > LL_FILA_HEADER; fin -= APP_BLOQUE) {
     const ini = Math.max(LL_FILA_HEADER + 1, fin - APP_BLOQUE + 1);
     const datos = api ? hoja.filas(est, ini, fin) : hoja.getRange(ini, 1, fin - ini + 1, est.ancho).getValues();
+    if (!api) { const t = hoja.getRange(ini, est.numero + 1, fin - ini + 1, 1).getDisplayValues(); datos.forEach(function (f, i) { f[est.numero] = t[i][0]; }); }
     leidas += datos.length;
     const bloque = [];
     for (let i = datos.length - 1; i >= 0; i--) {
