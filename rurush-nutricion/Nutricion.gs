@@ -86,6 +86,11 @@ function nu_pdAll(paths) {
       return j;
     });
 }
+// resultados de /persons/search: solo los del mejor nivel de coincidencia
+function nu_mejores(items) {
+  const top = items.reduce((m, it) => Math.max(m, it.result_score || 0), 0);
+  return items.filter((it) => (it.result_score || 0) >= top * 0.5);
+}
 // citas (pendientes y hechas) entre dos fechas, con las dos consultas en paralelo
 function nu_citasRango(desde, hasta) {
   const q = '/activities?type=deadline&user_id=0&limit=500&start=0&start_date=' + nu_mas(desde, -1) + '&end_date=' + nu_mas(hasta, 2) + '&done=';

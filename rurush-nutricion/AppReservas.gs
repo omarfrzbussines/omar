@@ -81,12 +81,12 @@ function rv_buscar(pin, q) {
     pids = items.map((it) => String(it.item.id));
   } else if (q.replace(/[^a-záéíóúñü]/gi, '').length >= 3) {
     modo = 'nombre';
-    const items = ((nu_pd('/persons/search?limit=6&fields=name&term=' + encodeURIComponent(q)).data || {}).items) || [];
+    const items = nu_mejores(((nu_pd('/persons/search?limit=30&fields=name&term=' + encodeURIComponent(q)).data || {}).items) || []);
     pids = items.map((it) => String(it.item.id));
   } else {
     throw new Error('Escribe el celular (9 dígitos), el DNI (8 números) o el nombre y apellido.');
   }
-  return { modo: modo, q: q, tel: tel, dni: modo === 'dni' ? num : '', fichas: rv_fichas(pids.slice(0, 6)) };
+  return { modo: modo, q: q, tel: tel, dni: modo === 'dni' ? num : '', fichas: rv_fichas(pids.slice(0, 12)) };
 }
 function rv_buscarTel(pin, t) { return rv_buscar(pin, t); }
 

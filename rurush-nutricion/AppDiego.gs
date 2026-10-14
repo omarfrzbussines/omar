@@ -308,8 +308,9 @@ function dg_buscar(pin, q) {
   q = String(q || '').trim();
   if (q.length < 3) return [];
   const tel = nu_tel(q);
-  const j = nu_pd('/persons/search?limit=8&fields=' + (tel ? 'phone' : 'name') + '&term=' + encodeURIComponent(tel || q));
-  return ((j.data || {}).items || []).map((it) => ({
+  // Pipedrive corta al azar entre resultados del mismo puntaje: se piden 30 y se quitan los que solo se parecen ("Clara" al buscar "lara")
+  const j = nu_pd('/persons/search?limit=30&fields=' + (tel ? 'phone' : 'name') + '&term=' + encodeURIComponent(tel || q));
+  return nu_mejores((j.data || {}).items || []).slice(0, 15).map((it) => ({
     pid: String(it.item.id), nombre: it.item.name,
     tels: (it.item.phones || []).map(nu_tel).filter(String).slice(0, 3)
   })).filter((p) => p.tels.length <= 3);   // fichas con muchos teléfonos son fichas mezcladas: no se ofrecen
