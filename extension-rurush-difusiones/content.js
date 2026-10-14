@@ -261,7 +261,8 @@ let last = 0;
 function marcarActividad(e) {
   if (!e.isTrusted || Date.now() - last < 30000) return;
   last = Date.now();
-  chrome.runtime.sendMessage({ type: 'waActivity' }).catch(() => {});
+  // tras recargar la extensión, el script viejo queda huérfano en la pestaña: no avisar nada
+  try { if (chrome.runtime && chrome.runtime.id) chrome.runtime.sendMessage({ type: 'waActivity' }).catch(() => {}); } catch (e) {}
 }
 window.addEventListener('keydown', marcarActividad, true);
 window.addEventListener('mousedown', marcarActividad, true);
