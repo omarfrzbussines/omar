@@ -26,6 +26,7 @@ function rv_titulo(n) { return String(n || '').trim().replace(/\s+/g, ' ').toLow
 // 2 por persona (datos + actividades) en una sola espera, sin recorrer la agenda completa.
 function rv_fichas(pids) {
   if (!pids.length) return [];
+  let vig = {}; try { vig = nu_vigentes(); } catch (e) { /* sin la base de AppsFit */ }
   const js = nu_pdAll(pids.reduce((l, id) => l.concat(['/persons/' + id, '/persons/' + id + '/activities?limit=500']), []));
   return pids.map((id, i) => {
     const p = js[2 * i].data, citas = (js[2 * i + 1].data || []).map(nu_cita).filter(Boolean);
@@ -35,7 +36,8 @@ function rv_fichas(pids) {
     const org = p.org_name || (p.org_id && p.org_id.name) || '';
     return {
       pid: String(p.id), nombre: p.name, dni: String(p[RV_DNI] || ''), org: org,
-      estado: /INACTIV/i.test(org) ? 'inactivo' : (/ACTIV/i.test(org) ? 'activo' : ''),
+      estado: tels.some((t) => vig[t]) ? 'activo' : (/INACTIV/i.test(org) ? 'inactivo' : (/ACTIV/i.test(org) ? 'activo' : '')),
+      vence: tels.map((t) => vig[t]).filter(Boolean).sort().pop() || '',
       tels: tels.slice(0, 4), mezclada: tels.length > 3,
       prox: prox ? { act: String(prox.id), fecha: prox.fecha, hora: prox.hora } : null,
       ultima: hechas.map((c) => c.fecha).sort().pop() || '', evaluaciones: hechas.length,
@@ -81,8 +83,13 @@ function rv_buscar(pin, q) {
     pids = items.map((it) => String(it.item.id));
   } else if (q.replace(/[^a-záéíóúñü]/gi, '').length >= 3) {
     modo = 'nombre';
-    const items = nu_mejores(((nu_pd('/persons/search?limit=30&fields=name&term=' + encodeURIComponent(q)).data || {}).items) || []);
-    pids = items.map((it) => String(it.item.id));
+    let extra = []; try { extra = nu_buscarVigentes(q); } catch (e) { /* sin la base de AppsFit */ }
+    const ya = {};
+    const items = extra.concat(nu_mejores(((nu_pd('/persons/search?limit=30&fields=name&term=' + encodeURIComponent(q)).data || {}).items) || []))
+      .filter((it) => !ya[it.item.id] && (ya[it.item.id] = 1));
+    let vig = {}; try { vig = nu_vigentes(); } catch (e) { /* sin la base se ordena por organización */ }
+    const niv = (it) => nu_nivel((it.item.phones || []).map(nu_tel).filter(String), it.item.organization && it.item.organization.name, vig);
+    pids = items.map((it) => [niv(it), String(it.item.id)]).sort((a, b) => a[0] - b[0]).map((x) => x[1]);   // activos primero
   } else {
     throw new Error('Escribe el celular (9 dígitos), el DNI (8 números) o el nombre y apellido.');
   }
