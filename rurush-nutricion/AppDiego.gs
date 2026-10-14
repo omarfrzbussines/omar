@@ -311,9 +311,11 @@ function dg_buscar(pin, q) {
   // Pipedrive corta al azar entre resultados del mismo puntaje: se piden 30 y se quitan los que solo se parecen ("Clara" al buscar "lara")
   const j = nu_pd('/persons/search?limit=30&fields=' + (tel ? 'phone' : 'name') + '&term=' + encodeURIComponent(tel || q));
   let vig = {}; try { vig = nu_vigentes(); } catch (e) { /* sin la base de AppsFit se ordena solo por organización */ }
-  let extra = []; if (!tel) try { extra = nu_buscarVigentes(q); } catch (e) { /* sin la base de AppsFit */ }
+  const base = nu_mejores((j.data || {}).items || []), yaTels = {};
+  base.forEach((it) => (it.item.phones || []).forEach((p) => { const t = nu_tel(p); if (t) yaTels[t] = 1; }));
+  let extra = []; if (!tel) try { extra = nu_buscarVigentes(q, yaTels); } catch (e) { /* sin la base de AppsFit */ }
   const ya = {};
-  return extra.concat(nu_mejores((j.data || {}).items || [])).filter((it) => !ya[it.item.id] && (ya[it.item.id] = 1)).map((it) => {
+  return extra.concat(base).filter((it) => !ya[it.item.id] && (ya[it.item.id] = 1)).map((it) => {
     const tels = (it.item.phones || []).map(nu_tel).filter((t, k, l) => t && l.indexOf(t) === k);
     const nivel = nu_nivel(tels, it.item.organization && it.item.organization.name, vig);
     return { pid: String(it.item.id), nombre: it.item.name, tels: tels.slice(0, 3), n: tels.length, nivel: nivel,
