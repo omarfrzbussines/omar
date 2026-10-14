@@ -95,13 +95,16 @@ function nu_pdAll(paths) {
       return j;
     });
 }
-// socios con membresía vigente en AppsFit (hoja '3. BASE DE SOCIOS'). Guardado 6 h (la base se actualiza una vez al día).
+// socios con membresía vigente: copia de AppsFit (AppsFit.gs) o, de respaldo, la hoja '3. BASE DE SOCIOS'. Guardado en caché hasta la próxima actualización.
 // { fin: { celular: 'yyyy-MM-dd' vencimiento }, nom: [[nombre sin tildes, celular], ...] }
 function nu_base() {
   const c = CacheService.getScriptCache(), k = 'nu_base3_' + nu_hoy();
   const g = c.get(k); if (g) return JSON.parse(g);
   const fin = {}, nom = [], hoy = nu_hoy();
-  (Sheets.Spreadsheets.Values.get(NU_BASE_ID, "'3. BASE DE SOCIOS'!B6:I1000").values || []).forEach((r) => {
+  // 1º la copia de AppsFit en vivo (AppsFit.gs, se actualiza cada hora); si no hay, la hoja BASE DE SOCIOS
+  let filas = null;
+  try { const af = af_copia_(); if (af) filas = af.map((r) => [r[0], r[1], r[2], r[3], r[4], r[5], r[5], r[6]]); } catch (e) { /* respaldo abajo */ }
+  (filas || Sheets.Spreadsheets.Values.get(NU_BASE_ID, "'3. BASE DE SOCIOS'!B6:I1000").values || []).forEach((r) => {
     const t = nu_tel(r[2]), f = nu_iso(r[7]);
     if (!t || !(f >= hoy)) return;
     if (!fin[t] || f > fin[t]) fin[t] = f;
