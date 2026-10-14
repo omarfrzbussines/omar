@@ -214,11 +214,18 @@ function ll_registrar(d) {
     const hoja = SpreadsheetApp.getActive().getSheetByName(d.base);
     if (!hoja) throw new Error("No existe la pestaña " + d.base);
     const est = ll_estructura(hoja);
-    const fila = hoja.getRange(d.fila, 1, 1, est.ancho).getValues()[0];
+    let fila = hoja.getRange(d.fila, 1, 1, est.ancho).getValues()[0];
 
-    // Si alguien ordenó o insertó filas mientras la asesora llamaba, ya no es la misma persona.
+    // Si alguien ordenó, insertó o borró filas mientras la asesora llamaba, la persona ya no está en
+    // esa fila: se la busca por su celular y, si aparece una sola vez, se guarda en su fila nueva.
     if (d.telefono && ll_limpiarTel(fila[est.numero]) !== ll_limpiarTel(d.telefono)) {
-      throw new Error("La fila cambió en el Sheet. Refresca la cola y vuelve a intentar.");
+      const tel = ll_limpiarTel(d.telefono), n = hoja.getLastRow();
+      const col = n > LL_FILA_HEADER ? hoja.getRange(LL_FILA_HEADER + 1, est.numero + 1, n - LL_FILA_HEADER, 1).getValues() : [];
+      const hallados = [];
+      col.forEach(function (r, i) { if (ll_limpiarTel(r[0]) === tel) hallados.push(LL_FILA_HEADER + 1 + i); });
+      if (hallados.length !== 1) throw new Error("La fila cambió en el Sheet" + (hallados.length ? " (el número está repetido)" : " (ya no encuentro ese número)") + ". Toca 🔄 y vuelve a intentar.");
+      d.fila = hallados[0];
+      fila = hoja.getRange(d.fila, 1, 1, est.ancho).getValues()[0];
     }
     const libre = ll_rondaLibre(est, fila);
     if (libre < 0) throw new Error("Esta persona ya tiene las 6 llamadas registradas.");
