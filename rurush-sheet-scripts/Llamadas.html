@@ -143,6 +143,7 @@ function traer(reset) {
       trayendo = false;
       if (base !== BASE) return;   // cambió de base mientras cargaba
       ESTADOS = r.estados; HORAS = r.horas; hoy = r.hoy; pend = r.pendientes;
+      r.cola.forEach((x) => { x.base = base; });   // cada persona recuerda de qué base salió
       if (reset) {
         // si ya se estaba mostrando la cola guardada, no cambiarle la persona en pantalla
         const enPantalla = actual();
@@ -279,7 +280,7 @@ function guardar() {
       ? `🧪 Prueba OK: se guardaría en la fila ${r.fila}, ${r.ronda}ª llamada${r.movida ? ' (la fila se había movido)' : ''}`
       : `✓ Guardado: ${e}`))
     .withFailureHandler((err) => { hoy[e]--; pintarMarcador(); toast(`No se guardó (${p.numero}): ${err.message || err}`, true); })
-    .app_guardar(LLAVE, BASE, p.fila, p.numero, e, obs, fpf, fph, intentos, seg);
+    .app_guardar(LLAVE, p.base || BASE, p.fila, p.numero, e, obs, fpf, fph, intentos, seg);
 }
 
 function revisarCola() { if (cola.length - idx <= 5) traer(false); }

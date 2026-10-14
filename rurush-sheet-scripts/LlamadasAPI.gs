@@ -224,7 +224,7 @@ function ll_registrar(d) {
       const col = n > LL_FILA_HEADER ? hoja.getRange(LL_FILA_HEADER + 1, est.numero + 1, n - LL_FILA_HEADER, 1).getValues() : [];
       const hallados = [];
       col.forEach(function (r, i) { if (ll_limpiarTel(r[0]) === tel) hallados.push(LL_FILA_HEADER + 1 + i); });
-      if (hallados.length !== 1) throw new Error("La fila cambió en el Sheet" + (hallados.length ? " (el número está repetido)" : " (ya no encuentro ese número)") + ". Toca 🔄 y vuelve a intentar.");
+      if (hallados.length !== 1) throw new Error("La fila cambió en «" + d.base + "» (fila " + filaPedida + ")" + (hallados.length ? " (el número está repetido)" : " (ya no encuentro ese número)") + ". Toca 🔄 y vuelve a intentar.");
       d.fila = hallados[0];
       fila = hoja.getRange(d.fila, 1, 1, est.ancho).getValues()[0];
     }
