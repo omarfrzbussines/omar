@@ -357,11 +357,10 @@ function app_guardar_(llave, base, fila, numero, estado, obs, fpFecha, fpHora, i
   const sinLlamar = estado === "CLIENTE" && !(Number(intentos) > 0) && cob_esSocio(numero);
   const r = ll_registrar({
     base: base, fila: Number(fila), telefono: numero, asesora: asesora, estado: estado,
-    sinLlamar: sinLlamar, simular: asesora === APP_PRUEBA,   // link de prueba: verifica todo, no escribe
+    sinLlamar: sinLlamar,   // el link OMAR también guarda de verdad (sale "OMAR" como asesor)
     observacion: (sinLlamar ? "🟢 Ya es socio (sin llamar) " : "") + (obs || ""), fechaFp: fpFecha || "", horaFp: fpHora || "",
     intentos: Number(intentos) || 0, segundos: Number(segundos) || 0
   });
-  if (asesora === APP_PRUEBA) return r;
   const cache = CacheService.getScriptCache();
   cache.remove("r" + base + fila);
   // contador de hoy (para el marcador de la app)

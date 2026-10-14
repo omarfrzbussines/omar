@@ -100,6 +100,7 @@ const ASESORA = <?!= JSON.stringify(asesora) ?>;
 const BASES = <?!= JSON.stringify(bases) ?>;
 // base elegida (se recuerda en el celular)
 let BASE = (() => { try { const b = localStorage.getItem('rr_base_' + ASESORA); return BASES.indexOf(b) >= 0 ? b : BASES[0]; } catch (e) { return BASES[0]; } })();
+let enVuelo = {};   // guardados que todavía no responde el servidor, por estado
 let mostrando = false, cola = [], idx = 0, estado = null, ESTADOS = [], HORAS = [], hoy = {}, pend = null, trayendo = false;
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -142,7 +143,9 @@ function traer(reset) {
     .withSuccessHandler((r) => {
       trayendo = false;
       if (base !== BASE) return;   // cambió de base mientras cargaba
-      ESTADOS = r.estados; HORAS = r.horas; hoy = r.hoy; pend = r.pendientes;
+      ESTADOS = r.estados; HORAS = r.horas; pend = r.pendientes;
+      // el servidor aún no cuenta las llamadas que se están guardando: se suman para que el marcador no baje
+      hoy = Object.assign({}, r.hoy); Object.keys(enVuelo).forEach((k) => { hoy[k] = (hoy[k] || 0) + enVuelo[k]; });
       r.cola.forEach((x) => { x.base = base; });   // cada persona recuerda de qué base salió
       if (reset) {
         // si ya se estaba mostrando la cola guardada, no cambiarle la persona en pantalla
@@ -273,13 +276,13 @@ function guardar() {
   const e = estado;
   const intentos = llamada.intentos, seg = segundos();
   try { localStorage.removeItem('rr_llamada'); } catch (err) {}
-  hoy[e] = (hoy[e] || 0) + 1; pintarMarcador();
+  hoy[e] = (hoy[e] || 0) + 1; enVuelo[e] = (enVuelo[e] || 0) + 1; pintarMarcador();
   idx++; pintar(); revisarCola(); guardarLocal();
   google.script.run
-    .withSuccessHandler((r) => toast(r && r.simulado
+    .withSuccessHandler((r) => (enVuelo[e]--, toast(r && r.simulado
       ? `🧪 Prueba OK: se guardaría en la fila ${r.fila}, ${r.ronda}ª llamada${r.movida ? ' (la fila se había movido)' : ''}`
-      : `✓ Guardado: ${e}`))
-    .withFailureHandler((err) => { hoy[e]--; pintarMarcador(); toast(`No se guardó (${p.numero}): ${err.message || err}`, true); })
+      : `✓ Guardado: ${e}`)))
+    .withFailureHandler((err) => { enVuelo[e]--; hoy[e]--; pintarMarcador(); toast(`No se guardó (${p.numero}): ${err.message || err}`, true); })
     .app_guardar(LLAVE, p.base || BASE, p.fila, p.numero, e, obs, fpf, fph, intentos, seg);
 }
 
@@ -428,7 +431,7 @@ $('#base').onchange = () => {
 if (ASESORA === 'OMAR') {
   const b = document.createElement('div');
   b.style.cssText = 'background:#5a3a00;color:#ffd27a;padding:6px 10px;font-size:13px;display:flex;gap:8px;align-items:center;flex-wrap:wrap';
-  b.innerHTML = '<span>🧪 PRUEBA · no se guarda nada</span>' +
+  b.innerHTML = '<span>🧪 OMAR · se guarda de verdad (asesor OMAR)</span>' +
     '<select id="como" style="background:#2a1d00;color:#ffd27a;border:1px solid #8a6400;border-radius:6px;padding:3px">' +
     '<option value="">Ver como: yo</option><option>MONICA</option><option>DANNA</option><option>LAURA</option></select>' +
     '<button id="errores" style="background:#8a6400;color:#fff;border:0;border-radius:6px;padding:4px 8px">🛠 Errores</button>';
