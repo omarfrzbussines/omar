@@ -205,7 +205,7 @@ const LL_MIN_SEG = { "APAGADO": 0, "NO CONTESTO": 15, "CORTO": 15,
 
 function ll_registrar(d) {
   if (!d.fila || !d.estado) throw new Error("Faltan datos de la llamada");
-  if (d.segundos != null && !d.sinLlamar) {   // viene de la app del celular: se exige haber llamado (salvo socio ya inscrito)
+  if (d.segundos != null && !d.sinLlamar && !d.sinMinimo) {   // viene de la app del celular: se exige haber llamado (salvo socio ya inscrito)
     const min = LL_MIN_SEG[String(d.estado).trim().toUpperCase()] || 0;
     if (!(Number(d.intentos) > 0)) throw new Error("Primero toca 📞 Llamar.");
     if (Number(d.segundos) < min) throw new Error("Para marcar " + d.estado + " la llamada debe durar al menos " + min + " s.");

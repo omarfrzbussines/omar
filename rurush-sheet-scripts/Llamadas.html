@@ -46,7 +46,7 @@
   .socio.exsocio { background:#2a2a2a; color:#ccc; }
   .socio button { display:block; width:100%; margin-top:8px; padding:10px; border:0; border-radius:8px; background:#1f7a3f; color:#fff; font-size:15px; font-weight:600; }
   .saltar { width:100%; margin-top:8px; background:none; border:0; color:var(--mut); padding:10px; font-size:14px; }
-  .toast { position:fixed; left:16px; right:16px; bottom:16px; background:#2c2c2e; color:#fff; padding:12px 14px; border-radius:12px; font-size:14px; display:none; z-index:20; }
+  .toast { white-space:pre-line; position:fixed; left:16px; right:16px; bottom:16px; background:#2c2c2e; color:#fff; padding:12px 14px; border-radius:12px; font-size:14px; display:none; z-index:20; }
   .toast.err { background:#5c1f1f; }
   .vacio { text-align:center; color:var(--mut); padding:60px 10px; }
   .tabs { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:10px; }
@@ -67,6 +67,12 @@
   .buscar { display:grid; grid-template-columns:1fr auto; gap:8px; } .buscar button { background:var(--ice); color:#04121f; border:0; border-radius:12px; padding:0 16px; font-weight:700; font-size:15px; }
   .sa { display:inline-block; white-space:nowrap; margin-top:4px; font-size:12px; padding:1px 7px; border-radius:7px; background:var(--line); color:var(--mut); }
   .sa.med { background:#3a2e10; color:#ffcc00; } .sa.alto { background:#3d1515; color:#ff6b6b; }
+  .luego { margin:-16px -16px 14px; padding:12px 16px; border-radius:16px 16px 0 0; background:#3a2e10; color:#ffd666; font-size:14px; }
+  .luego b { font-size:16px; }
+  .card.esLuego { border:2px solid #ffcc00; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+  .chips button { background:var(--line); color:var(--tx); border:0; border-radius:10px; padding:9px 12px; font-size:14px; }
+  .m.prog { background:#3a2e10; color:#ffd666; } .m.prog b { color:#ffd666; }
   .aviso { background:#3a2e10; color:#ffd666; border-radius:10px; padding:10px; font-size:13px; margin-top:10px; }
 </style>
 </head>
@@ -100,7 +106,8 @@ const ASESORA = <?!= JSON.stringify(asesora) ?>;
 const BASES = <?!= JSON.stringify(bases) ?>;
 // base elegida (se recuerda en el celular)
 let BASE = (() => { try { const b = localStorage.getItem('rr_base_' + ASESORA); return BASES.indexOf(b) >= 0 ? b : BASES[0]; } catch (e) { return BASES[0]; } })();
-let enVuelo = {};   // guardados que todavía no responde el servidor, por estado
+let enVuelo = {};
+let PROG = [];      // mis llamadas programadas que todavía no tocan (⏰ llamar luego)   // guardados que todavía no responde el servidor, por estado
 let mostrando = false, cola = [], idx = 0, estado = null, ESTADOS = [], HORAS = [], hoy = {}, pend = null, trayendo = false;
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -143,7 +150,7 @@ function traer(reset) {
     .withSuccessHandler((r) => {
       trayendo = false;
       if (base !== BASE) return;   // cambió de base mientras cargaba
-      ESTADOS = r.estados; HORAS = r.horas; pend = r.pendientes;
+      ESTADOS = r.estados; HORAS = r.horas; pend = r.pendientes; PROG = r.programadas || [];
       // el servidor aún no cuenta las llamadas que se están guardando: se suman para que el marcador no baje
       hoy = Object.assign({}, r.hoy); Object.keys(enVuelo).forEach((k) => { hoy[k] = (hoy[k] || 0) + enVuelo[k]; });
       r.cola.forEach((x) => { x.base = base; });   // cada persona recuerda de qué base salió
@@ -151,8 +158,19 @@ function traer(reset) {
         // si ya se estaba mostrando la cola guardada, no cambiarle la persona en pantalla
         const enPantalla = actual();
         cola = r.cola; idx = 0;
-        if (enPantalla) { const j = cola.findIndex((x) => x.fila === enPantalla.fila); if (j > 0) { cola.splice(j, 1); cola.unshift(enPantalla); } else if (j < 0) cola.unshift(enPantalla); }
-      } else { cola = cola.concat(r.cola); }
+        const igual = (x) => (x.base || base) === (enPantalla.base || base) && x.fila === enPantalla.fila;
+        // ⏰ si llegó una llamada programada y la asesora aún no llamó a quien tiene en pantalla, la programada va primero
+        const ceder = cola[0] && cola[0].luego && !llamada.intentos;
+        if (enPantalla) {
+          const j = cola.findIndex(igual);
+          if (j >= 0) cola.splice(j, 1);
+          cola.splice(ceder ? 1 : 0, 0, enPantalla);
+        }
+        if (enPantalla && ceder && VISTA === 'llamadas') pintar();
+      } else {
+        const ya = {}; cola.forEach((x) => { ya[(x.base || base) + ':' + x.fila] = true; });
+        cola = cola.concat(r.cola.filter((x) => !ya[x.base + ':' + x.fila]));
+      }
       guardarLocal();
       $('#sub').textContent = `Hola ${ASESORA} · cargó en ${((Date.now() - t0) / 1000).toFixed(1)} s${r.api === false ? ' · lectura lenta (falta servicio Sheets)' : ''}`;
       if (!cobros && !cargandoCobros) setTimeout(traerCobros, 500);   // deja lista la pestaña Cobros
@@ -166,7 +184,7 @@ function traer(reset) {
 const actual = () => cola[idx];
 
 // Tiempo mínimo en el marcador para poder marcar cada resultado (igual que en el servidor).
-const MIN_SEG = { 'APAGADO': 0, 'NO CONTESTO': 15, 'CORTO': 15, 'CONTESTO': 30, 'AGENDADO': 30, 'CLIENTE': 30, 'DESCARTADO': 30, 'Otra Ciudad': 30 };
+const MIN_SEG = { 'APAGADO': 0, 'NO CONTESTO': 15, 'CORTO': 15, 'CONTESTO': 30, 'AGENDADO': 30, 'CLIENTE': 30, 'DESCARTADO': 30, 'Otra Ciudad': 30, 'LLAMAR LUEGO': 10 };
 let llamada = { fila: null, intentos: 0, fueraMs: 0, salio: null, toco: 0, wa: 0 };
 const segundos = () => Math.round(llamada.fueraMs / 1000);
 const mmss = (s) => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
@@ -210,7 +228,10 @@ function pintarMarcador() {
   $('#marcador').innerHTML =
     `<div class="m"><b>${total}</b>llamadas hoy</div><div class="m"><b>${cont}</b>contestaron</div>` +
     `<div class="m"><b>${hoy.AGENDADO || 0}</b>agendados</div>` +
-    `<div class="m"><b>${Math.max(cola.length - idx, 0)}</b>en tu cola</div>`;
+    `<div class="m"><b>${Math.max(cola.length - idx, 0)}</b>en tu cola</div>` +
+    (PROG.length ? `<div class="m prog" id="verProg"><b>${PROG.length}</b>⏰ programadas</div>` : '');
+  const vp = $('#verProg');
+  if (vp) vp.onclick = () => toast(PROG.map((x) => `⏰ ${x.texto} · ${x.nombre && !/^[+\d\s()-]+$/.test(x.nombre) ? x.nombre : x.numero}`).join('\n'));
 }
 
 // Socio con plan vigente (vence hoy o después): se puede marcar CLIENTE sin llamar. Vencido = ex-socio.
@@ -228,7 +249,8 @@ function pintar() {
   const fp = true ? `<div id="fpbox" style="display:none"><h2>Fecha y hora del Free Pass</h2>
       <div class="fila2"><input type="date" id="fpf"><select id="fph"><option value="">Hora</option>${HORAS.map((h) => `<option>${h}</option>`).join('')}</select></div></div>` : '';
   $('#main').innerHTML = `
-    <div class="card">
+    <div class="card${p.luego ? ' esLuego' : ''}">
+      ${p.luego ? `<div class="luego">🔔 <b>LLAMAR AHORA</b> · pidió ${esc(p.luego.texto)}${p.luego.nota ? `<br>📝 ${esc(p.luego.nota)}` : ''}<br>Lo atendió ${esc(p.luego.asesora)}</div>` : ''}
       <div class="nombre">${esc(esNum || !p.nombre ? 'Sin nombre' : p.nombre)}</div>
       <div class="num">+51 ${esc(p.numero.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3'))}</div>
       <div class="meta"><span class="tag">${p.ronda}ª llamada</span>${p.dia ? `<span class="tag">lead del ${esc(p.dia)}</span>` : ''}${p.origen ? `<span class="tag">${esc(p.origen)}</span>` : ''}</div>
@@ -246,6 +268,9 @@ function pintar() {
     <h2>¿Cómo salió?</h2>
     <div class="estados">${ESTADOS.map((e) => `<button class="est" data-e="${esc(e)}" disabled>${esc(e)}<small></small></button>`).join('')}</div>
     ${fp}
+    <div id="lgbox" style="display:none"><h2>¿A qué hora lo llamamos?</h2>
+      <div class="chips"><button data-lg="1h">En 1 h</button><button data-lg="18">Hoy 6 pm</button><button data-lg="m10">Mañana 10 am</button></div>
+      <input type="datetime-local" id="lgf"></div>
     <h2>Observación</h2>
     <textarea id="obs" placeholder="Toca aquí y usa el 🎤 del teclado para dictar"></textarea>
     <div class="tip">🎤 Toca el cuadro y el micrófono del teclado: habla y se escribe solo.</div>
@@ -256,9 +281,17 @@ function pintar() {
     document.querySelectorAll('.est').forEach((x) => x.classList.toggle('on', x === b));
     $('#guardar').disabled = false;
     const box = $('#fpbox'); if (box) box.style.display = estado === 'AGENDADO' ? 'block' : 'none';
+    $('#lgbox').style.display = estado === 'LLAMAR LUEGO' ? 'block' : 'none';
+  });
+  document.querySelectorAll('[data-lg]').forEach((b) => b.onclick = () => {
+    const d = new Date(), t = b.dataset.lg;
+    if (t === '1h') d.setTime(d.getTime() + 3600e3);
+    else { if (t === 'm10') d.setDate(d.getDate() + 1); d.setHours(t === 'm10' ? 10 : 18, 0, 0, 0); }
+    const pad = (n) => String(n).padStart(2, '0');
+    $('#lgf').value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   });
   $('#guardar').onclick = guardar;
-  nuevaLlamada(BASE + ':' + p.fila);
+  nuevaLlamada((p.base || BASE) + ':' + p.fila);
   $('#llamar').onclick = () => { llamada.intentos++; llamada.toco = Date.now(); guardarLlamada(); actualizarBotones(); };
   // Llamada por WhatsApp: abre el chat (la asesora toca el 📞 de WhatsApp) y cuenta igual que una timbrada.
   $('#wacall').onclick = () => { llamada.intentos++; llamada.wa = (llamada.wa || 0) + 1; llamada.toco = Date.now(); guardarLlamada(); actualizarBotones(); };
@@ -274,17 +307,37 @@ function guardar() {
   const obs = (llamada.wa ? '📲 WA ' : '') + $('#obs').value;
   const fpf = $('#fpf') ? $('#fpf').value : '', fph = $('#fph') ? $('#fph').value : '';
   const e = estado;
+  let luego = 0;
+  if (e === 'LLAMAR LUEGO') {
+    luego = $('#lgf').value ? new Date($('#lgf').value).getTime() : 0;
+    if (!luego) return toast('⏰ Elige a qué hora lo llamamos.', true);
+    if (luego < Date.now()) return toast('⏰ Esa hora ya pasó.', true);
+  }
   const intentos = llamada.intentos, seg = segundos();
   try { localStorage.removeItem('rr_llamada'); } catch (err) {}
-  hoy[e] = (hoy[e] || 0) + 1; enVuelo[e] = (enVuelo[e] || 0) + 1; pintarMarcador();
+  const k = e === 'LLAMAR LUEGO' ? 'CONTESTO' : e;   // en el Sheet queda como CONTESTO
+  hoy[k] = (hoy[k] || 0) + 1; enVuelo[k] = (enVuelo[k] || 0) + 1; pintarMarcador();
   idx++; pintar(); revisarCola(); guardarLocal();
   google.script.run
-    .withSuccessHandler((r) => (enVuelo[e]--, toast(r && r.simulado
-      ? `🧪 Prueba OK: se guardaría en la fila ${r.fila}, ${r.ronda}ª llamada${r.movida ? ' (la fila se había movido)' : ''}`
-      : `✓ Guardado: ${e}`)))
-    .withFailureHandler((err) => { enVuelo[e]--; hoy[e]--; pintarMarcador(); toast(`No se guardó (${p.numero}): ${err.message || err}`, true); })
-    .app_guardar(LLAVE, p.base || BASE, p.fila, p.numero, e, obs, fpf, fph, intentos, seg);
+    .withSuccessHandler((r) => {
+      enVuelo[k]--;
+      if (!luego) return toast(`✓ Guardado: ${e}`);
+      const texto = new Date(luego).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', hour: 'numeric', minute: '2-digit' });
+      PROG.push({ ms: luego, texto, nombre: p.nombre, numero: p.numero }); PROG.sort((a, b) => a.ms - b.ms);
+      pintarMarcador(); toast(`⏰ Programada: ${texto}. A esa hora te sale primero.`);
+    })
+    .withFailureHandler((err) => { enVuelo[k]--; hoy[k]--; pintarMarcador(); toast(`No se guardó (${p.numero}): ${err.message || err}`, true); })
+    .app_guardar(LLAVE, p.base || BASE, p.fila, p.numero, e, obs, fpf, fph, intentos, seg, luego, p.nombre);
 }
+
+// ⏰ cuando llega la hora de una llamada programada: aviso y se trae la cola (sale primera)
+setInterval(() => {
+  if (document.hidden || VISTA !== 'llamadas' || !PROG.length || PROG[0].ms > Date.now()) return;
+  const x = PROG.shift();
+  toast(`🔔 Hora de llamar: ${x.nombre && !/^[+\d\s()-]+$/.test(x.nombre) ? x.nombre : x.numero} (${x.texto})`);
+  try { navigator.vibrate && navigator.vibrate([300, 150, 300]); } catch (e) {}
+  if (!trayendo) traer(true);
+}, 20000);
 
 function revisarCola() { if (cola.length - idx <= 5) traer(false); }
 

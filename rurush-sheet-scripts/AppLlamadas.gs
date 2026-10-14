@@ -237,17 +237,25 @@ function app_getCola_(llave, base, excluir, api, como) {
 
   nuevos.sort(function (a, c) { return c.diaIso.localeCompare(a.diaIso) || c.fila - a.fila; });
   seguimiento.sort(function (a, c) { return a.ultFecha.localeCompare(c.ultFecha); });
-  const cola = nuevos.concat(seguimiento).slice(0, APP_TAM_COLA);
+  // ⏰ llamar luego: las que ya tocan van primero; las que están programadas no salen antes de su hora
+  let luego = { ahora: [], despues: [], todas: [] };
+  try { luego = app_luegoPara_(asesora); } catch (e) { console.error("luego: " + e); }
+  const programada = {};
+  luego.todas.forEach(function (p) { programada[p.base + ":" + p.fila] = true; });
+  const primero = [];
+  luego.ahora.forEach(function (p) { try { const x = app_luegoItem_(p, api); if (x) primero.push(x); } catch (e) { console.error("luego item: " + e); } });
+  const cola = primero.concat(nuevos.concat(seguimiento).filter(function (x) { return !programada[base + ":" + x.fila]; })).slice(0, APP_TAM_COLA);
   // ¿ya es socio? (BASE DE SOCIOS). Si falla, la cola sale igual, sin el aviso.
   let socios = {};
   try { socios = cob_sociosPorTel(); } catch (e) {}
   cola.forEach(function (x) { if (socios[x.numero]) x.socio = socios[x.numero]; });
   const res = {};
-  cola.forEach(function (x) { res["r" + base + x.fila] = asesora; });
+  cola.forEach(function (x) { res["r" + (x.base || base) + x.fila] = asesora; });
   if (cola.length && quien !== APP_PRUEBA) cache.putAll(res, APP_RESERVA_SEG);
 
   return {
-    asesora: asesora, cola: cola, hoy: app_contadorHoy(asesora), estados: APP_ESTADOS, horas: LL_HORAS,
+    asesora: asesora, cola: cola, hoy: app_contadorHoy(asesora), estados: APP_ESTADOS.concat([APP_LUEGO]), horas: LL_HORAS,
+    programadas: luego.despues,
     pendientes: null, leidas: leidas, ms: Date.now() - t0, api: api
   };
 }
@@ -342,26 +350,39 @@ function app_probarApi() {
   }
 }
 
-function app_guardar(llave, base, fila, numero, estado, obs, fpFecha, fpHora, intentos, segundos) {
+function app_guardar(llave, base, fila, numero, estado, obs, fpFecha, fpHora, intentos, segundos, luego, nombre) {
   try {
-    return app_guardar_(llave, base, fila, numero, estado, obs, fpFecha, fpHora, intentos, segundos);
+    return app_guardar_(llave, base, fila, numero, estado, obs, fpFecha, fpHora, intentos, segundos, luego, nombre);
   } catch (e) {
     app_logError(llave, "guardar", base, fila, numero, estado, e);
     throw e;
   }
 }
-function app_guardar_(llave, base, fila, numero, estado, obs, fpFecha, fpHora, intentos, segundos) {
+function app_guardar_(llave, base, fila, numero, estado, obs, fpFecha, fpHora, intentos, segundos, luego, nombre) {
   const asesora = app_asesora(llave);
   if (APP_BASES.indexOf(base) < 0) throw new Error("Base no habilitada: " + base);
+  // ⏰ "llámame más tarde": se guarda como CONTESTO con la hora en la observación y queda programada
+  let msLuego = 0;
+  if (estado === APP_LUEGO) {
+    msLuego = Number(luego) || 0;
+    if (!(Number(intentos) > 0)) throw new Error("Primero toca 📞 Llamar.");
+    if (!(msLuego > Date.now() - 5 * 60000)) throw new Error("Elige una hora que todavía no pasó.");
+    if (msLuego > Date.now() + 30 * 864e5) throw new Error("Elige una hora dentro de los próximos 30 días.");
+    estado = "CONTESTO";
+    obs = "⏰ Volver a llamar " + app_luegoTexto_(msLuego) + (obs ? " · " + obs : "");
+  }
   if (APP_ESTADOS.indexOf(estado) < 0) throw new Error("Estado no válido.");
   // Si ya es socio puede marcarse CLIENTE sin llamar (se verifica aquí, no en el celular).
   const sinLlamar = estado === "CLIENTE" && !(Number(intentos) > 0) && cob_esSocio(numero);
   const r = ll_registrar({
     base: base, fila: Number(fila), telefono: numero, asesora: asesora, estado: estado,
     sinLlamar: sinLlamar,   // el link OMAR también guarda de verdad (sale "OMAR" como asesor)
+    sinMinimo: msLuego > 0,  // "llámame luego" suele ser una llamada corta
     observacion: (sinLlamar ? "🟢 Ya es socio (sin llamar) " : "") + (obs || ""), fechaFp: fpFecha || "", horaFp: fpHora || "",
     intentos: Number(intentos) || 0, segundos: Number(segundos) || 0
   });
+  try { app_luegoGuardar_(asesora, base, r.fila || Number(fila), numero, nombre, msLuego, msLuego ? String(obs).replace(/^⏰ Volver a llamar [^·]*(· )?/, "") : ""); }
+  catch (e) { if (msLuego) throw new Error("Se guardó como CONTESTO pero no se pudo programar la hora: " + e.message); console.error("luego: " + e); }
   const cache = CacheService.getScriptCache();
   cache.remove("r" + base + fila);
   // contador de hoy (para el marcador de la app)
@@ -434,4 +455,97 @@ function app_getColaDiag_(asesora, base) {
   const cache = CacheService.getScriptCache();
   r.cola.forEach(function (x) { cache.remove("r" + base + x.fila); });
   return r.cola.length + " personas · " + r.leidas + " filas leídas · " + (r.api ? "con API" : "SIN API (lento)");
+}
+
+/* ---------- ⏰ LLAMAR LUEGO (pestaña LLAMAR LUEGO) ----------
+   El cliente pide "llámame a las 6": la llamada se guarda como CONTESTO con la nota y queda
+   programada aquí. A la hora sale primera en la cola de la asesora que lo atendió; si en
+   APP_LUEGO_LIBRE_MIN no lo llamó, le sale a cualquier asesora. Al volver a llamarlo
+   (guardar cualquier resultado) la programación queda HECHA. */
+const APP_LUEGO = "LLAMAR LUEGO";
+const APP_LUEGO_LIBRE_MIN = 30;
+const APP_LUEGO_COLS = ["CREADO", "ASESORA", "BASE", "FILA", "CELULAR", "NOMBRE", "LLAMAR A LAS", "NOTA", "ESTADO", "MS"];
+
+function app_luegoHoja_(crear) {
+  const ss = SpreadsheetApp.getActive();
+  let h = ss.getSheetByName(APP_LUEGO);
+  if (!h && crear) {
+    h = ss.insertSheet(APP_LUEGO);
+    h.appendRow(APP_LUEGO_COLS);
+    h.setFrozenRows(1);
+  }
+  return h;
+}
+
+// Programaciones pendientes [{row, asesora, base, fila, numero, nombre, texto, nota, ms}] (caché 60 s).
+function app_luegoPendientes_(fresco) {
+  const cache = CacheService.getScriptCache();
+  if (!fresco) { const c = cache.get("luego"); if (c) return JSON.parse(c); }
+  const h = app_luegoHoja_(false);
+  const out = [];
+  if (h && h.getLastRow() > 1) {
+    h.getRange(2, 1, h.getLastRow() - 1, APP_LUEGO_COLS.length).getDisplayValues().forEach(function (f, i) {
+      if (String(f[8]).trim() !== "PENDIENTE") return;
+      out.push({ row: i + 2, asesora: f[1], base: f[2], fila: Number(f[3]), numero: ll_limpiarTel(f[4]), nombre: f[5],
+        texto: f[6], nota: f[7], ms: Number(String(f[9]).replace(/\D/g, "")) });
+    });
+  }
+  cache.put("luego", JSON.stringify(out), 60);
+  return out;
+}
+
+// Para la cola: las que ya tocan (ahora) y las que vienen de esta asesora (despues).
+function app_luegoPara_(asesora) {
+  const now = Date.now(), ahora = [], despues = [];
+  app_luegoPendientes_(false).forEach(function (p) {
+    const mia = p.asesora === asesora;
+    if (p.ms <= now && (mia || now >= p.ms + APP_LUEGO_LIBRE_MIN * 60000)) ahora.push(p);
+    else if (mia && p.ms > now) despues.push({ ms: p.ms, texto: p.texto, nombre: p.nombre, numero: p.numero });
+  });
+  ahora.sort(function (a, b) { return a.ms - b.ms; });
+  despues.sort(function (a, b) { return a.ms - b.ms; });
+  return { ahora: ahora, despues: despues, todas: app_luegoPendientes_(false) };
+}
+
+// Arma el item de la cola para una programación que ya toca (lee su fila para el historial).
+function app_luegoItem_(p, api) {
+  const hoja = api ? app_hojaApi(p.base) : SpreadsheetApp.getActive().getSheetByName(p.base);
+  if (!hoja) return null;
+  const est = ll_estructura(hoja);
+  const fila = api ? hoja.filas(est, p.fila, p.fila)[0] : ll_leerFila(hoja, est, p.fila);
+  const libre = ll_rondaLibre(est, fila);
+  if (libre < 0) return null;
+  const hechas = ll_historial(est, fila);
+  return {
+    fila: p.fila, base: p.base, numero: p.numero, nombre: p.nombre || String(fila[est.nombre] || "").trim(),
+    dia: "", diaIso: "", origen: "", ronda: libre + 1,
+    rondas: hechas.map(function (h) { return { n: h.n, asesor: h.asesor, fecha: h.fecha.slice(0, 5), estado: h.estado, obs: h.obs }; }),
+    ultFecha: "", luego: { texto: p.texto, nota: p.nota, asesora: p.asesora }
+  };
+}
+
+// Al guardar una llamada: cierra lo pendiente de esa persona y, si pidió "llamar luego", lo programa.
+function app_luegoGuardar_(asesora, base, fila, numero, nombre, ms, nota) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const tel = ll_limpiarTel(numero);
+    const pend = app_luegoPendientes_(true).filter(function (p) { return p.base === base && p.numero === tel; });
+    const ahora = new Date();
+    if (!pend.length && !ms) return;
+    const h = app_luegoHoja_(true);
+    const marca = "HECHO " + Utilities.formatDate(ahora, "America/Lima", "dd/MM HH:mm") + " " + asesora;
+    pend.forEach(function (p) { h.getRange(p.row, 9).setValue(marca); });
+    if (ms) {
+      h.appendRow([Utilities.formatDate(ahora, "America/Lima", "dd/MM/yyyy HH:mm"), asesora, base, fila, "'" + tel, nombre || "",
+        app_luegoTexto_(ms), nota || "", "PENDIENTE", ms]);
+    }
+    CacheService.getScriptCache().remove("luego");
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function app_luegoTexto_(ms) {
+  return Utilities.formatDate(new Date(ms), "America/Lima", "dd/MM h:mm a").replace("AM", "am").replace("PM", "pm");
 }
