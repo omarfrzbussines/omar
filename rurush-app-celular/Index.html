@@ -362,15 +362,15 @@ function seccionLlamadas() {
   const barra = (label, t, max, extra) => `<div class="row"><div class="main"><div class="t">${label} <small style="color:var(--mut)">${t.n} llamadas · ${t.ag} agend.${extra || ''}</small></div>
     <div class="bar"><i style="width:${max ? Math.round(p(t.c, t.n) * 100 / max) : 0}%"></i></div></div><div class="t">${p(t.c, t.n)}%</div></div>`;
   let h = `<details id="llBox" class="desp" ${LL_ABIERTO ? 'open' : ''}><summary>📞 Llamadas <small>${T.n} · ${p(T.c, T.n)}% contestan${llCargando ? ' · actualizando…' : ''}</small></summary>
-    <select class="sel" id="llMes"><option value="">📅 Todos los meses</option>${meses.map((m) => `<option value="${m}" ${m === LL_MES && !LL_DIA ? 'selected' : ''}>📅 ${nomMes(m)}</option>`).join('')}</select>
+    <select class="sel" id="llMes"><option value="">📅 Todos los meses</option>${meses.map((m) => `<option value="${m}" ${m === LL_MES ? 'selected' : ''}>📅 ${nomMes(m)}</option>`).join('')}</select>
     <div style="display:flex;gap:8px;margin-top:8px"><input type="date" class="sel" id="llDia" value="${LL_DIA}" max="${D.fecha}">
     ${LL_DIA ? '<button class="sel" id="llDiaX" style="width:auto">✕ Mes</button>' : ''}</div>
-    ${LL_DIA ? `<div class="sub">Viendo solo el ${fm(LL_DIA)}${LL_DIA === D.fecha ? ' (hoy: se actualiza cada hora)' : ''}</div>` : ''}
+    ${LL_DIA ? `<div class="sub">${LL.filas.some((f) => f[11]) ? `Viendo solo el ${fm(LL_DIA)}${LL_DIA === D.fecha ? ' (hoy: se actualiza cada hora)' : ''}` : '⏳ El filtro por día se activa en la próxima actualización del Sheet (máx. 1 hora).'}</div>` : ''}
     <div class="grid">
     <div class="kpi"><div class="n">${T.n}</div><div class="l">llamadas</div></div>
     <div class="kpi"><div class="n">${p(T.c, T.n)}%</div><div class="l">contestan (${T.c})</div></div>
     <div class="kpi"><div class="n">${T.ag}</div><div class="l">agendados · ${p(T.ag, T.c)}% de los que contestan</div></div>
-    <div class="kpi"><div class="n">${T.dn ? (T.ds / T.dn / 60).toFixed(1) : 0}</div><div class="l">min por llamada · ${T.cl} clientes</div></div></div>`;
+    <div class="kpi"><div class="n">${T.dn ? Math.round(T.ds / T.dn) : 0}</div><div class="l">seg por llamada · ${T.cl} clientes</div></div></div>`;
   // por asesora (siempre todas, del mes elegido)
   const porA = {}; delMes.forEach((f) => { (porA[f[1]] = porA[f[1]] || []).push(f); });
   const as = Object.entries(porA).map(([n, arr]) => [n, sum(arr)]).sort((a, b) => b[1].n - a[1].n);

@@ -68,6 +68,10 @@ function dash_actualizar() {
   const lista = ["TODOS"].concat(Object.keys(meses).sort().reverse());
   h.getRange("B2").setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(lista, true).build());
   h.getRange("B2").setNumberFormat("@");
+  if (h.getRange("G4").getValue() === "Duración prom. (min)") {   // versión anterior: pasaba a minutos
+    h.getRange("G4").setValue("Duración prom. (seg)");
+    h.getRange("G5").setFormula(String(h.getRange("G5").getFormula()).replace(/\/60,0\)$/, ",0)")).setNumberFormat("0");
+  }
   if (!h.getRange("B2").getValue()) h.getRange("B2").setValue(Utilities.formatDate(new Date(), "America/Lima", "yyyy-MM"));
   h.getRange("G2").setValue("Actualizado: " + Utilities.formatDate(new Date(), "America/Lima", "dd/MM HH:mm") + " · se actualiza cada hora");
 }
@@ -81,9 +85,15 @@ function dash_rehacer() {
 }
 
 /** Instala el disparador de cada hora y arma el dashboard en un minuto (una sola vez). */
+const DASH_VER = "3";   // al cambiar el cálculo, súbelo: la app rehace los datos al minuto sin esperar la hora
 function dash_instalarSiFalta() {
   const props = PropertiesService.getScriptProperties();
+  if (props.getProperty("DASH_TRIGGER") && props.getProperty("DASH_VER") !== DASH_VER) {
+    props.setProperty("DASH_VER", DASH_VER);
+    ScriptApp.newTrigger("dash_primeraVez").timeBased().after(60 * 1000).create();
+  }
   if (props.getProperty("DASH_TRIGGER")) return;
+  props.setProperty("DASH_VER", DASH_VER);
   props.setProperty("DASH_TRIGGER", "1");
   const ya = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === "dash_actualizar"; });
   if (!ya) {
@@ -119,17 +129,17 @@ function dash_minutos_(v) {
   if (/p\.?\s*m/.test(s)) h += 12; else if (!/a\.?\s*m/.test(s)) h = Number(m[1]);
   return h * 60 + Number(m[2]);
 }
-// "2:15" (min:seg) → segundos. Si Sheets lo tomó como hora (2:15:00) se corrige.
+// "2:15" (min:seg) → segundos. Sheets toma "0:55" como 0 h 55 min: si viene como hora sin segundos,
+// en realidad eran minutos:segundos.
 function dash_segundos_(v) {
   if (v === "" || v == null) return 0;
-  let s;
-  if (typeof v === "number") s = Math.round((v % 1) * 86400);
-  else {
-    const p = String(v).split(":").map(Number);
-    if (p.some(isNaN)) return 0;
-    s = p.length === 3 ? p[0] * 3600 + p[1] * 60 + p[2] : p.length === 2 ? p[0] * 60 + p[1] : 0;
+  if (typeof v === "number") {
+    const t = Math.round((v % 1) * 86400);
+    return t % 60 === 0 ? t / 60 : t;
   }
-  return s >= 3600 ? Math.round(s / 60) : s;
+  const p = String(v).split(":").map(Number);
+  if (p.some(isNaN)) return 0;
+  return p.length === 3 ? (p[2] === 0 ? p[0] * 60 + p[1] : p[0] * 3600 + p[1] * 60 + p[2]) : p.length === 2 ? p[0] * 60 + p[1] : 0;
 }
 
 /* ---------- armado de la pestaña (fórmulas + gráficos) ---------- */
@@ -172,7 +182,7 @@ function dash_armar_(ss) {
     ["Agendados", "=" + est("AGENDADO")],
     ["% Agendan (de los que contestan)", pct(est("AGENDADO"), noCont())],
     ["Clientes", "=" + est("CLIENTE")],
-    ["Duración prom. (min)", "=IFERROR(SUMIFS(" + col("H") + "," + base(true) + ")/SUMIFS(" + col("I") + "," + base(true) + ")/60,0)"],
+    ["Duración prom. (seg)", "=IFERROR(SUMIFS(" + col("H") + "," + base(true) + ")/SUMIFS(" + col("I") + "," + base(true) + "),0)"],
     ["Timbradas prom.", "=IFERROR(SUMIFS(" + col("J") + "," + base(true) + ")/SUMIFS(" + col("K") + "," + base(true) + "),0)"]
   ];
   kpis.forEach(function (k, i) {
@@ -182,7 +192,7 @@ function dash_armar_(ss) {
   h.getRange("A4:H4").setFontSize(9).setFontColor("#666666").setWrap(true).setVerticalAlignment("bottom");
   h.getRange("A5:H5").setFontSize(20).setFontWeight("bold").setFontColor("#1f2a44");
   h.getRange("C5").setNumberFormat("0%"); h.getRange("E5").setNumberFormat("0%");
-  h.getRange("G5:H5").setNumberFormat("0.0");
+  h.getRange("G5").setNumberFormat("0"); h.getRange("H5").setNumberFormat("0.0");
 
   // Embudo
   dash_titulo_(h, "A7", "🎯 Embudo");
