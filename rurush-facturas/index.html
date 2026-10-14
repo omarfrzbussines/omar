@@ -94,7 +94,7 @@
   <button data-tab="conf"><span>⚙️</span>Ajustes</button>
 </nav>
 <input type="file" id="cam" accept="image/*" capture="environment" class="hide">
-<input type="file" id="gal" accept="image/*" multiple class="hide">
+<input type="file" id="gal" accept="image/*,application/pdf,.pdf" multiple class="hide">
 <div class="toast" id="toast"></div>
 
 <script>
@@ -629,11 +629,26 @@ async function subirFotos(it, lista, donde) {
   if (it[lista].length >= it.fotos.length) return;
   const dest = await donde(it.gasto.fecha);
   for (let i = it[lista].length; i < it.fotos.length; i++) {
-    const nombre = it.archivo + (it.fotos.length > 1 ? ' (' + (i + 1) + ')' : '') + '.jpg';
-    const f = await gj('PUT', `/drives/${dest.driveId}/items/${dest.id}:/${ruta(nombre)}:/content?@microsoft.graph.conflictBehavior=rename`,
-      it.fotos[i], { 'Content-Type': 'image/jpeg' });
+    const pdf = it.fotos[i].type === 'application/pdf';
+    const nombre = it.archivo + (it.fotos.length > 1 ? ' (' + (i + 1) + ')' : '') + (pdf ? '.pdf' : '.jpg');
+    const f = await subirArchivo(dest, nombre, it.fotos[i], pdf ? 'application/pdf' : 'image/jpeg');
     it[lista].push({ nombre: f.name, web: f.webUrl });
     await colaPut(it);
+  }
+}
+
+// Hasta 4 MB de una vez; más grande (PDF pesados) por sesión de carga en partes.
+async function subirArchivo(dest, nombre, blob, tipo) {
+  const base = `/drives/${dest.driveId}/items/${dest.id}:/${ruta(nombre)}:`;
+  if (blob.size <= 4 * 1024 * 1024) return gj('PUT', base + '/content?@microsoft.graph.conflictBehavior=rename', blob, { 'Content-Type': tipo });
+  const ses = await gj('POST', base + '/createUploadSession', { item: { '@microsoft.graph.conflictBehavior': 'rename' } });
+  const parte = 5 * 320 * 1024;   // múltiplo de 320 KB, como pide OneDrive
+  for (let ini = 0; ini < blob.size; ini += parte) {
+    const fin = Math.min(ini + parte, blob.size);
+    const r = await fetch(ses.uploadUrl, { method: 'PUT', body: blob.slice(ini, fin),
+      headers: { 'Content-Range': `bytes ${ini}-${fin - 1}/${blob.size}` } });   // URL ya autorizada: sin token
+    if (!r.ok && r.status !== 202) throw new Error('OneDrive respondió ' + r.status + ' al subir el PDF');
+    if (fin === blob.size) return r.json();
   }
 }
 
@@ -737,7 +752,9 @@ const chips = (lista, actual, attr) => lista.map((v) =>
 
 function pintarNueva() {
   const c = calcular(), f = faltan();
-  const fotos = F.fotos.map((b, i) => `<div><img src="${b.url}"><button data-quitar="${i}">✕</button></div>`).join('');
+  const fotos = F.fotos.map((b, i) => b.pdf
+    ? `<div><div class="mas" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px;text-align:center;word-break:break-all;font-size:11px"><span style="font-size:30px">📄</span>${esc(b.nombre || 'PDF')}</div><button data-quitar="${i}">✕</button></div>`
+    : `<div><img src="${b.url}"><button data-quitar="${i}">✕</button></div>`).join('');
   return `
     <div id="estado"></div>
     <label>¿Quién registra? <i>*</i></label>
@@ -745,9 +762,9 @@ function pintarNueva() {
 
     <label>Foto del comprobante <i>*</i></label>
     ${F.fotos.length
-      ? `<div class="fotos">${fotos}<button class="mas" id="tomarFoto">📷<br>＋ Otra foto</button><button class="mas" id="galeria">🖼️<br>＋ Galería</button></div>`
+      ? `<div class="fotos">${fotos}<button class="mas" id="tomarFoto">📷<br>＋ Otra foto</button><button class="mas" id="galeria">🖼️📄<br>＋ Galería / PDF</button></div>`
       : `<button class="foto" id="tomarFoto"><span>📷</span>Tomar foto</button>
-         <button class="btn" id="galeria" style="width:100%;margin-top:8px">🖼️ Elegir de la galería (p. ej. llegó por WhatsApp)</button>`}
+         <button class="btn" id="galeria" style="width:100%;margin-top:8px">🖼️ Galería o PDF (p. ej. llegó por WhatsApp)</button>`}
 
     <label>Categoría <i>*</i></label>
     <div class="chips">${chips(CFG.categorias, F.categoria, 'cat')}</div>
@@ -1102,6 +1119,12 @@ document.addEventListener('input', (ev) => {
 async function agregarFotos(ev) {
   for (const file of Array.from(ev.target.files || []).slice(0, 5)) {
     try {
+      // PDF (facturas electrónicas): se sube tal cual, sin comprimir.
+      if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
+        if (file.size > 50 * 1024 * 1024) throw new Error('El PDF pesa más de 50 MB.');
+        F.fotos.push({ blob: new Blob([file], { type: 'application/pdf' }), pdf: true, nombre: file.name });
+        continue;
+      }
       const blob = await comprimir(file);
       F.fotos.push({ blob, url: URL.createObjectURL(blob) });
     } catch (e) { toast('❌ ' + e.message, 4000); }
