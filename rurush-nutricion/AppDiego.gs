@@ -306,7 +306,7 @@ function dg_deshacer(pin, q) {
 function dg_buscar(pin, q) {
   dg_pin(pin);
   q = String(q || '').trim();
-  if (q.length < 3) return [];
+  if (q.length < 3 && !/^\d{1,4}$/.test(q)) return [];
   const tel = nu_tel(q);
   // Pipedrive corta al azar entre resultados del mismo puntaje: se piden 30 y se quitan los que solo se parecen ("Clara" al buscar "lara")
   const j = nu_pd('/persons/search?limit=30&fields=' + (tel ? 'phone' : 'name') + '&term=' + encodeURIComponent(tel || q));

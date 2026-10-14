@@ -77,6 +77,9 @@ function rv_buscar(pin, q) {
     modo = 'tel';
     const items = ((nu_pd('/persons/search?limit=10&fields=phone&term=' + tel).data || {}).items) || [];
     pids = items.filter((it) => (it.item.phones || []).map(nu_tel).indexOf(tel) >= 0).map((it) => String(it.item.id));
+  } else if (/^#?\d{1,4}$/.test(q)) {   // código de AppsFit (ej. 1025)
+    modo = 'nombre';
+    pids = nu_buscarVigentes(q, {}).map((it) => String(it.item.id));
   } else if (/^\d{8,9}$/.test(num)) {
     modo = 'dni';
     const items = ((nu_pd('/persons/search?limit=5&exact_match=true&fields=custom_fields&term=' + num).data || {}).items) || [];
