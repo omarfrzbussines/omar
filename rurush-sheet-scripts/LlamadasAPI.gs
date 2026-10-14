@@ -243,6 +243,7 @@ function ll_registrar(d) {
     const estado = String(d.estado).trim().toUpperCase() === "OTRA CIUDAD" ? "Otra Ciudad" : String(d.estado).toUpperCase();
     const set = function (c, v) { if (c >= 0) hoja.getRange(d.fila, c + 1).setValue(v); };
 
+    if (ro.asesor >= 0) ll_permitirEnLista(hoja.getRange(d.fila, ro.asesor + 1), String(d.asesora || "").toUpperCase());
     set(ro.asesor, String(d.asesora || "").toUpperCase());
     set(ro.fecha, hoy);
     set(ro.hora, ll_horaDeLista(ahora));
@@ -290,6 +291,16 @@ function ll_duracion(seg) {
 function ll_fechaTexto(f) {
   const m = String(f).match(/^(\d{4})-(\d{2})-(\d{2})$/);
   return m ? m[3] + "/" + m[2] + "/" + m[1] : String(f);
+}
+
+// Si la celda tiene una lista desplegable estricta que no incluye ese nombre (p. ej. "OMAR" o una
+// asesora nueva), se agrega el nombre a la lista de ESA celda; si no, setValue falla y no se guarda.
+function ll_permitirEnLista(rango, nombre) {
+  const v = rango.getDataValidation();
+  if (!nombre || !v || v.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) return;
+  const crit = v.getCriteriaValues(), lista = crit[0] || [];
+  if (lista.some(function (x) { return String(x).trim().toUpperCase() === nombre; })) return;
+  rango.setDataValidation(v.copy().requireValueInList(lista.concat([nombre]), crit[1] !== false).build());
 }
 
 // Una fila con el celular tal como se ve en el Sheet (no se rompe si NUMERO tiene formato de fecha).
