@@ -334,6 +334,58 @@ function seccionReferidos() {
   return h + '</details>';
 }
 
+/* ---------- 📞 Llamadas (📊 Dashboard de llamadas del Sheet de leads) ---------- */
+let LL = (() => { try { return JSON.parse(localStorage.getItem('rr_lldash') || 'null'); } catch (e) { return null; } })();
+let llCargando = false, llFresco = false, LL_MES = null, LL_ABIERTO = false;
+const LL_NO = ['NO CONTESTO', 'APAGADO'], LL_DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+function cargarLlamadas() {
+  if (llCargando) return; llCargando = true;
+  google.script.run
+    .withSuccessHandler((r) => { LL = r; llCargando = false; llFresco = true; try { localStorage.setItem('rr_lldash', JSON.stringify(r)); } catch (e) {} if (tab === 'hoy') pintar(); })
+    .withFailureHandler((e) => { llCargando = false; llFresco = true; if (!LL) LL = { error: e.message || String(e) }; if (tab === 'hoy') pintar(); })
+    .getLlamadasDash(false);
+}
+function seccionLlamadas() {
+  if (!llFresco && !llCargando) setTimeout(cargarLlamadas, 0);
+  if (!LL) return `<h2>📞 Llamadas</h2><div class="list"><div class="vacio">Cargando…</div></div>`;
+  if (LL.error) return `<h2>📞 Llamadas</h2><div class="err">⚠️ ${esc(LL.error)}</div>`;
+  const meses = [...new Set(LL.filas.map((f) => f[0]))].sort().reverse();
+  if (LL_MES == null) LL_MES = meses.includes(D.fecha.slice(0, 7)) ? D.fecha.slice(0, 7) : (meses[0] || '');
+  const delMes = LL.filas.filter((f) => LL_MES === '' || f[0] === LL_MES);
+  const filas = delMes.filter((f) => ase === 'TODAS' || norm(f[1]) === norm(ase));
+  const sum = (arr) => { const t = { n: 0, c: 0, ag: 0, cl: 0, ds: 0, dn: 0 };
+    arr.forEach((f) => { t.n += f[6]; if (!LL_NO.includes(f[5])) t.c += f[6]; if (f[5] === 'AGENDADO') t.ag += f[6]; if (f[5] === 'CLIENTE') t.cl += f[6]; t.ds += f[7]; t.dn += f[8]; });
+    return t; };
+  const p = (a, b) => (b ? Math.round(a * 100 / b) : 0);
+  const T = sum(filas);
+  const barra = (label, t, max, extra) => `<div class="row"><div class="main"><div class="t">${label} <small style="color:var(--mut)">${t.n} llamadas · ${t.ag} agend.${extra || ''}</small></div>
+    <div class="bar"><i style="width:${max ? Math.round(p(t.c, t.n) * 100 / max) : 0}%"></i></div></div><div class="t">${p(t.c, t.n)}%</div></div>`;
+  let h = `<details id="llBox" class="desp" ${LL_ABIERTO ? 'open' : ''}><summary>📞 Llamadas <small>${T.n} · ${p(T.c, T.n)}% contestan${llCargando ? ' · actualizando…' : ''}</small></summary>
+    <select class="sel" id="llMes"><option value="">📅 Todos los meses</option>${meses.map((m) => `<option value="${m}" ${m === LL_MES ? 'selected' : ''}>📅 ${nomMes(m)}</option>`).join('')}</select>
+    <div class="grid">
+    <div class="kpi"><div class="n">${T.n}</div><div class="l">llamadas</div></div>
+    <div class="kpi"><div class="n">${p(T.c, T.n)}%</div><div class="l">contestan (${T.c})</div></div>
+    <div class="kpi"><div class="n">${T.ag}</div><div class="l">agendados · ${p(T.ag, T.c)}% de los que contestan</div></div>
+    <div class="kpi"><div class="n">${T.dn ? (T.ds / T.dn / 60).toFixed(1) : 0}</div><div class="l">min por llamada · ${T.cl} clientes</div></div></div>`;
+  // por asesora (siempre todas, del mes elegido)
+  const porA = {}; delMes.forEach((f) => { (porA[f[1]] = porA[f[1]] || []).push(f); });
+  const as = Object.entries(porA).map(([n, arr]) => [n, sum(arr)]).sort((a, b) => b[1].n - a[1].n);
+  h += `<h2>👩 Por asesora <small>% que contesta</small></h2>` + lista(as, ([n, t]) => barra(esc(n), t, 100, ` · ${p(t.ag, t.c)}% agenda`), 'Sin llamadas en este mes.');
+  // por hora
+  const hs = []; for (let hr = 6; hr <= 22; hr++) { const t = sum(filas.filter((f) => f[4] === hr)); if (t.n) hs.push([hr, t]); }
+  const mejor = hs.filter(([, t]) => t.n >= 5).sort((a, b) => p(b[1].c, b[1].n) - p(a[1].c, a[1].n))[0];
+  const hl = (hr) => ((hr + 11) % 12 + 1) + (hr < 12 ? ' am' : ' pm');
+  h += `<h2>🕐 Por hora <small>${mejor ? 'mejor: ' + hl(mejor[0]) : ''}</small></h2>` + lista(hs, ([hr, t]) => barra(hl(hr), t, 100), 'Sin llamadas con hora.', 20);
+  // por día
+  const ds = [1, 2, 3, 4, 5, 6, 0].map((d) => [d, sum(filas.filter((f) => f[3] === d))]).filter(([, t]) => t.n);
+  h += `<h2>📅 Por día</h2>` + lista(ds, ([d, t]) => barra(LL_DIAS[d], t, 100), 'Sin datos.');
+  // por base
+  const porB = {}; filas.forEach((f) => { (porB[f[2]] = porB[f[2]] || []).push(f); });
+  const bs = Object.entries(porB).map(([n, arr]) => [n, sum(arr)]).sort((a, b) => b[1].n - a[1].n);
+  h += `<h2>📂 Por base</h2>` + lista(bs, ([n, t]) => barra(esc(n), t, 100), 'Sin datos.');
+  return h + '<div class="sub">Se actualiza cada hora desde el Sheet de leads.</div></details>';
+}
+
 function pintar() {
   if (!D) return;
   pintarChips();
@@ -360,7 +412,7 @@ function pintar() {
       <div class="kpi"><div class="n">${soles(D.ingresosHoy ? Object.keys(D.ingresosHoy).filter((n) => ase === 'TODAS' || n === norm(ase)).reduce((t, n) => t + D.ingresosHoy[n].t, 0) : ins.reduce((t, x) => t + x.pago, 0))}</div><div class="l">venta de hoy</div></div>
     </div>`;
     if (nunca) h += `<div class="sub" style="margin-bottom:10px">${nunca} socios activos nunca registraron asistencia.</div>`;
-    h += seccionIngresos() + seccionReferidos();
+    h += seccionIngresos() + seccionReferidos() + seccionLlamadas();
     h += `<h2>Inscritos hoy <small>${ins.length}</small></h2>` + lista(ins, (x) =>
       `<div class="row"><div class="main"><div class="t">${esc(x.nombre)}</div><div class="d">${esc(x.plan)} · ${soles(x.pago)} · ${esc(x.asesora)}</div></div>${wa(x.tel)}</div>`, 'Todavía nadie hoy.');
   }
@@ -412,6 +464,8 @@ function pintar() {
   if (iF) { iF.onchange = cambioIng; iM.onchange = cambioIng; }
   const rm = $('#refMes'); if (rm) rm.onchange = () => { RF_MES = rm.value; pintar(); };
   const rb = $('#refBox'); if (rb) rb.ontoggle = () => { RF_ABIERTO = rb.open; };
+  const lm = $('#llMes'); if (lm) lm.onchange = () => { LL_MES = lm.value; pintar(); };
+  const lb = $('#llBox'); if (lb) lb.ontoggle = () => { LL_ABIERTO = lb.open; };
 }
 
 document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
