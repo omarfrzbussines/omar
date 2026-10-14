@@ -39,7 +39,14 @@ function nu_tel(v) {
   let t = String(v || '').replace(/\D/g, '');
   if (t.indexOf('5151') === 0) t = t.slice(4);
   else if (t.indexOf('51') === 0 && t.length === 11) t = t.slice(2);
+  if (/^(\d)\1{7,}/.test(t.slice(1)) || /^9(12345678|87654321|00000000)$/.test(t)) return '';   // 999999999, 911111111…: números de relleno
   return /^9\d{8}$/.test(t) ? t : '';
+}
+// ¿dos nombres son de la misma persona? (comparten una palabra de 3+ letras, sin tildes; un nombre sin letras no se compara)
+function nu_mismoNombre(a, b) {
+  const w = (x) => nu_sinTildes(x).split(/\s+/).filter((p) => p.length >= 3);
+  const A = w(a), Bw = w(b);
+  return !A.length || !Bw.length || A.some((p) => Bw.some((q) => p === q || (p.length >= 4 && q.length >= 4 && (p.indexOf(q) >= 0 || q.indexOf(p) >= 0))));   // @jhordylara ~ Jhordy Lara
 }
 function nu_nombre(v) {
   const w = String(v || '').replace(/,/g, ' ').trim().split(/\s+/)[0] || '';
