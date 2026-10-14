@@ -487,8 +487,16 @@ if (ASESORA === 'OMAR') {
   b.innerHTML = '<span>🧪 OMAR · se guarda de verdad (asesor OMAR)</span>' +
     '<select id="como" style="background:#2a1d00;color:#ffd27a;border:1px solid #8a6400;border-radius:6px;padding:3px">' +
     '<option value="">Ver como: yo</option><option>MONICA</option><option>DANNA</option><option>LAURA</option></select>' +
-    '<button id="errores" style="background:#8a6400;color:#fff;border:0;border-radius:6px;padding:4px 8px">🛠 Errores</button>';
+    '<button id="errores" style="background:#8a6400;color:#fff;border:0;border-radius:6px;padding:4px 8px">🛠 Errores</button>' +
+    '<button id="dashYa" style="background:#8a6400;color:#fff;border:0;border-radius:6px;padding:4px 8px">📊 Rehacer dashboard</button>';
   document.body.prepend(b);
+  $('#dashYa').onclick = () => {
+    toast('📊 Rehaciendo el dashboard… (~1 min)');
+    google.script.run
+      .withSuccessHandler((s) => toast(`📊 Dashboard listo en ${s} s. Toca 🔄 en RURUSH Hoy.`))
+      .withFailureHandler((e) => toast('📊 Error: ' + (e.message || e), true))
+      .app_dashAhora(LLAVE);
+  };
   $('#como').onchange = () => { COMO = $('#como').value; mostrando = false; cola = []; idx = 0; $('#main').innerHTML = '<div class="vacio">Cargando la cola' + (COMO ? ' de ' + esc(COMO) : '') + '…</div>'; traer(true); };
   $('#errores').onclick = () => {
     $('#main').innerHTML = '<div class="vacio">Cargando errores…</div>';

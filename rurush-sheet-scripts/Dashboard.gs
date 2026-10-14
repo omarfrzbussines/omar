@@ -73,6 +73,7 @@ function dash_actualizar() {
     h.getRange("G5").setFormula(String(h.getRange("G5").getFormula()).replace(/\/60,0\)$/, ",0)")).setNumberFormat("0");
   }
   if (!h.getRange("B2").getValue()) h.getRange("B2").setValue(Utilities.formatDate(new Date(), "America/Lima", "yyyy-MM"));
+  PropertiesService.getScriptProperties().setProperty("DASH_ULT", String(Date.now()));
   h.getRange("G2").setValue("Actualizado: " + Utilities.formatDate(new Date(), "America/Lima", "dd/MM HH:mm") + " · se actualiza cada hora");
 }
 
@@ -88,8 +89,12 @@ function dash_rehacer() {
 const DASH_VER = "3";   // al cambiar el cálculo, súbelo: la app rehace los datos al minuto sin esperar la hora
 function dash_instalarSiFalta() {
   const props = PropertiesService.getScriptProperties();
-  if (props.getProperty("DASH_TRIGGER") && props.getProperty("DASH_VER") !== DASH_VER) {
+  // versión nueva del cálculo, o datos con más de 70 min (el disparador de cada hora falló): rehacer al minuto
+  const viejo = Date.now() - Number(props.getProperty("DASH_ULT") || 0) > 70 * 60000;
+  const pedido = Date.now() - Number(props.getProperty("DASH_PEDIDO") || 0) < 10 * 60000;
+  if (props.getProperty("DASH_TRIGGER") && !pedido && (props.getProperty("DASH_VER") !== DASH_VER || viejo)) {
     props.setProperty("DASH_VER", DASH_VER);
+    props.setProperty("DASH_PEDIDO", String(Date.now()));
     ScriptApp.newTrigger("dash_primeraVez").timeBased().after(60 * 1000).create();
   }
   if (props.getProperty("DASH_TRIGGER")) return;
@@ -286,4 +291,12 @@ function dash_armar_(ss) {
 
 function dash_titulo_(h, celda, texto) {
   h.getRange(celda).setValue(texto).setFontWeight("bold").setFontSize(12).setFontColor("#1f2a44");
+}
+
+/** Link de Omar (🧪): rehace el dashboard ahora mismo (tarda ~1 min). */
+function app_dashAhora(llave) {
+  if (app_asesora(llave) !== APP_PRUEBA) throw new Error("Solo para Omar.");
+  const t0 = Date.now();
+  dash_actualizar();
+  return Math.round((Date.now() - t0) / 1000);
 }
