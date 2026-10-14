@@ -214,6 +214,7 @@ function ll_registrar(d) {
     const hoja = SpreadsheetApp.getActive().getSheetByName(d.base);
     if (!hoja) throw new Error("No existe la pestaña " + d.base);
     const est = ll_estructura(hoja);
+    const filaPedida = d.fila;
     let fila = hoja.getRange(d.fila, 1, 1, est.ancho).getValues()[0];
 
     // Si alguien ordenó, insertó o borró filas mientras la asesora llamaba, la persona ya no está en
@@ -231,6 +232,8 @@ function ll_registrar(d) {
     if (libre < 0) throw new Error("Esta persona ya tiene las 6 llamadas registradas.");
 
     const ro = est.rondas[libre];
+    // Prueba (link OMAR): pasó todas las verificaciones reales; no se escribe nada.
+    if (d.simular) return { simulado: true, fila: d.fila, ronda: libre + 1, movida: d.fila !== filaPedida };
     const ahora = new Date();
     const hoy = Utilities.formatDate(ahora, "America/Lima", "dd/MM/yyyy");
     const estado = String(d.estado).trim().toUpperCase() === "OTRA CIUDAD" ? "Otra Ciudad" : String(d.estado).toUpperCase();

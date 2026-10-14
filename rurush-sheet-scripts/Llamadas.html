@@ -109,7 +109,9 @@ function toast(t, err) {
   clearTimeout(el._t); el._t = setTimeout(() => el.style.display = 'none', err ? 6000 : 2200);
 }
 
-const claveLocal = () => 'rr_cola_' + ASESORA + '_' + BASE;
+// Link de prueba de Omar: puede ver la cola de una asesora ("ver como"); nada se guarda.
+let COMO = '';
+const claveLocal = () => 'rr_cola_' + ASESORA + (COMO ? '_' + COMO : '') + '_' + BASE;
 function guardarLocal() {
   try { localStorage.setItem(claveLocal(), JSON.stringify({ dia: new Date().toDateString(), cola: cola.slice(idx), ESTADOS, HORAS })); } catch (e) {}
 }
@@ -154,7 +156,7 @@ function traer(reset) {
       if (VISTA === 'llamadas' && (!mostrando || !actual())) { mostrando = true; pintar(); }
     })
     .withFailureHandler((e) => { trayendo = false; if (/CELULAR_NO_AUTORIZADO/.test(e.message || e)) return google.script.run.withSuccessHandler(pantallaPin).app_estadoCelular(LLAVE); toast(e.message || String(e), true); if (!cola.length && VISTA === 'llamadas') $('#main').innerHTML = `<div class="vacio">${esc(e.message || e)}</div>`; })
-    .app_getCola(LLAVE, BASE, excluir);
+    .app_getCola(LLAVE, BASE, excluir, false, COMO);
 }
 
 const actual = () => cola[idx];
@@ -273,7 +275,9 @@ function guardar() {
   hoy[e] = (hoy[e] || 0) + 1; pintarMarcador();
   idx++; pintar(); revisarCola(); guardarLocal();
   google.script.run
-    .withSuccessHandler(() => toast(`✓ Guardado: ${e}`))
+    .withSuccessHandler((r) => toast(r && r.simulado
+      ? `🧪 Prueba OK: se guardaría en la fila ${r.fila}, ${r.ronda}ª llamada${r.movida ? ' (la fila se había movido)' : ''}`
+      : `✓ Guardado: ${e}`))
     .withFailureHandler((err) => { hoy[e]--; pintarMarcador(); toast(`No se guardó (${p.numero}): ${err.message || err}`, true); })
     .app_guardar(LLAVE, BASE, p.fila, p.numero, e, obs, fpf, fph, intentos, seg);
 }
@@ -420,7 +424,30 @@ $('#base').onchange = () => {
   traer(true);
 };
 // Link de prueba de Omar: avisa que nada se guarda.
-if (ASESORA === 'OMAR') { const b = document.createElement('div'); b.textContent = '🧪 MODO PRUEBA · no se guarda nada en el Sheet'; b.style.cssText = 'background:#5a3a00;color:#ffd27a;text-align:center;padding:6px;font-size:13px'; document.body.prepend(b); }
+if (ASESORA === 'OMAR') {
+  const b = document.createElement('div');
+  b.style.cssText = 'background:#5a3a00;color:#ffd27a;padding:6px 10px;font-size:13px;display:flex;gap:8px;align-items:center;flex-wrap:wrap';
+  b.innerHTML = '<span>🧪 PRUEBA · no se guarda nada</span>' +
+    '<select id="como" style="background:#2a1d00;color:#ffd27a;border:1px solid #8a6400;border-radius:6px;padding:3px">' +
+    '<option value="">Ver como: yo</option><option>MONICA</option><option>DANNA</option><option>LAURA</option></select>' +
+    '<button id="errores" style="background:#8a6400;color:#fff;border:0;border-radius:6px;padding:4px 8px">🛠 Errores</button>';
+  document.body.prepend(b);
+  $('#como').onchange = () => { COMO = $('#como').value; mostrando = false; cola = []; idx = 0; $('#main').innerHTML = '<div class="vacio">Cargando la cola' + (COMO ? ' de ' + esc(COMO) : '') + '…</div>'; traer(true); };
+  $('#errores').onclick = () => {
+    $('#main').innerHTML = '<div class="vacio">Cargando errores…</div>';
+    google.script.run
+      .withSuccessHandler((lista) => {
+        $('#main').innerHTML = '<h2>🛠 Últimos errores de la app</h2>' + (lista.length ? lista.map((x) =>
+          `<div class="card" style="margin-bottom:8px"><div class="num"><b>${esc(x.asesora)}</b> · ${esc(x.fecha)} ${esc(x.hora)} · ${esc(x.accion)}</div>
+          <div class="tip">${esc(x.base)}${x.fila ? ' · fila ' + esc(x.fila) : ''}${x.celular ? ' · ' + esc(x.celular) : ''}${x.estado ? ' · ' + esc(x.estado) : ''}</div>
+          <div style="color:#ff8a80;margin-top:4px">${esc(x.error)}</div></div>`).join('') : '<div class="vacio">Sin errores registrados 👌</div>') +
+          '<button class="saltar" id="volver">← Volver a la cola</button>';
+        $('#volver').onclick = () => { mostrando = false; pintar(); };
+      })
+      .withFailureHandler((e) => toast(e.message || String(e), true))
+      .app_errores(LLAVE);
+  };
+}
 function iniciar() {
   // Al abrir: si hay una cola guardada de hoy, se muestra al instante y se actualiza por detrás.
   const local = leerLocal();

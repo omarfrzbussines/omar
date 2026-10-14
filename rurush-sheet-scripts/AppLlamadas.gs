@@ -163,16 +163,23 @@ function app_contadorHoy(asesora) {
  *  Fuera: cerrados, 6 llamadas, llamados hoy, los que lleva otra asesora, reservados. */
 const APP_BLOQUE = 1200;
 
-function app_getCola(llave, base, excluir, sinApi) {
-  if (!sinApi && app_conApi()) {
-    try { return app_getCola_(llave, base, excluir, true); }
-    catch (e) { if (!/^API Sheets/.test(e.message)) throw e; }   // la API falló: se lee como antes
+function app_getCola(llave, base, excluir, sinApi, como) {
+  try {
+    if (!sinApi && app_conApi()) {
+      try { return app_getCola_(llave, base, excluir, true, como); }
+      catch (e) { if (!/^API Sheets/.test(e.message)) throw e; }   // la API falló: se lee como antes
+    }
+    return app_getCola_(llave, base, excluir, false, como);
+  } catch (e) {
+    if (!/CELULAR_NO_AUTORIZADO/.test(e.message)) app_logError(llave, "cargar cola", base, "", "", "", e);
+    throw e;
   }
-  return app_getCola_(llave, base, excluir, false);
 }
-function app_getCola_(llave, base, excluir, api) {
+function app_getCola_(llave, base, excluir, api, como) {
   const t0 = Date.now();
-  const asesora = app_asesora(llave);
+  const quien = app_asesora(llave);
+  // El link de prueba puede ver la cola de una asesora ("ver como"), sin reservarle a nadie.
+  const asesora = quien === APP_PRUEBA && APP_ASESORAS.indexOf(como) >= 0 ? como : quien;
   if (APP_BASES.indexOf(base) < 0) throw new Error("Base no habilitada: " + base);
   const hoja = api ? app_hojaApi(base) : SpreadsheetApp.getActive().getSheetByName(base);
   const est = ll_estructura(hoja);
@@ -236,7 +243,7 @@ function app_getCola_(llave, base, excluir, api) {
   cola.forEach(function (x) { if (socios[x.numero]) x.socio = socios[x.numero]; });
   const res = {};
   cola.forEach(function (x) { res["r" + base + x.fila] = asesora; });
-  if (cola.length && asesora !== APP_PRUEBA) cache.putAll(res, APP_RESERVA_SEG);
+  if (cola.length && quien !== APP_PRUEBA) cache.putAll(res, APP_RESERVA_SEG);
 
   return {
     asesora: asesora, cola: cola, hoy: app_contadorHoy(asesora), estados: APP_ESTADOS, horas: LL_HORAS,
@@ -335,18 +342,26 @@ function app_probarApi() {
 }
 
 function app_guardar(llave, base, fila, numero, estado, obs, fpFecha, fpHora, intentos, segundos) {
+  try {
+    return app_guardar_(llave, base, fila, numero, estado, obs, fpFecha, fpHora, intentos, segundos);
+  } catch (e) {
+    app_logError(llave, "guardar", base, fila, numero, estado, e);
+    throw e;
+  }
+}
+function app_guardar_(llave, base, fila, numero, estado, obs, fpFecha, fpHora, intentos, segundos) {
   const asesora = app_asesora(llave);
   if (APP_BASES.indexOf(base) < 0) throw new Error("Base no habilitada: " + base);
   if (APP_ESTADOS.indexOf(estado) < 0) throw new Error("Estado no válido.");
-  if (asesora === APP_PRUEBA) return { ok: true, prueba: true };   // modo prueba: no escribe en el Sheet
   // Si ya es socio puede marcarse CLIENTE sin llamar (se verifica aquí, no en el celular).
   const sinLlamar = estado === "CLIENTE" && !(Number(intentos) > 0) && cob_esSocio(numero);
   const r = ll_registrar({
     base: base, fila: Number(fila), telefono: numero, asesora: asesora, estado: estado,
-    sinLlamar: sinLlamar,
+    sinLlamar: sinLlamar, simular: asesora === APP_PRUEBA,   // link de prueba: verifica todo, no escribe
     observacion: (sinLlamar ? "🟢 Ya es socio (sin llamar) " : "") + (obs || ""), fechaFp: fpFecha || "", horaFp: fpHora || "",
     intentos: Number(intentos) || 0, segundos: Number(segundos) || 0
   });
+  if (asesora === APP_PRUEBA) return r;
   const cache = CacheService.getScriptCache();
   cache.remove("r" + base + fila);
   // contador de hoy (para el marcador de la app)
@@ -355,6 +370,36 @@ function app_guardar(llave, base, fila, numero, estado, obs, fpFecha, fpHora, in
   c[estado] = (c[estado] || 0) + 1;
   cache.put(k, JSON.stringify(c), 21600);
   return r;
+}
+
+/* ---------- registro de errores (pestaña LOG APP LLAMADAS) ----------
+   Cada error de la app (al guardar o al cargar la cola) queda anotado con la hora, la asesora,
+   la base, la fila, el celular y el mensaje exacto. Omar lo ve con 🛠 en su link de prueba. */
+const APP_LOG = "LOG APP LLAMADAS";
+function app_logError(llave, accion, base, fila, numero, estado, e) {
+  try {
+    let quien = "";
+    try { quien = app_asesoraLlave(llave); } catch (x) { quien = "link no válido"; }
+    const ss = SpreadsheetApp.getActive();
+    let h = ss.getSheetByName(APP_LOG);
+    if (!h) {
+      h = ss.insertSheet(APP_LOG);
+      h.appendRow(["FECHA", "HORA", "ASESORA", "ACCIÓN", "BASE", "FILA", "CELULAR", "ESTADO", "ERROR"]);
+      h.setFrozenRows(1);
+    }
+    const ahora = new Date();
+    h.appendRow([Utilities.formatDate(ahora, "America/Lima", "dd/MM/yyyy"), Utilities.formatDate(ahora, "America/Lima", "HH:mm:ss"),
+      quien, accion, base || "", fila || "", numero ? "'" + numero : "", estado || "", String((e && e.message) || e).slice(0, 300)]);
+  } catch (x) { console.error("app_logError: " + x); }
+}
+/** Solo el link de prueba: últimos errores (más nuevos primero). */
+function app_errores(llave) {
+  if (app_asesora(llave) !== APP_PRUEBA) throw new Error("Solo para Omar.");
+  const h = SpreadsheetApp.getActive().getSheetByName(APP_LOG);
+  if (!h || h.getLastRow() < 2) return [];
+  const n = Math.min(40, h.getLastRow() - 1);
+  return h.getRange(h.getLastRow() - n + 1, 1, n, 9).getDisplayValues().reverse()
+    .map(function (f) { return { fecha: f[0], hora: f[1], asesora: f[2], accion: f[3], base: f[4], fila: f[5], celular: f[6], estado: f[7], error: f[8] }; });
 }
 
 /** Ejecutar desde el editor cuando la app "se queda cargando": mide cada paso que hace el celular
