@@ -1,7 +1,7 @@
 /* RURUSH Facturas — guarda la app en el celular para que abra sin internet.
    index.html: primero la red (para recibir cambios), si no hay, la copia guardada.
    Librerías del CDN (versión fija): la copia guardada. A Microsoft/OneDrive no se toca. */
-const CACHE = 'rurush-facturas-v1';
+const CACHE = 'rurush-facturas-v2';
 const CDN = [
   'https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js',
   'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
@@ -25,7 +25,8 @@ self.addEventListener('fetch', (e) => {
   }
   if (req.mode === 'navigate' && new URL(req.url).origin === location.origin) {
     // Sin la parte ?…/#… (el login de Microsoft vuelve con parámetros).
-    e.respondWith(fetch(req).then((res) => {
+    // no-store: siempre la última versión publicada (GitHub Pages deja la página 10 min en caché).
+    e.respondWith(fetch(req.url, { cache: 'no-store', credentials: 'same-origin' }).then((res) => {
       if (res.ok) { const copia = res.clone(); caches.open(CACHE).then((c) => c.put('./', copia)); }
       return res;
     }).catch(() => caches.match('./')));
