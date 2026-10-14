@@ -83,9 +83,11 @@ function rv_buscar(pin, q) {
     pids = items.map((it) => String(it.item.id));
   } else if (q.replace(/[^a-záéíóúñü]/gi, '').length >= 3) {
     modo = 'nombre';
-    let extra = []; try { extra = nu_buscarVigentes(q); } catch (e) { /* sin la base de AppsFit */ }
+    const base = nu_mejores(((nu_pd('/persons/search?limit=30&fields=name&term=' + encodeURIComponent(q)).data || {}).items) || []), yaTels = {};
+    base.forEach((it) => (it.item.phones || []).forEach((p) => { const t = nu_tel(p); if (t) yaTels[t] = 1; }));
+    let extra = []; try { extra = nu_buscarVigentes(q, yaTels); } catch (e) { /* sin la base de AppsFit */ }
     const ya = {};
-    const items = extra.concat(nu_mejores(((nu_pd('/persons/search?limit=30&fields=name&term=' + encodeURIComponent(q)).data || {}).items) || []))
+    const items = extra.concat(base)
       .filter((it) => !ya[it.item.id] && (ya[it.item.id] = 1));
     let vig = {}; try { vig = nu_vigentes(); } catch (e) { /* sin la base se ordena por organización */ }
     const niv = (it) => nu_nivel((it.item.phones || []).map(nu_tel).filter(String), it.item.organization && it.item.organization.name, vig);

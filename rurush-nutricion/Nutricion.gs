@@ -47,6 +47,8 @@ function nu_nombre(v) {
 }
 function nu_iso(v) {   // "13/10/2026" o Date → "2026-10-13"
   if (v instanceof Date) return Utilities.formatDate(v, 'America/Lima', 'yyyy-MM-dd');
+  const iso = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/);   // la base de AppsFit trae algunas fechas como 2026-11-01
+  if (iso) return iso[1] + '-' + iso[2] + '-' + iso[3];
   const m = String(v || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   return m ? m[3] + '-' + nu_pad(m[2]) + '-' + nu_pad(m[1]) : '';
 }
@@ -86,10 +88,10 @@ function nu_pdAll(paths) {
       return j;
     });
 }
-// socios con membresía vigente en AppsFit (hoja '3. BASE DE SOCIOS'). Guardado 10 min.
+// socios con membresía vigente en AppsFit (hoja '3. BASE DE SOCIOS'). Guardado 6 h (la base se actualiza una vez al día).
 // { fin: { celular: 'yyyy-MM-dd' vencimiento }, nom: [[nombre sin tildes, celular], ...] }
 function nu_base() {
-  const c = CacheService.getScriptCache(), k = 'nu_base_' + nu_hoy();
+  const c = CacheService.getScriptCache(), k = 'nu_base2_' + nu_hoy();
   const g = c.get(k); if (g) return JSON.parse(g);
   const fin = {}, nom = [], hoy = nu_hoy();
   (Sheets.Spreadsheets.Values.get(NU_BASE_ID, "'3. BASE DE SOCIOS'!B6:I1000").values || []).forEach((r) => {
@@ -99,18 +101,18 @@ function nu_base() {
     nom.push([nu_sinTildes(r[1]), t]);
   });
   const o = { fin: fin, nom: nom };
-  try { c.put(k, JSON.stringify(o), 600); } catch (e) { /* muy grande para el caché: se relee la próxima vez */ }
+  try { c.put(k, JSON.stringify(o), 21600); } catch (e) { /* muy grande para el caché: se relee la próxima vez */ }
   return o;
 }
 function nu_vigentes() { return nu_base().fin; }
 function nu_sinTildes(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zñ0-9 ]/g, ' '); }
 // fichas de Pipedrive de los socios VIGENTES cuyo nombre en AppsFit contiene todas las palabras buscadas
 // (con apellidos comunes Pipedrive devuelve solo 30 de cientos y los activos pueden quedar fuera)
-function nu_buscarVigentes(q) {
+function nu_buscarVigentes(q, yaTels) {
   const pal = nu_sinTildes(q).split(/\s+/).filter((w) => w.length >= 2);
   if (!pal.length) return [];
   const tels = nu_base().nom.filter((x) => pal.every((w) => x[0].indexOf(w) >= 0)).map((x) => x[1])
-    .filter((t, i, l) => l.indexOf(t) === i).slice(0, 6);
+    .filter((t, i, l) => l.indexOf(t) === i && !(yaTels && yaTels[t])).slice(0, 6);   // solo los que Pipedrive no trajo
   if (!tels.length) return [];
   const out = [];
   nu_pdAll(tels.map((t) => '/persons/search?limit=5&fields=phone&term=' + t)).forEach((j, i) =>
