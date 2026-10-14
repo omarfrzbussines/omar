@@ -665,7 +665,15 @@ async function enviarTexto(text, seguro) {
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg.type === 'ping') {
-    reply({ loggedIn: !!document.querySelector('#pane-side, #side, [aria-label="Lista de chats"], [aria-label="Chat list"]'), wid: wid() });
+    const loggedIn = !!document.querySelector('#pane-side, #side, [aria-label="Lista de chats"], [aria-label="Chat list"]');
+    // "WhatsApp está abierto en otra ventana" (otra pestaña de este Chrome, p. ej. de Difusiones): se toma aquí.
+    let otraVentana = false;
+    if (!loggedIn) {
+      const b = [...document.querySelectorAll('button, div[role="button"]')].find((x) => /^(usar aquí|use here)$/i.test((x.textContent || '').trim()));
+      if (b) { otraVentana = true; b.click(); }
+    }
+    const qr = !loggedIn && !!document.querySelector('canvas[aria-label], [data-ref] canvas, [data-testid="qrcode"]');
+    reply({ loggedIn, wid: wid(), otraVentana, qr });
   } else if (msg.type === 'chatState') {
     const c = compose();
     reply({

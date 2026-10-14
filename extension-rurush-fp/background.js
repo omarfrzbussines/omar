@@ -279,6 +279,15 @@ async function huellaUrl(url) {
 // ───────────────────────── WhatsApp Web ─────────────────────────
 async function waTab() {
   const tabs = await chrome.tabs.query({ url: 'https://web.whatsapp.com/*' });
+  // Con varias pestañas de WhatsApp (otra extensión abrió la suya) solo una tiene la sesión:
+  // se usa la que muestra la lista de chats.
+  if (tabs.length > 1) {
+    for (const t of tabs) {
+      await asegurarScript(t.id);
+      const r = await ask(t.id, { type: 'ping' });
+      if (r && r.loggedIn) return t;
+    }
+  }
   if (tabs.length) return tabs[0];
   return chrome.tabs.create({ url: 'https://web.whatsapp.com/', active: false, pinned: true });
 }
@@ -292,6 +301,14 @@ async function ask(tabId, msg) {
 async function asegurarScript(tabId) {
   if (await ask(tabId, { type: 'ping' })) return;
   try { await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] }); } catch {}
+}
+
+// Mensaje claro cuando WhatsApp Web no está listo.
+async function errorWA(tabId) {
+  const r = await ask(tabId, { type: 'ping' });
+  if (r && r.qr) return 'WhatsApp Web pide escanear el código QR (se cerró la sesión): escanéalo con el celular de esta línea.';
+  if (r && r.otraVentana) return 'WhatsApp Web estaba abierto en otra pestaña; se tomó aquí, se reintenta en 10 min.';
+  return 'WhatsApp Web no cargó o no tiene sesión iniciada.';
 }
 
 async function waitFor(tabId, msg, ok, timeoutMs = 60000) {
@@ -397,7 +414,7 @@ async function correrAnuncios(reason) {
     await sleep(1000);
     await asegurarScript(tab.id);
     const status = await waitFor(tab.id, { type: 'ping' }, (r) => r.loggedIn, 90000);
-    if (!status) throw new Error('WhatsApp Web no cargó o no tiene sesión iniciada.');
+    if (!status) throw new Error(await errorWA(tab.id));
     if (cfg.expectedNumber && status.wid !== String(cfg.expectedNumber).replace(/\D/g, '')) throw new Error(`Número de WhatsApp Web incorrecto (${status.wid}).`);
     const bloqueados = new Set(cfg.blocklist.map(ultimos9).filter((x) => x.length === 9));
 
@@ -937,7 +954,7 @@ async function correrModulo(key, reason, programado) {
       await sleep(1000);
       await asegurarScript(tab.id);
       const status = await waitFor(tab.id, { type: 'ping' }, (r) => r.loggedIn, 90000);
-      if (!status) throw new Error('WhatsApp Web no cargó o no tiene sesión iniciada.');
+      if (!status) throw new Error(await errorWA(tab.id));
       if (cfg.expectedNumber) {
         if (!status.wid) throw new Error('No pude leer el número de la sesión de WhatsApp Web. No se envió nada.');
         if (status.wid !== String(cfg.expectedNumber).replace(/\D/g, '')) throw new Error(`Número de WhatsApp Web incorrecto (${status.wid}). No se envió nada.`);
@@ -1237,7 +1254,7 @@ async function correrNutriSeguimiento(cfg, now, real, manual, inicio, resumen) {
   await sleep(1000);
   await asegurarScript(tab.id);
   const status = await waitFor(tab.id, { type: 'ping' }, (r) => r.loggedIn, 90000);
-  if (!status) throw new Error('WhatsApp Web no cargó o no tiene sesión iniciada.');
+  if (!status) throw new Error(await errorWA(tab.id));
   if (cfg.expectedNumber && status.wid !== String(cfg.expectedNumber).replace(/\D/g, '')) throw new Error(`Número de WhatsApp Web incorrecto (${status.wid}). No se envió nada.`);
   const bloqueados = new Set(cfg.blocklist.map(ultimos9));
   const guardar = [];
