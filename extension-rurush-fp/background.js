@@ -303,6 +303,22 @@ async function asegurarScript(tabId) {
   try { await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] }); } catch {}
 }
 
+// Turno compartido con Rurush Difusiones (ver turnoWA en content.js): si Difusiones está
+// enviando, esta corrida no entra y se reintenta en 10 min; mientras corre, se renueva cada minuto.
+const QUIEN_TURNO = 'Rurush FP';
+let turnoTimer = null, turnoTab = null;
+async function tomarTurno(tabId) {
+  const r = await ask(tabId, { type: 'turno', accion: 'tomar', quien: QUIEN_TURNO, ms: 4 * 60e3 });
+  if (r && r.ok === false) throw new Error(`WhatsApp Web ocupado: ${r.quien} está enviando. Reintento en 10 min.`);
+  turnoTab = tabId;
+  clearInterval(turnoTimer);
+  turnoTimer = setInterval(() => ask(turnoTab, { type: 'turno', accion: 'tomar', quien: QUIEN_TURNO, ms: 4 * 60e3 }), 60e3);
+}
+async function soltarTurno() {
+  clearInterval(turnoTimer); turnoTimer = null;
+  if (turnoTab != null) { await ask(turnoTab, { type: 'turno', accion: 'soltar', quien: QUIEN_TURNO }); turnoTab = null; }
+}
+
 // Mensaje claro cuando WhatsApp Web no está listo.
 async function errorWA(tabId) {
   const r = await ask(tabId, { type: 'ping' });
@@ -416,6 +432,7 @@ async function correrAnuncios(reason) {
     const status = await waitFor(tab.id, { type: 'ping' }, (r) => r.loggedIn, 90000);
     if (!status) throw new Error(await errorWA(tab.id));
     if (cfg.expectedNumber && status.wid !== String(cfg.expectedNumber).replace(/\D/g, '')) throw new Error(`Número de WhatsApp Web incorrecto (${status.wid}).`);
+    await tomarTurno(tab.id);
     const bloqueados = new Set(cfg.blocklist.map(ultimos9).filter((x) => x.length === 9));
 
     const anotar = async (id, dato) => {
@@ -493,6 +510,7 @@ async function correrAnuncios(reason) {
     resumen.alertas.push(String(e.message || e));
   } finally {
     clearInterval(latido);
+    await soltarTurno();
     await chrome.storage.local.set({ lock: 0 });
     const linea = [
       resumen.anuncios.length && `📣 ${resumen.anuncios.length} de anuncio`,
@@ -928,7 +946,14 @@ async function correrModulo(key, reason, programado) {
   try {
     // domingo: el módulo tiene dos partes
     const partes = key === 'm5' ? ['m5a', 'm5b'] : key === 'n2' ? [] : [key];
-    if (key === 'n2') await correrNutriSeguimiento(cfg, now, real, manual, inicio, resumen);
+    if (key === 'n2') {
+      try { await correrNutriSeguimiento(cfg, now, real, manual, inicio, resumen); }
+      catch (e) {
+        // WhatsApp Web sin sesión u ocupado por Difusiones: reintentar en 10 min (hasta 3 h de atraso)
+        resumen.alertas.push(`n2: ${e.message || e}`);
+        if (!manual) chrome.alarms.create(`retry:${key}:${programado || ''}`, { delayInMinutes: 10 });
+      }
+    }
     let enviadosCorrida = 0;
     const tocados = new Set(); // un solo mensaje por teléfono por corrida
     let fallosEtiqueta = 0;
@@ -959,6 +984,7 @@ async function correrModulo(key, reason, programado) {
         if (!status.wid) throw new Error('No pude leer el número de la sesión de WhatsApp Web. No se envió nada.');
         if (status.wid !== String(cfg.expectedNumber).replace(/\D/g, '')) throw new Error(`Número de WhatsApp Web incorrecto (${status.wid}). No se envió nada.`);
       }
+      await tomarTurno(tab.id);
       const bloqueados = new Set(cfg.blocklist.map(ultimos9).filter((x) => x.length === 9));
 
       for (const fp of plan.lista) {
@@ -1050,6 +1076,7 @@ async function correrModulo(key, reason, programado) {
     resumen.alertas.push(String(e.message || e));
   } finally {
     clearInterval(latido);
+    await soltarTurno();
     await chrome.storage.local.set({ lock: 0 });
     const linea = [
       resumen.enviados.length && `✅ ${resumen.enviados.length} enviados`,
@@ -1256,6 +1283,7 @@ async function correrNutriSeguimiento(cfg, now, real, manual, inicio, resumen) {
   const status = await waitFor(tab.id, { type: 'ping' }, (r) => r.loggedIn, 90000);
   if (!status) throw new Error(await errorWA(tab.id));
   if (cfg.expectedNumber && status.wid !== String(cfg.expectedNumber).replace(/\D/g, '')) throw new Error(`Número de WhatsApp Web incorrecto (${status.wid}). No se envió nada.`);
+  await tomarTurno(tab.id);
   const bloqueados = new Set(cfg.blocklist.map(ultimos9));
   const guardar = [];
   let enviados = 0;

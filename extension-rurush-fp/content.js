@@ -663,8 +663,24 @@ async function enviarTexto(text, seguro) {
   return clickSend();
 }
 
+
+// Turno compartido entre Rurush FP y Rurush Difusiones: las dos usan la misma pestaña de
+// WhatsApp Web, así que quien envía toma el turno y la otra espera. Vive en el localStorage
+// de web.whatsapp.com (lo ven las dos extensiones) y vence solo si nadie lo renueva.
+function turnoWA(msg) {
+  const K = 'rurush_turno', ahora = Date.now();
+  let t = null;
+  try { t = JSON.parse(localStorage.getItem(K) || 'null'); } catch (e) {}
+  if (msg.accion === 'soltar') { if (t && t.quien === msg.quien) localStorage.removeItem(K); return { ok: true }; }
+  if (t && t.hasta > ahora && t.quien !== msg.quien) return { ok: false, quien: t.quien, hasta: t.hasta };
+  localStorage.setItem(K, JSON.stringify({ quien: msg.quien, hasta: ahora + (msg.ms || 240000) }));
+  return { ok: true };
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
-  if (msg.type === 'ping') {
+  if (msg.type === 'turno') {
+    reply(turnoWA(msg));
+  } else if (msg.type === 'ping') {
     const loggedIn = !!document.querySelector('#pane-side, #side, [aria-label="Lista de chats"], [aria-label="Chat list"]');
     // "WhatsApp está abierto en otra ventana" (otra pestaña de este Chrome, p. ej. de Difusiones): se toma aquí.
     let otraVentana = false;
