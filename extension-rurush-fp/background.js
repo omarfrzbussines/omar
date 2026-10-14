@@ -1448,6 +1448,7 @@ async function programar(soloFaltantes = false) {
   crear('tick', { delayInMinutes: 1, periodInMinutes: cfg.intervalMin });
   crear('reporte', { when: proximaLima(21, 5), periodInMinutes: 1440 });
   crear('anuncios', { delayInMinutes: 3, periodInMinutes: 30 });
+  crear('recarga', { delayInMinutes: 2, periodInMinutes: 5 });
   for (const [key, mod] of Object.entries(MODULOS)) {
     const hora = key === 'manana' ? [cfg.mananaHora, 0] : mod.hora;
     if (hora) crear(`mod:${key}`, { when: proximaLima(hora[0], hora[1]), periodInMinutes: mod.cadaMin || 1440 });
@@ -1470,7 +1471,24 @@ async function cargarVideosPrecargados() {
 
 chrome.runtime.onInstalled.addListener((d) => { programar(d.reason !== 'install' && d.reason !== 'update'); cargarVideosPrecargados().catch(() => {}); });
 chrome.runtime.onStartup.addListener(() => { programar(true); cargarVideosPrecargados().catch(() => {}); });
+// Autorrecarga: cuando ACTUALIZAR.bat deja archivos nuevos en la carpeta de la extensión, esta se
+// recarga sola (cada 5 min se compara la versión del manifest en disco), pero nunca a mitad de un envío.
+async function autoRecarga() {
+  try {
+    const r = await fetch(chrome.runtime.getURL('manifest.json'), { cache: 'no-store' });
+    const v = (await r.json()).version;
+    if (!v || v === chrome.runtime.getManifest().version) return;
+    if (await ocupadoParaRecargar()) return;
+    chrome.runtime.reload();
+  } catch (e) { /* manifest a medio copiar: se intenta en la próxima vuelta */ }
+}
+async function ocupadoParaRecargar() {
+  const { lock = 0 } = await chrome.storage.local.get('lock');
+  return lock && Date.now() - lock < 10 * 60e3;
+}
+
 chrome.alarms.onAlarm.addListener((a) => {
+  if (a.name === 'recarga') return autoRecarga();
   if (a.name === 'tick') { reintentarVideos().catch(() => {}); return encolar('m1', 'alarm'); }
   if (a.name === 'reporte') return descargarReporte(a.scheduledTime);
   if (a.name === 'anuncios') { cola = cola.then(() => correrAnuncios('alarm')).catch((e) => log({ level: 'error', mod: 'fb', msg: `Chats de anuncios: ${e.message || e}` })); return; }

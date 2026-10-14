@@ -1,7 +1,7 @@
 ﻿# RURUSH — trae lo nuevo de GitHub y sube los Apps Script a Google (0 tokens).
 # Lo llama ACTUALIZAR.bat. Nunca borra archivos de Google: primero baja el proyecto,
 # encima pone los archivos del repo y recién ahí sube.
-param([switch]$SoloComparar)
+param([switch]$SoloComparar, [switch]$Auto)   # -Auto: lo usa la tarea programada (sin ventana, deja log)
 $ErrorActionPreference = "Stop"
 $tools = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repo  = Split-Path -Parent $tools
@@ -24,6 +24,21 @@ Linea "`n⬇️  Bajando lo nuevo de GitHub..." Cyan
 if (git status --porcelain) { git diff --ignore-cr-at-eol --quiet; if ($LASTEXITCODE -eq 0) { git checkout -- . } }
 git pull --ff-only
 $despues = (git rev-parse HEAD).Trim()
+if ($Auto) {
+  # Modo automático: si no hay nada pendiente se va en silencio; si hay, deja todo en auto_log.txt
+  $pendiente = $false
+  $est = @{}; if (Test-Path $estadoF) { (Get-Content $estadoF -Raw | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $est[$_.Name] = $_.Value } }
+  foreach ($l in Get-Content (Join-Path $tools "proyectos.txt") -Encoding UTF8) {
+    if ($l.Trim() -eq "" -or $l.Trim().StartsWith("#")) { continue }
+    $c = ($l.Split("|") | ForEach-Object { $_.Trim() })
+    if ($c[1] -and $est[$c[0]] -ne (git log -1 --format=%H -- $c[0]).Trim()) { $pendiente = $true }
+  }
+  if (-not $pendiente -and $antes -eq $despues) { exit 0 }
+  $log = Join-Path $tools "auto_log.txt"
+  if ((Test-Path $log) -and (Get-Item $log).Length -gt 500KB) { Remove-Item $log }
+  Start-Transcript -Path $log -Append | Out-Null
+  Linea "`n===== $(Get-Date -Format 'dd/MM/yyyy HH:mm') =====" Cyan
+}
 if ($antes -eq $despues) { Linea "   Ya estaba al día." } else { git log --oneline "$antes..$despues" | ForEach-Object { Linea "   • $_" } }
 
 # 2) Apps Script
@@ -144,8 +159,23 @@ foreach ($l in Get-Content (Join-Path $tools "proyectos.txt") -Encoding UTF8) {
 }
 if (-not $SoloComparar) { $estado | ConvertTo-Json | Set-Content $estadoF }
 
-# 3) Extensiones que hay que recargar
+# 3) Extensiones: copia a las carpetas desde donde las carga cada Chrome (tools\extensiones.txt)
+$extF = Join-Path $tools "extensiones.txt"
+if (Test-Path $extF) {
+  foreach ($l in Get-Content $extF -Encoding UTF8) {
+    if ($l.Trim() -eq "" -or $l.Trim().StartsWith("#")) { continue }
+    $p = $l.Split("|") | ForEach-Object { $_.Trim() }
+    $origen = Join-Path $repo $p[0]
+    if ((Test-Path $origen) -and $p[1] -and (Test-Path $p[1])) {
+      Copy-Item (Join-Path $origen "*") $p[1] -Recurse -Force
+      Linea "   📁 $($p[0]) copiada a $($p[1])" DarkGray
+    } elseif ($p[1]) { Linea "   ⚠️ No existe la carpeta $($p[1])" Yellow }
+  }
+}
+
+# 4) Extensiones que hay que recargar
 $ext = @(); if ($antes -ne $despues) { $ext = git diff --name-only $antes $despues | Where-Object { $_ -like "extension-*" } | ForEach-Object { $_.Split("/")[0] } | Sort-Object -Unique }
 Linea "`n🧩 Extensiones de Chrome:" Cyan
-if ($ext.Count) { $ext | ForEach-Object { Linea "   🔄 Recarga «$_» en chrome://extensions" Yellow } } else { Linea "   Ninguna cambió." }
+if ($ext.Count) { $ext | ForEach-Object { Linea "   🔄 «$_» cambió: se recarga sola en unos minutos (o toca ⟳ en chrome://extensions)" Yellow } } else { Linea "   Ninguna cambió." }
 Linea "`nListo." Cyan
+if ($Auto) { Stop-Transcript | Out-Null }

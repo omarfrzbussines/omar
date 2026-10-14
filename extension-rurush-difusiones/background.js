@@ -768,12 +768,30 @@ async function siguientePestanaAuto(run) {
 
 function programarAuto() {
   chrome.alarms.create('auto', { delayInMinutes: 1, periodInMinutes: 10 });
+  chrome.alarms.create('recarga', { delayInMinutes: 2, periodInMinutes: 5 });
+}
+
+// Autorrecarga: cuando ACTUALIZAR.bat deja archivos nuevos en la carpeta de la extensión, esta se
+// recarga sola (cada 5 min se compara la versión del manifest en disco), pero nunca a mitad de un envío.
+async function autoRecarga() {
+  try {
+    const r = await fetch(chrome.runtime.getURL('manifest.json'), { cache: 'no-store' });
+    const v = (await r.json()).version;
+    if (!v || v === chrome.runtime.getManifest().version) return;
+    if (await ocupadoParaRecargar()) return;
+    chrome.runtime.reload();
+  } catch (e) { /* manifest a medio copiar: se intenta en la próxima vuelta */ }
+}
+async function ocupadoParaRecargar() {
+  const run = await getRun();
+  return procesando || revisando || (run && run.estado === 'corriendo');
 }
 
 // ───────────────────────── disparadores ─────────────────────────
 chrome.alarms.onAlarm.addListener((a) => {
   if (a.name === 'next') procesar();
   if (a.name === 'auto') autoCheck();
+  if (a.name === 'recarga') autoRecarga();
 });
 
 chrome.runtime.onStartup.addListener(async () => {
