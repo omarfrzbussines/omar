@@ -178,6 +178,7 @@ function app_getCola(llave, base, excluir, sinApi, como) {
 function app_getCola_(llave, base, excluir, api, como) {
   const t0 = Date.now();
   const quien = app_asesora(llave);
+  try { dash_instalarSiFalta(); } catch (e) { console.error("dashboard: " + e); }   // 📊 una sola vez
   // El link de prueba puede ver la cola de una asesora ("ver como"), sin reservarle a nadie.
   const asesora = quien === APP_PRUEBA && APP_ASESORAS.indexOf(como) >= 0 ? como : quien;
   if (APP_BASES.indexOf(base) < 0) throw new Error("Base no habilitada: " + base);
