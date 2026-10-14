@@ -363,3 +363,10 @@ function dg_probar() {
   Logger.log('Horas libres el ' + nu_lab(a) + ': ' + dg_libresTxt(a));
   Logger.log('PIN configurado: ' + (nu_props().getProperty('DIEGO_PIN') ? 'sí' : 'NO — agrega DIEGO_PIN en Propiedades del script'));
 }
+
+/* Ejecutar desde el editor si los buscadores no muestran "ALUMNO ACTIVO": dice si se puede leer la base de AppsFit. */
+function dg_probarActivos() {
+  const v = nu_vigentes();
+  Logger.log('Socios vigentes leídos de AppsFit: ' + Object.keys(v).length + ' (si sale 0 o error, la base no se puede leer)');
+  dg_buscar(nu_props().getProperty('DIEGO_PIN'), 'lara').slice(0, 5).forEach((p) => Logger.log(p.nombre + ' · nivel ' + p.nivel + (p.vence ? ' · vence ' + p.vence : '')));
+}
