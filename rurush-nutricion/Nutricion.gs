@@ -196,16 +196,25 @@ function nu_plan() {
     const futuras = {}; nu_citas(hoy, nu_mas(hoy, 60), false).filter((c) => c.ms > Date.now()).forEach((c) => { futuras[c.pid] = 1; });
     const evaluado = {};   // si ya fue evaluado después (sin cita u otro día), no es no-show
     nu_citas(nu_mas(hoy, -7), hoy, true).forEach((c) => { if (c.pid && (!evaluado[c.pid] || c.fecha > evaluado[c.pid])) evaluado[c.pid] = c.fecha; });
+    const fuera = [];
     pasadas.forEach((c) => {
       if (!c.pid || futuras[c.pid] || usados[c.pid] || (evaluado[c.pid] && evaluado[c.pid] >= c.fecha)) return;
       usados[c.pid] = 1;
       const s = porPid[c.pid];
-      if (!s) { plan.fueraHoja.push(c.nombre + ' (person_id ' + c.pid + ', cita ' + nu_lab(c.fecha) + ' ' + nu_horaTxt(c.hora) + ')'); return; }
+      if (!s) { fuera.push(c); return; }
       if (!s.tel || s.ult === hoy) return;
       const n = nu_nombre(s.nombre);
       plan.noshows.push(job(s, 'noshow', 'Hola' + (n ? ' ' + n : '') + '! 😊 Vimos que no pudiste asistir a tu evaluación nutricional con Diego — sin problema, te reagendamos cuando gustes 💪\n\n' +
         '¿Te acomoda mejor:\n• ' + nu_lab(a) + ' — mañana (8-11am) o tarde (5-8pm)?\n• ' + nu_lab(b) + ' — mañana (8-11am) o tarde (5-8pm)?\n\n¿Cuál te queda mejor? 😊',
         { resp: 'No asistió ' + c.fecha.slice(8) + '/' + c.fecha.slice(5, 7) + ' ' + c.hora + '. Reagendo enviado ' + hoy.slice(8) + '/' + hoy.slice(5, 7) + '.' }));
+    });
+    // los que no están en la hoja van para Mónica, con su celular (fichas leídas en paralelo)
+    let fichas = [];
+    try { fichas = fuera.length ? nu_pdAll(fuera.map((c) => '/persons/' + c.pid)) : []; } catch (e) {}   // si una ficha falla, igual se avisa sin celular
+    fuera.forEach((c, i) => {
+      const p = (fichas[i] && fichas[i].data) || {};
+      const tel = ((p.phone || []).map((x) => nu_tel(x.value)).filter(Boolean)[0]) || 'sin celular';
+      plan.fueraHoja.push(c.nombre + ' · ' + tel + ' (cita ' + nu_lab(c.fecha) + ' ' + nu_horaTxt(c.hora) + ', person_id ' + c.pid + ')');
     });
   }
   // 2) "por enviar": en pausa (sin tope) o tanda nueva (máx 20, un mensaje por teléfono)
