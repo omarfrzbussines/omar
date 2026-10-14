@@ -337,6 +337,8 @@ function dg_sinCita(pin, q) {
     let pid = q.pid ? String(q.pid) : '';
     if (!pid) {   // antes de crear, buscar por celular para no duplicar
       const hit = (((nu_pd('/persons/search?limit=1&fields=phone&term=' + tel).data || {}).items) || [])[0];
+      if (hit && !nu_mismoNombre(hit.item.name, nombre))
+        throw new Error('El celular ' + tel + ' ya está en la ficha de "' + hit.item.name + '". Revisa el número, o busca a ' + nombre + ' arriba y elígelo de la lista.');
       pid = hit ? String(hit.item.id) : String(nu_pd('/persons', { method: 'post', contentType: 'application/json',
         payload: JSON.stringify({ name: nombre, phone: [{ value: '+51' + tel, primary: true }] }) }).data.id);
     }

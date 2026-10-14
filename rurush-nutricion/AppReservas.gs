@@ -155,6 +155,8 @@ function rv_agendar(pin, q) {
       if (!rv_nombreOk(nombre)) throw new Error('Escribe nombre y apellido reales del socio (no "Socio" ni "Cliente").');
       const hit = ((((nu_pd('/persons/search?limit=10&fields=phone&term=' + tel).data || {}).items) || [])
         .filter((it) => (it.item.phones || []).map(nu_tel).indexOf(tel) >= 0))[0];
+      if (hit && !nu_mismoNombre(hit.item.name, nombre))
+        throw new Error('El celular ' + tel + ' ya está en la ficha de "' + hit.item.name + '". Revisa el número o busca al socio por su nombre.');
       if (hit) pid = String(hit.item.id);
     }
     // validar ANTES de crear nada
