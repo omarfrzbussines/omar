@@ -104,3 +104,11 @@ OCTUBRE, NOVIEMBRE y DICIEMBRE: columna **COD** en ventas y renovación (autocom
 - Cola automática con comodín: en Opciones, «📨 TANDA *» toma todas las pestañas que empiezan así, en el orden del
   Sheet. Las tandas nuevas entran solas. TANDA 4 y 8 no tienen pendientes para Laura/Mónica.
 - 1.3.3: vigilante si la corrida queda «Enviando…» sin alarma; ask() con corte a 20 s; 3 fallas seguidas → pausa.
+
+## 15-oct · Dashboard y reasignación a Danna
+
+- Nueva pestaña **📊 CONTROL DE ENVÍOS** (gid 920011): envíos por línea (hoy/semana/mes), cupo de 300 chats nuevos, stock por tanda y asesora, proyección oct–dic y gráfico de 14 días. Todo con fórmulas sobre 📜 LOG EXTENSIÓN; celdas amarillas = supuestos (tope, límite, qué envía cada línea, bloqueada hasta).
+- Laura quedó con límite de WhatsApp hasta 31/10 → 250 de sus pendientes pasaron a **DANNA** (línea 075): 118 de TANDA 5 + 132 de TANDA 6 (solo filas sin enviar y sin RESULTADO).
+- Mensajes de TANDA 5 y 6 ahora usan `PROPER(ASESORA)` para el nombre (antes solo Laura/Mónica).
+- ⚙️ CONFIG: se quitó «SOLO INASISTENCIAS» de la nota de DANNA, si no la API rechaza las tandas.
+- La 075 también recibe leads de Meta Ads: tope sugerido 25/día en su extensión.
