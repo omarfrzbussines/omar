@@ -119,3 +119,6 @@ OCTUBRE, NOVIEMBRE y DICIEMBRE: columna **COD** en ventas y renovación (autocom
 - Imagen: celda **A3 «🖼 IMAGEN» + enlace en B3** (Drive «Cualquier persona con el enlace», JPG/PNG). Si está la celda y falta el enlace, la API no entrega pendientes.
 - API (`Difusiones_API.gs`): `esSocios_`/`esChatExistente_` → socios activos permitidos, anti-duplicado 1 día, pausas, líneas «solo inasistencias» pueden enviarla; acción nueva `imagen` (UrlFetchApp → base64); `pendientes` devuelve `imagen`.
 - Extensión 1.4.0: si la pestaña tiene imagen, la baja al cargar, la pega en el chat (plan B: soltar), la envía sola y luego reabre el chat con el texto y sigue el flujo normal. Pestañas INASIST|SOCIOS no cuentan para el tope y salen aunque la línea esté en el límite de 300.
+
+## ⚠️ Regla de entrega (pedido de Omar, 15-oct)
+Todo cambio se publica en **main** (merge de la rama de trabajo). Omar solo ejecuta **tools/ACTUALIZAR.bat** (o la tarea automática cada 10 min): baja main, sube los Apps Script con clasp (misma implementación/URL) y copia las extensiones. No mandar zips ni prompts de Cowork para instalar código.
