@@ -529,28 +529,19 @@ async function unPaso() {
     return true;
   }
 
-  // Pestaña con imagen: primero la imagen (sola) y después el texto de siempre.
-  if (run.conImagen && run.imagenEnviadaA !== tel) {
-    const { imagen } = await chrome.storage.local.get('imagen');
-    if (!imagen || imagen.tab !== run.tab) throw new Error('No tengo la imagen de esta pestaña. Vuelve a «Cargar pendientes».');
-    const ri = await ask(tab.id, { type: 'enviarImagen', b64: imagen.b64, mime: imagen.mime, nombre: imagen.nombre }, 90000);
-    if (!ri || !ri.ok) throw new Error(`no pude enviar la imagen a ${etiqueta} (${(ri && ri.error) || 'sin respuesta'}). Revisa el chat.`);
-    run.imagenEnviadaA = tel; // si algo falla con el texto, al reanudar no se repite la imagen
-    await setRun(run);
-    await sleep(2000);
-  }
-  if (run.conImagen) {
-    // el cuadro de texto se vació para la imagen: se vuelve a abrir el chat con el texto
-    const conTexto = await openChat(tab.id, tel, it.mensaje);
-    if (!conTexto || normTexto(conTexto.draft || '') !== normTexto(it.mensaje)) {
-      throw new Error(`a ${etiqueta} ya le salió la imagen pero no se cargó el texto. Reanuda para reintentar solo el texto.`);
-    }
-  }
-
   const inicio = normTexto(it.mensaje).slice(0, 30);
   const antes = await ask(tab.id, { type: 'lastOutgoing' });
-  const r = await ask(tab.id, { type: 'send' });
-  if (!r || !r.ok) throw new Error(`falló el clic en Enviar con ${etiqueta} (${(r && r.error) || 'sin respuesta'})`);
+  let r;
+  if (run.conImagen) {
+    // imagen con el mensaje como comentario: un solo envío
+    const { imagen } = await chrome.storage.local.get('imagen');
+    if (!imagen || imagen.tab !== run.tab) throw new Error('No tengo la imagen de esta pestaña. Vuelve a «Cargar pendientes».');
+    r = await ask(tab.id, { type: 'enviarImagen', b64: imagen.b64, mime: imagen.mime, nombre: imagen.nombre, texto: it.mensaje }, 60000);
+    if (!r || !r.ok) throw new Error(`no envié a ${etiqueta}: ${(r && r.error) || 'sin respuesta de WhatsApp Web'}. Revisa el chat y reanuda.`);
+  } else {
+    r = await ask(tab.id, { type: 'send' });
+    if (!r || !r.ok) throw new Error(`falló el clic en Enviar con ${etiqueta} (${(r && r.error) || 'sin respuesta'})`);
+  }
 
   // Confirmar la burbuja: se busca por su texto. Si tiene reloj se espera hasta 1 minuto;
   // si no se puede leer, no se espera de más (el cuadro ya quedó vacío: salió).

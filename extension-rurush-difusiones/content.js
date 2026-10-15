@@ -227,39 +227,50 @@ async function esperar(fn, ms) {
 
 const salientes = () => document.querySelectorAll('#main .message-out, #main [data-id^="true_"]').length;
 
-async function enviarImagen({ b64, mime, nombre }) {
+async function enviarImagen({ b64, mime, nombre, texto }) {
   const c = compose();
   if (!c) return { ok: false, error: 'el chat no está abierto' };
-  clearDraft();
   const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
   const archivo = new File([bytes], nombre || 'promo.jpg', { type: mime || 'image/jpeg' });
-  const antes = salientes();
-
   const conArchivo = () => { const dt = new DataTransfer(); dt.items.add(archivo); return dt; };
+
+  // Con el texto ya en el cuadro, WhatsApp lo pasa como comentario de la imagen:
+  // sale UN solo mensaje (imagen + texto abajo).
   c.focus();
   c.dispatchEvent(new ClipboardEvent('paste', { clipboardData: conArchivo(), bubbles: true, cancelable: true }));
+  let metodo = 'pegar';
   let vista = await esperar(vistaPrevia, 8000);
   if (!vista) {
     // plan B: soltar el archivo sobre el chat (como arrastrarlo)
+    metodo = 'soltar';
     const zona = document.querySelector('#main');
     const dt = conArchivo();
     for (const t of ['dragenter', 'dragover', 'drop']) zona.dispatchEvent(new DragEvent(t, { dataTransfer: dt, bubbles: true, cancelable: true }));
     vista = await esperar(vistaPrevia, 8000);
   }
   if (!vista) return { ok: false, error: 'no se abrió la vista previa de la imagen' };
+  await new Promise((r) => setTimeout(r, 800));
+  vista = vistaPrevia() || vista;
 
-  // si WhatsApp pasó algún texto como comentario de la imagen, se borra: el texto va aparte
-  if (vista.comentario && vista.comentario.innerText.trim()) {
+  const cancelar = (error) => {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+    return { ok: false, error, metodo };
+  };
+  const leer = () => normTexto(vista.comentario ? vista.comentario.innerText : '');
+  if (!leer() && vista.comentario) {
+    // no pasó el texto: se pega como comentario
+    const dt = new DataTransfer();
+    dt.setData('text/plain', texto);
     vista.comentario.focus();
-    document.execCommand('selectAll', false, null);
-    document.execCommand('delete', false, null);
+    vista.comentario.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    await new Promise((r) => setTimeout(r, 600));
   }
+  if (leer() !== normTexto(texto)) return cancelar('el comentario de la imagen no coincide con el mensaje del Sheet');
+
   vista.boton.click();
-  const salio = await esperar(() => !vistaPrevia() && salientes() > antes, 60000);
-  if (salio) return { ok: true };
-  if (!vistaPrevia()) return { ok: true, sinConfirmar: true };
-  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-  return { ok: false, error: 'la imagen no salió en 1 minuto' };
+  const cerro = await esperar(() => !vistaPrevia(), 20000);
+  if (!cerro) return cancelar('la imagen no salió (la vista previa no se cerró)');
+  return { ok: true, metodo };
 }
 
 // Turno compartido entre Rurush FP y Rurush Difusiones: las dos usan la misma pestaña de
