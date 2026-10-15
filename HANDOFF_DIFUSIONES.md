@@ -112,3 +112,10 @@ OCTUBRE, NOVIEMBRE y DICIEMBRE: columna **COD** en ventas y renovación (autocom
 - Mensajes de TANDA 5 y 6 ahora usan `PROPER(ASESORA)` para el nombre (antes solo Laura/Mónica).
 - ⚙️ CONFIG: se quitó «SOLO INASISTENCIAS» de la nota de DANNA, si no la API rechaza las tandas.
 - La 075 también recibe leads de Meta Ads: tope sugerido 25/día en su extensión.
+
+## 15-oct · Promo referidos a socios activos (v1.4.0)
+
+- Nueva pestaña **📣 SOCIOS ACTIVOS** (gid 920012): 86 socios vigentes de «3. BASE DE SOCIOS» (ACTIVO + VENCE EN…), asesora = ASES. ASIG.; 6 quedan «SIN ASIGNAR» (no se envían). Mensaje con ARRAYFORMULA (saludo en col. M, nombre de la asesora con PROPER).
+- Imagen: celda **A3 «🖼 IMAGEN» + enlace en B3** (Drive «Cualquier persona con el enlace», JPG/PNG). Si está la celda y falta el enlace, la API no entrega pendientes.
+- API (`Difusiones_API.gs`): `esSocios_`/`esChatExistente_` → socios activos permitidos, anti-duplicado 1 día, pausas, líneas «solo inasistencias» pueden enviarla; acción nueva `imagen` (UrlFetchApp → base64); `pendientes` devuelve `imagen`.
+- Extensión 1.4.0: si la pestaña tiene imagen, la baja al cargar, la pega en el chat (plan B: soltar), la envía sola y luego reabre el chat con el texto y sigue el flujo normal. Pestañas INASIST|SOCIOS no cuentan para el tope y salen aunque la línea esté en el límite de 300.

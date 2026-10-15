@@ -201,6 +201,67 @@ async function clickSend() {
   return { ok: false, error: 'el mensaje quedó en el cuadro de texto' };
 }
 
+// ── Imagen: se pega en el cuadro de texto (como Ctrl+V), WhatsApp abre la vista previa
+//    y se aprieta su botón Enviar. Sin texto: el texto va después, como mensaje normal.
+const ICONO_ENVIAR = 'span[data-icon="send"], span[data-icon="wds-ic-send-filled"]';
+
+function vistaPrevia() {
+  const iconos = [...document.querySelectorAll(ICONO_ENVIAR)].filter((i) => !i.closest('#main footer') && i.offsetParent);
+  if (!iconos.length) return null;
+  const icono = iconos[iconos.length - 1];
+  const boton = icono.closest('button, [role="button"]') || icono.parentElement;
+  const textos = [...document.querySelectorAll('div[contenteditable="true"]')]
+    .filter((e) => !e.closest('#main footer') && !e.closest('#side') && !e.closest('#pane-side') && e.offsetParent);
+  return { boton, comentario: textos[textos.length - 1] || null };
+}
+
+async function esperar(fn, ms) {
+  const fin = Date.now() + ms;
+  while (Date.now() < fin) {
+    const r = fn();
+    if (r) return r;
+    await new Promise((res) => setTimeout(res, 300));
+  }
+  return null;
+}
+
+const salientes = () => document.querySelectorAll('#main .message-out, #main [data-id^="true_"]').length;
+
+async function enviarImagen({ b64, mime, nombre }) {
+  const c = compose();
+  if (!c) return { ok: false, error: 'el chat no está abierto' };
+  clearDraft();
+  const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+  const archivo = new File([bytes], nombre || 'promo.jpg', { type: mime || 'image/jpeg' });
+  const antes = salientes();
+
+  const conArchivo = () => { const dt = new DataTransfer(); dt.items.add(archivo); return dt; };
+  c.focus();
+  c.dispatchEvent(new ClipboardEvent('paste', { clipboardData: conArchivo(), bubbles: true, cancelable: true }));
+  let vista = await esperar(vistaPrevia, 8000);
+  if (!vista) {
+    // plan B: soltar el archivo sobre el chat (como arrastrarlo)
+    const zona = document.querySelector('#main');
+    const dt = conArchivo();
+    for (const t of ['dragenter', 'dragover', 'drop']) zona.dispatchEvent(new DragEvent(t, { dataTransfer: dt, bubbles: true, cancelable: true }));
+    vista = await esperar(vistaPrevia, 8000);
+  }
+  if (!vista) return { ok: false, error: 'no se abrió la vista previa de la imagen' };
+
+  // si WhatsApp pasó algún texto como comentario de la imagen, se borra: el texto va aparte
+  if (vista.comentario && vista.comentario.innerText.trim()) {
+    vista.comentario.focus();
+    document.execCommand('selectAll', false, null);
+    document.execCommand('delete', false, null);
+  }
+  vista.boton.click();
+  const salio = await esperar(() => !vistaPrevia() && salientes() > antes, 60000);
+  if (salio) return { ok: true };
+  if (!vistaPrevia()) return { ok: true, sinConfirmar: true };
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  return { ok: false, error: 'la imagen no salió en 1 minuto' };
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg.type === 'ping') {
     reply({ loggedIn: !!document.querySelector('#pane-side'), wid: wid() });
@@ -234,6 +295,9 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     reply(clearDraft());
   } else if (msg.type === 'send') {
     clickSend().then(reply);
+    return true;
+  } else if (msg.type === 'enviarImagen') {
+    enviarImagen(msg).then(reply, (e) => reply({ ok: false, error: String(e && e.message || e) }));
     return true;
   }
   return false;

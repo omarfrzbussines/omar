@@ -201,9 +201,15 @@ async function cargar(tab, asesora) {
     diasAntiDup: data.diasAntiDup || cfg.diasAntiDup,
     res: { enviados: 0, simulados: 0, saltados: 0, alertas: 0 },
     simulacion: cfg.dryRun,
+    conImagen: !!data.imagen,
   };
+  // La imagen se baja una vez por carga y se guarda aparte (no viaja en cada guardado de la corrida).
+  if (run.conImagen) {
+    const img = await api({ a: 'imagen', tab });
+    await chrome.storage.local.set({ imagen: { tab, mime: img.mime, nombre: img.nombre, b64: img.b64 } });
+  }
   await setRun(run);
-  await log('info', `${tab} · ${asesora}: ${data.items.length} para enviar, ${data.excluidos.length} apartados.`);
+  await log('info', `${tab} · ${asesora}: ${data.items.length} para enviar, ${data.excluidos.length} apartados${run.conImagen ? ' · con imagen 🖼' : ''}.`);
   return run;
 }
 
@@ -262,7 +268,9 @@ async function limiteDeLinea(linea) {
   const h = limites[linea];
   return h && h >= limaNow().date ? h : null; // fecha (aaaa-mm-dd) hasta la que no puede abrir chats nuevos
 }
-const esInasist = (tab) => /INASIST/i.test(tab || '');
+// Pestañas a socios (🏃 INASISTENCIAS, 📣 SOCIOS ACTIVOS): son chats que ya existen, así que
+// no cuentan para el tope diario y siguen saliendo aunque la línea llegue al límite de chats nuevos.
+const esInasist = (tab) => /INASIST|SOCIOS/i.test(tab || '');
 
 // Lista de pestañas del modo automático. Una línea que termina en * toma TODAS las pestañas
 // del Sheet que empiezan así, en el orden en que están en el Sheet. Ej.: «📨 TANDA *» incluye
@@ -315,7 +323,7 @@ async function topeDeChatsNuevos(run, tabId, aviso) {
     return true;
   }
   const motivo = `WhatsApp: la línea de ${run.asesora} llegó al límite de chats nuevos del mes (no puede abrir más hasta el ${hasta}). `
-    + 'Hasta esa fecha esta línea solo envía 🏃 INASISTENCIAS; las tandas quedan pendientes.';
+    + 'Hasta esa fecha esta línea solo escribe a socios (🏃 INASISTENCIAS, 📣 SOCIOS); las tandas quedan pendientes.';
   await pausar(motivo);
   notify('Rurush Difusiones', `⛔ ${motivo}`);
   return false;
@@ -501,6 +509,24 @@ async function unPaso() {
     run.res.alertas += 1;
     await siguiente(run, { level: 'warn', msg: `⚠️ ${etiqueta}: el borrador no coincide con el mensaje del Sheet, no envié.` });
     return true;
+  }
+
+  // Pestaña con imagen: primero la imagen (sola) y después el texto de siempre.
+  if (run.conImagen && run.imagenEnviadaA !== tel) {
+    const { imagen } = await chrome.storage.local.get('imagen');
+    if (!imagen || imagen.tab !== run.tab) throw new Error('No tengo la imagen de esta pestaña. Vuelve a «Cargar pendientes».');
+    const ri = await ask(tab.id, { type: 'enviarImagen', b64: imagen.b64, mime: imagen.mime, nombre: imagen.nombre }, 90000);
+    if (!ri || !ri.ok) throw new Error(`no pude enviar la imagen a ${etiqueta} (${(ri && ri.error) || 'sin respuesta'}). Revisa el chat.`);
+    run.imagenEnviadaA = tel; // si algo falla con el texto, al reanudar no se repite la imagen
+    await setRun(run);
+    await sleep(2000);
+  }
+  if (run.conImagen) {
+    // el cuadro de texto se vació para la imagen: se vuelve a abrir el chat con el texto
+    const conTexto = await openChat(tab.id, tel, it.mensaje);
+    if (!conTexto || normTexto(conTexto.draft || '') !== normTexto(it.mensaje)) {
+      throw new Error(`a ${etiqueta} ya le salió la imagen pero no se cargó el texto. Reanuda para reintentar solo el texto.`);
+    }
   }
 
   const inicio = normTexto(it.mensaje).slice(0, 30);
@@ -697,7 +723,7 @@ async function autoCheck() {
     }
     const enTope = !cfg.dryRun && (await contador(status.wid)) >= cfg.topeDiario;
     const limitada = await limiteDeLinea(status.wid);
-    if (limitada) await log('info', `🤖 ${asesora}: límite de chats nuevos de WhatsApp hasta el ${limitada}. Solo 🏃 INASISTENCIAS.`);
+    if (limitada) await log('info', `🤖 ${asesora}: límite de chats nuevos de WhatsApp hasta el ${limitada}. Solo socios (🏃 INASISTENCIAS, 📣 SOCIOS).`);
     const cola = (await colaAuto(cfg, info)).filter((c) => turnos.includes(c.clave)).map((c) => c.tab);
     for (const pestana of cola) {
       if ((limitada || enTope) && !esInasist(pestana)) continue;
