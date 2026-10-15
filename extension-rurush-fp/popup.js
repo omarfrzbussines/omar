@@ -1,13 +1,26 @@
 const $ = (id) => document.getElementById(id);
 
+let MODS = {};
+const ETIQ = { real: ['📤 Envío real', 'real'], sim: ['🧪 Simulación', 'sim'], off: ['Apagado', 'apag'] };
+
 async function pintar() {
   const { config = {}, logs = [] } = await chrome.storage.local.get(['config', 'logs']);
   const enabled = config.enabled !== false;
-  const dryRun = config.dryRun !== false;
   $('estado').textContent = enabled ? '● Activa' : '● Pausada';
   $('estado').className = 'badge ' + (enabled ? 'on' : 'off');
-  $('modo').textContent = dryRun ? '🧪 Simulación (no envía)' : '📤 Envío real';
-  $('modo').className = 'badge ' + (dryRun ? 'test' : 'on');
+
+  const tabla = $('mods');
+  tabla.innerHTML = '';
+  for (const [k, nombre] of Object.entries(MODS)) {
+    const modo = (config.modos && config.modos[k]) || (k === 'm1' ? (config.dryRun === false ? 'real' : 'sim') : 'sim');
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td></td><td style="text-align:right"><span class="badge"></span></td>';
+    tr.firstChild.textContent = nombre;
+    const b = tr.querySelector('.badge');
+    b.textContent = ETIQ[modo][0];
+    b.className = 'badge ' + ETIQ[modo][1];
+    tabla.appendChild(tr);
+  }
 
   const ul = $('logs');
   ul.innerHTML = '';
@@ -35,11 +48,59 @@ async function pintar() {
 $('run').onclick = async () => {
   $('run').disabled = true;
   $('run').textContent = 'Corriendo…';
-  await chrome.runtime.sendMessage({ type: 'runNow' });
+  await chrome.runtime.sendMessage({ type: 'runNow', mod: $('modSel').value });
   $('run').disabled = false;
   $('run').textContent = 'Ejecutar ahora';
   pintar();
 };
+// reporte de texto con todas las corridas de hoy (hora Lima), para revisarlo con Claude
+$('rep').onclick = async () => {
+  const { texto } = await chrome.runtime.sendMessage({ type: 'report' });
+  await navigator.clipboard.writeText(texto);
+  $('rep').textContent = '✓ Copiado';
+  setTimeout(() => ($('rep').textContent = '📋 Copiar reporte de hoy'), 2000);
+};
 $('opts').onclick = () => chrome.runtime.openOptionsPage();
+// prueba: pone la etiqueta FREE PASS al chat que esté abierto en WhatsApp Web
+$('etq').onclick = async () => {
+  $('etq').disabled = true;
+  $('etq').textContent = 'Etiquetando…';
+  const r = await chrome.runtime.sendMessage({ type: 'probarEtiqueta' });
+  let txt = r && r.ok ? (r.ya ? '✓ Ya tenía FREE PASS' : '✓ Etiquetado FREE PASS') : `⚠️ ${(r && r.error) || 'error'}`;
+  if (r && r.diag) {
+    try { await navigator.clipboard.writeText(`ETIQUETA FREE PASS · ${txt}\n${r.diag}`); txt += ' · 📋 diagnóstico copiado: pégaselo a Claude'; } catch (e) { /* sin portapapeles */ }
+  }
+  $('etq').textContent = txt;
+  setTimeout(() => { $('etq').textContent = '🏷️ Probar etiqueta en el chat abierto'; $('etq').disabled = false; }, 12000);
+};
+// revisa si el chat abierto vino de un anuncio y, si vino, le pone la etiqueta (aunque esté en simulación)
+$('fbad').onclick = async () => {
+  $('fbad').disabled = true;
+  $('fbad').textContent = 'Revisando…';
+  const r = await chrome.runtime.sendMessage({ type: 'probarFbAd' });
+  let txt = r && r.ok ? `✓ Anuncio de ${r.red} · ${r.ya ? 'ya tenía la etiqueta' : 'etiquetado'} · video: ${r.video}` : `⚠️ ${(r && r.error) || 'error'}`;
+  if (r && r.diag) {
+    try { await navigator.clipboard.writeText(`ETIQUETA FB ADS · ${txt}\n${r.diag}`); txt += ' · 📋 diagnóstico copiado: pégaselo a Claude'; } catch (e) { /* sin portapapeles */ }
+  }
+  $('fbad').textContent = txt;
+  setTimeout(() => { $('fbad').textContent = '📣 ¿Vino de anuncio? (chat abierto)'; $('fbad').disabled = false; }, 12000);
+};
+// corre ya el módulo "Chats de anuncios" (leads nuevos de Pipedrive → su chat)
+$('fbrun').onclick = async () => {
+  $('fbrun').disabled = true;
+  $('fbrun').textContent = 'Revisando leads…';
+  await chrome.runtime.sendMessage({ type: 'correrAnuncios' });
+  $('fbrun').textContent = '📣 Revisar leads nuevos ahora';
+  $('fbrun').disabled = false;
+  pintar();
+};
+chrome.runtime.sendMessage({ type: 'modulos' }, (m) => {
+  MODS = m || {};
+  for (const [k, nombre] of Object.entries(MODS)) {
+    const o = document.createElement('option');
+    o.value = k; o.textContent = nombre;
+    $('modSel').appendChild(o);
+  }
+  pintar();
+});
 chrome.storage.onChanged.addListener(pintar);
-pintar();

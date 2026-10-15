@@ -3,17 +3,63 @@
 Reemplaza la rutina **FPS 2HRS** sin gastar uso de Claude. Corre en el Chrome
 donde está abierto WhatsApp Web (Pipechat) de las asesoras.
 
-## Qué hace (cada 30 min, 8am–8pm, lun–sáb, hora Lima)
+## Módulos (hora Lima)
 
-1. **Pipedrive** → actividades `FP…` / `FREE PASS…` de HOY (ventana ayer → hoy+2 por el bug de UTC).
-2. **Portero** → solo sigue si a alguna clase le faltan **≤ 4h** y todavía no pasó.
-3. **WhatsApp Web** → abre el chat y lo lee:
-   - ya tiene recordatorio cercano con GPS hoy → salta
-   - canceló / pidió reagendar → salta
-   - el chat menciona **otra hora** distinta a Pipedrive → **no envía**, lo marca ⚠️ para revisar a mano
-   - confirmó → reconfirmación + GPS · no respondió → "¿confirmas?" + GPS
-4. **Envía** un solo mensaje (≤180 caracteres, combinatorio para que no se repita).
-5. Registra cada FP enviado para no repetirle, y muestra el resumen en el ícono 🔥.
+| Módulo | Cuándo | A quién | Reemplaza |
+|---|---|---|---|
+| Recordatorio 2h | cada 30 min, lun–sáb 8–20h | FP de hoy con ≤4h para la clase | FPS 2HRS |
+| Recordatorio de la mañana | lun–sáb 9:00 (configurable) | FP de hoy desde la 1pm | (nuevo) |
+| No-show de ayer | lun–sáb 9:15 | FP de ayer que no vinieron | FP 9 AM (parte no-shows) |
+| Sábado seguimiento | sáb 11:00 | no-shows lun–sáb sin FP nuevo | FP SABADOS SEGUIMIENTO |
+| No-show de la mañana | lun–sáb 13:00 | FP de hoy 6:00–11:30 | FP 1PM |
+| Refuerzo noche anterior | dom–vie 20:00 | FP de mañana | FP 8PM (parte FP de mañana) |
+| No-show de la tarde | lun–sáb 20:10 | FP de hoy 11:30–18:30 | FP 8PM (parte no-shows) |
+| Domingo | dom 9:00 | FP del lunes + no-shows de la semana | DOMINGO REC FP 9 AM |
+| Etiquetar FREE PASS | cada 2h desde 8:40 | todo el que tenga FP en Pipedrive (hoy a 14 días) | (nuevo) |
+| Chats de anuncios | cada 30 min, 8–21h | leads nuevos de Pipedrive (3 días) | etiquetar a mano mirando la foto |
+
+Cada módulo tiene su modo en Opciones: 🧪 Simulación (no envía), 📤 Envío real o Apagado.
+
+Reglas comunes:
+- Antes de escribir abre el chat, comprueba que es el del número y lo lee.
+- Reagendos: máximo 1 cada 48h y 3 en total por persona; nunca a quien ya tiene un FP nuevo.
+- Salta a quien escribió hace <3h, dijo que ya asistió, que avisa, o canceló (según el módulo).
+- Avisa ⚠️ para revisar a mano: otra hora en el chat, "no me interesa", "voy el viernes" sin FP nuevo.
+- Nunca escribe antes de las 6:00 ni después de las 21:30; si la PC estuvo apagada >3h a la hora programada, ese módulo se omite.
+- No escribe en Pipedrive (salvo el campo Video de los chats de anuncios).
+- Dirección: Av. Larco 1164, Víctor Larco, al costado de Mass.
+
+Etiquetar FREE PASS: abre el chat y le pone la etiqueta de WhatsApp Business "FREE PASS"
+(⋮ → Añadir a la lista → FREE PASS). No quita otras etiquetas; si no puede saber si ya la tenía, no toca nada.
+Máximo 15 por corrida; a cada persona se la etiqueta una sola vez. Para probarlo: abre un
+chat en WhatsApp Web y toca 🏷️ Probar etiqueta en el chat abierto (en el ícono 🔥).
+
+## Chats de anuncios (FB / Instagram) → Video en Pipedrive + etiqueta FB ADS
+
+Lo hace la extensión sola, nadie tiene que abrir los chats:
+
+1. Cada 30 min (8:00–21:00) toma las personas **creadas en Pipedrive en los últimos 3 días** que todavía no revisó (máx. 15 por vuelta).
+2. Abre su chat de WhatsApp: por celular, o por el **@usuario** si en Pipedrive solo tiene eso (lo busca en la lista de chats).
+3. Busca la tarjeta **"Anuncio de facebook · Ver detalles"**; si la conversación es larga, **sube hasta el inicio del chat** (máx. 25 s).
+4. Si vino de anuncio:
+   - reconoce el **video por la miniatura** y llena el campo **Video** de la persona (solo si está vacío; nunca cambia uno ya puesto);
+   - pone la etiqueta de WhatsApp Business **FB ADS** (créala una vez a mano; el nombre se cambia en Opciones).
+5. Si el chat estaba **sin leer**, lo vuelve a dejar sin leer (WhatsApp igual le muestra al lead el doble check azul).
+6. Si no vino de anuncio (llegó al inicio y no hay tarjeta), lo anota y no lo vuelve a abrir.
+
+- Si alguien usa WhatsApp Web, no corre (o para a la mitad) y sigue en la próxima vuelta.
+- Viene en 🧪 Simulación: abre los chats y anota qué haría, pero no escribe en Pipedrive ni etiqueta. Pásalo a 📤 Etiquetar en Opciones.
+- 📣 Revisar leads nuevos ahora (ícono 🔥) corre la vuelta al momento.
+- **Videos por aprender** (Opciones): si llega una miniatura que no conoce, queda ahí con la lista de leads; eliges una vez cuál video es y se llena a todos.
+- **Videos aprendidos** (Opciones): si uno quedó mal, se borra.
+- `videos-precargados.json` trae videos ya cargados (miniatura recortada de capturas de WhatsApp Web): S M EDITA, FOTO CANSADA DE ENTRENAR SOLA, NUNCA PISASTE UN GYM (opción 251; hay otra 126 con el mismo nombre que ya no se usa), VIDEO VIVES CERCA (sacado de la imagen ampliada: si un lead de ese video cae en "Videos por aprender", elegirlo ahí lo corrige). Mismo video = diferencia de huella ≤ 12; entre videos distintos hoy la mínima es 27.
+- Además, cuando una persona abre un chat de anuncio, se procesa al toque (sin subir, para no moverle la pantalla).
+- 📣 ¿Vino de anuncio? (ícono 🔥) procesa el chat abierto aunque esté en simulación.
+
+La imagen "cómo llegar" (Opciones) va en el recordatorio 2h, el refuerzo de la noche anterior y el del domingo.
+
+Todos los días a las **9:05pm** descarga el reporte del día en
+`Descargas/RurushFP/reporte-AAAA-MM-DD.txt` (también está el botón 📋 Copiar reporte de hoy).
 
 Nunca contacta los números de la lista de bloqueo (vienen cargados 51942853538 y 51953876647).
 
@@ -28,13 +74,11 @@ Nunca contacta los números de la lista de bloqueo (vienen cargados 51942853538 
    - **Guardar**
 5. Deja una pestaña de WhatsApp Web abierta (mejor fijada). Si no hay, la extensión la abre.
 
-## Primera vez: modo simulación 🧪
+## Activar un módulo
 
-Viene con **Simulación activada**: hace todo menos apretar Enviar y te muestra en el
-ícono 🔥 qué mensaje le habría mandado a cada uno. Revisa un par de corridas y, si
-todo cuadra, en Opciones desmarca **Simulación** → desde ahí envía de verdad.
-
-Después **desactiva la rutina "FPS 2HRS"** para que no manden los dos.
+1. Viene en 🧪 Simulación. Déjalo correr 1–2 días y revisa en el ícono 🔥 qué habría enviado.
+2. Si está bien, en Opciones pásalo a 📤 Envío real.
+3. Pausa (o recorta) la rutina de Claude que reemplaza, para que no salgan mensajes dobles.
 
 ## Convivencia con las rutinas de Claude
 

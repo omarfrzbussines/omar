@@ -1,0 +1,339 @@
+/**
+ * RURUSH — puente de llamadas entre el Sheet y la extensión de Chrome
+ *          + la app del celular de las asesoras (archivo AppLlamadas).
+ *
+ * v2 (oct-2026):
+ *   - Cada llamada puede tener HORA, OBSERVACION, FECHA FP y HORA FP (se buscan por título).
+ *   - Al registrar AGENDADO se crea el FP en Pipedrive (llama a procesarFilaFP del
+ *     archivo AGENDAMIENTO AUTOMÁTICO): el onEdit no se dispara con escrituras de scripts.
+ *   - doGet atiende también la app del celular (?k=llave de la asesora).
+ *
+ * Todos los nombres llevan el prefijo LL_ / ll_ (los archivos comparten ámbito global).
+ *
+ * DESPLIEGUE: Implementar → Administrar implementaciones → ✏️ → Nueva versión.
+ */
+
+// ⚠️ Deja aquí TU línea actual de LL_TOKEN (la que ya tenías en este archivo).
+const LL_TOKEN = "PEGA-AQUI-TU-LL_TOKEN";
+
+const LL_BASES = [
+  "DIARIO 🔥", "2026", "FP 2026 NI", "FPS NA 2026",
+  "ACTIVOS", "INASISTENCIAS", "INACTIVOS",
+  "EXAL2025", "FPS 2025", "2025", "2024"
+];
+const LL_FILA_HEADER = 2;
+const LL_CIERRA = ["CLIENTE", "DESCARTADO", "AGENDADO", "OTRA CIUDAD"];
+
+// Horas tal como las tiene el desplegable del Sheet ("6:00 am" … "10:30 pm")
+const LL_HORAS = (function () {
+  const out = [];
+  for (let m = 6 * 60; m <= 22 * 60 + 30; m += 30) {
+    const h = Math.floor(m / 60), h12 = ((h + 11) % 12) + 1;
+    out.push(h12 + ":" + (m % 60 ? "30" : "00") + " " + (h < 12 ? "am" : "pm"));
+  }
+  return out;
+})();
+
+/* ---------- entradas ---------- */
+
+function doGet(e) {
+  // La app del celular entra con ?k=<llave de la asesora>
+  if (e && e.parameter && e.parameter.k) return app_doGet(e);
+  return ll_responder(function () {
+    ll_verificar(e);
+    const p = e.parameter;
+    switch (p.accion) {
+      case "bases":  return { bases: ll_contarBases(p.asesora || "") };
+      case "cola":   return { cola: ll_traerCola(p.base, p.asesora || "", Number(p.limit || 25)) };
+      case "ping":   return { ok: true, sheet: SpreadsheetApp.getActive().getName() };
+      case "registrar": return ll_registrar({
+        base: p.base, fila: Number(p.fila), telefono: p.telefono,
+        asesora: p.asesora, estado: p.estado, observacion: p.observacion || "",
+        fechaFp: p.fechaFp || "", horaFp: p.horaFp || ""
+      });
+      default:       throw new Error("Acción desconocida: " + p.accion);
+    }
+  });
+}
+
+function doPost(e) {
+  return ll_responder(function () {
+    ll_verificar(e);
+    const d = JSON.parse(e.postData.contents || "{}");
+    if (d.token !== LL_TOKEN) throw new Error("Token inválido");
+    return ll_registrar(d);
+  });
+}
+
+function ll_verificar(e) {
+  const t = (e && e.parameter && e.parameter.token) || "";
+  if (t !== LL_TOKEN && !(e.postData)) throw new Error("Token inválido");
+}
+
+function ll_responder(fn) {
+  let salida;
+  try { salida = { ok: true, data: fn() }; }
+  catch (err) { salida = { ok: false, error: String(err && err.message || err) }; }
+  return ContentService.createTextOutput(JSON.stringify(salida)).setMimeType(ContentService.MimeType.JSON);
+}
+
+/* ---------- lectura de la estructura ----------
+   Cada "ESTADO" es una llamada. Hacia atrás (hasta el ASESOR) están FECHA y HORA;
+   hacia adelante (hasta la siguiente llamada) OBSERVACION, FECHA FP y HORA FP.
+   Nada está clavado por número de columna (índices base 0, -1 = no existe). */
+
+function ll_estructura(hoja) {
+  const ancho = hoja.getLastColumn();
+  const head = hoja.getRange(LL_FILA_HEADER, 1, 1, ancho).getValues()[0]
+    .map(function (c) { return String(c || "").trim().toUpperCase(); });
+  const col = function (nombre) { return head.indexOf(nombre); };
+  const numero = col("NUMERO");
+
+  const rondas = [];
+  for (let i = 0; i < head.length; i++) {
+    if (head[i] !== "ESTADO") continue;
+    const ro = { asesor: -1, timbrada: -1, duracion: -1, fecha: -1, hora: -1, estado: i, obs: -1, fpFecha: -1, fpHora: -1 };
+    for (let j = i - 1; j >= 0; j--) {
+      if (head[j] === "ESTADO") break;
+      if (ro.timbrada < 0 && head[j] === "TIMBRADA") ro.timbrada = j;
+      if (ro.duracion < 0 && (head[j] === "DURACION" || head[j] === "DURACIÓN")) ro.duracion = j;
+      if (ro.hora < 0 && head[j] === "HORA") ro.hora = j;
+      if (ro.fecha < 0 && head[j] === "FECHA") ro.fecha = j;
+      if (head[j] === "ASESOR") { ro.asesor = j; break; }
+    }
+    // En la primera llamada el título del asesor a veces es un nombre ("VALERIA").
+    if (ro.asesor < 0 && rondas.length === 0 && numero >= 0) ro.asesor = numero + 1;
+    for (let j = i + 1; j < head.length; j++) {
+      if (head[j] === "ASESOR" || head[j] === "ESTADO") break;
+      if (ro.obs < 0 && (head[j] === "OBSERVACION" || head[j] === "OBSERVACIÓN")) ro.obs = j;
+      if (ro.duracion < 0 && (head[j] === "DURACION" || head[j] === "DURACIÓN")) ro.duracion = j;
+      if (ro.fpFecha < 0 && head[j] === "FECHA FP") ro.fpFecha = j;
+      if (ro.fpHora < 0 && head[j] === "HORA FP") ro.fpHora = j;
+    }
+    rondas.push(ro);
+  }
+
+  // DIA = fecha del lead, solo si está ANTES de la 1ª llamada (si no, "FECHA" sería la de la llamada)
+  const primera = rondas.length ? Math.min(rondas[0].asesor >= 0 ? rondas[0].asesor : 999, rondas[0].estado) : 999;
+  const antes = function (c) { return c >= 0 && c < primera ? c : -1; };
+  return {
+    head: head, ancho: ancho, numero: numero, nombre: col("NOMBRE"), rondas: rondas,
+    origen: col("ORIGEN") >= 0 ? col("ORIGEN") : col("MEDIO"),
+    dia: antes(col("DIA")) >= 0 ? col("DIA") : antes(col("FECHA")),
+    membresia: col("MENBRESIA") >= 0 ? col("MENBRESIA") : col("MEMBRESIA")
+  };
+}
+
+/* ---------- cola de llamadas (extensión) ---------- */
+
+function ll_traerCola(base, asesora, limite) {
+  const hoja = SpreadsheetApp.getActive().getSheetByName(base);
+  if (!hoja) throw new Error("No existe la pestaña " + base);
+  const est = ll_estructura(hoja);
+  const ultima = hoja.getLastRow();
+  if (ultima <= LL_FILA_HEADER) return [];
+
+  const datos = hoja.getRange(LL_FILA_HEADER + 1, 1, ultima - LL_FILA_HEADER, est.ancho).getValues();
+  const tels = hoja.getRange(LL_FILA_HEADER + 1, est.numero + 1, ultima - LL_FILA_HEADER, 1).getDisplayValues();
+  datos.forEach(function (f, i) { f[est.numero] = tels[i][0]; });
+  const yo = String(asesora || "").trim().toUpperCase();
+  const salida = [];
+
+  for (let r = 0; r < datos.length && salida.length < limite; r++) {
+    const fila = datos[r];
+    const tel = ll_limpiarTel(fila[est.numero]);
+    if (!tel) continue;
+    const hechas = ll_historial(est, fila);
+    const libre = ll_rondaLibre(est, fila);
+    if (libre < 0) continue;
+    if (hechas.length && LL_CIERRA.indexOf(hechas[hechas.length - 1].estado) >= 0) continue;
+    const duenio = String(fila[est.rondas[0].asesor] || "").trim().toUpperCase();
+    if (yo && duenio && duenio !== yo) continue;
+    salida.push({
+      fila: LL_FILA_HEADER + 1 + r,
+      nombre: String(fila[est.nombre] || "").trim(),
+      telefono: tel,
+      origen: est.origen >= 0 ? String(fila[est.origen] || "").trim() : "",
+      dia: est.dia >= 0 ? ll_comoTexto(fila[est.dia]) : "",
+      membresia: est.membresia >= 0 ? String(fila[est.membresia] || "").trim() : "",
+      asignada: duenio, ronda: libre + 1, historial: hechas
+    });
+  }
+  return salida;
+}
+
+function ll_historial(est, fila) {
+  const hechas = [];
+  est.rondas.forEach(function (ro, k) {
+    const e = String(fila[ro.estado] || "").trim();
+    if (!e) return;
+    hechas.push({
+      n: k + 1,
+      asesor: ro.asesor >= 0 ? String(fila[ro.asesor] || "").trim() : "",
+      fecha: ro.fecha >= 0 ? ll_comoTexto(fila[ro.fecha]) : "",
+      fechaIso: ro.fecha >= 0 && fila[ro.fecha] instanceof Date ? ll_iso(fila[ro.fecha]) : "",
+      estado: e.toUpperCase(),
+      obs: ro.obs >= 0 ? String(fila[ro.obs] || "").trim() : ""
+    });
+  });
+  return hechas;
+}
+
+function ll_rondaLibre(est, fila) {
+  for (let k = 0; k < est.rondas.length; k++) {
+    if (!String(fila[est.rondas[k].estado] || "").trim()) return k;
+  }
+  return -1;
+}
+
+function ll_contarBases(asesora) {
+  const ss = SpreadsheetApp.getActive();
+  const out = [];
+  for (let i = 0; i < LL_BASES.length; i++) {
+    if (!ss.getSheetByName(LL_BASES[i])) continue;
+    out.push({ base: LL_BASES[i], pendientes: ll_traerCola(LL_BASES[i], asesora, 500).length });
+  }
+  return out;
+}
+
+/* ---------- registrar una llamada (extensión y app del celular) ---------- */
+
+// Tiempo mínimo fuera de la app (en el marcador) para poder marcar cada resultado.
+// Una llamada que no contestan timbra ~25-40 s; una conversación dura más.
+const LL_MIN_SEG = { "APAGADO": 0, "NO CONTESTO": 15, "CORTO": 15,
+                     "CONTESTO": 30, "AGENDADO": 30, "CLIENTE": 30, "DESCARTADO": 30, "OTRA CIUDAD": 30 };
+
+function ll_registrar(d) {
+  if (!d.fila || !d.estado) throw new Error("Faltan datos de la llamada");
+  if (d.segundos != null && !d.sinLlamar && !d.sinMinimo) {   // viene de la app del celular: se exige haber llamado (salvo socio ya inscrito)
+    const min = LL_MIN_SEG[String(d.estado).trim().toUpperCase()] || 0;
+    if (!(Number(d.intentos) > 0)) throw new Error("Primero toca 📞 Llamar.");
+    if (Number(d.segundos) < min) throw new Error("Para marcar " + d.estado + " la llamada debe durar al menos " + min + " s.");
+  }
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const hoja = SpreadsheetApp.getActive().getSheetByName(d.base);
+    if (!hoja) throw new Error("No existe la pestaña " + d.base);
+    const est = ll_estructura(hoja);
+    const filaPedida = d.fila;
+    let fila = ll_leerFila(hoja, est, d.fila);
+
+    // Si alguien ordenó, insertó o borró filas mientras la asesora llamaba, la persona ya no está en
+    // esa fila: se la busca por su celular y, si aparece una sola vez, se guarda en su fila nueva.
+    if (d.telefono && ll_limpiarTel(fila[est.numero]) !== ll_limpiarTel(d.telefono)) {
+      const tel = ll_limpiarTel(d.telefono), n = hoja.getLastRow();
+      // se lee el texto que se ve: si la columna quedó con formato de fecha, getValues da "Invalid Date"
+      const col = n > LL_FILA_HEADER ? hoja.getRange(LL_FILA_HEADER + 1, est.numero + 1, n - LL_FILA_HEADER, 1).getDisplayValues() : [];
+      const hallados = [];
+      col.forEach(function (r, i) { if (ll_limpiarTel(r[0]) === tel) hallados.push(LL_FILA_HEADER + 1 + i); });
+      if (hallados.length !== 1) throw new Error("La fila cambió en «" + d.base + "» (fila " + filaPedida + ")" + (hallados.length ? " (el número está repetido)" : " (ya no encuentro ese número)") + ". Toca 🔄 y vuelve a intentar." +
+        " [diag: col " + est.numero + "=" + est.head[est.numero] + ", leí «" + fila[est.numero] + "» (" + typeof fila[est.numero] + "), última " + n + ", hoja " + hoja.getName() + "/" + hoja.getParent().getId().slice(0, 6) + ", buscadas " + col.length + "]");
+      d.fila = hallados[0];
+      fila = ll_leerFila(hoja, est, d.fila);
+    }
+    const libre = ll_rondaLibre(est, fila);
+    if (libre < 0) throw new Error("Esta persona ya tiene las 6 llamadas registradas.");
+
+    const ro = est.rondas[libre];
+    // Prueba (link OMAR): pasó todas las verificaciones reales; no se escribe nada.
+    if (d.simular) return { simulado: true, fila: d.fila, ronda: libre + 1, movida: d.fila !== filaPedida };
+    const ahora = new Date();
+    const hoy = Utilities.formatDate(ahora, "America/Lima", "dd/MM/yyyy");
+    const estado = String(d.estado).trim().toUpperCase() === "OTRA CIUDAD" ? "Otra Ciudad" : String(d.estado).toUpperCase();
+    const set = function (c, v) { if (c >= 0) hoja.getRange(d.fila, c + 1).setValue(v); };
+
+    if (ro.asesor >= 0) ll_permitirEnLista(hoja.getRange(d.fila, ro.asesor + 1), String(d.asesora || "").toUpperCase());
+    set(ro.asesor, String(d.asesora || "").toUpperCase());
+    set(ro.fecha, hoy);
+    set(ro.hora, ll_horaDeLista(ahora));
+    set(ro.estado, estado);
+    // intentos (Timbrada 1-3) y duración, si la llamada viene de la app
+    const dur = d.segundos != null ? ll_duracion(d.segundos) : "";
+    if (d.intentos != null) set(ro.timbrada, Math.min(Math.max(Number(d.intentos) || 0, 0), 3));
+    if (dur && ro.duracion >= 0) set(ro.duracion, dur);
+    let obs = String(d.observacion || "").trim();
+    if (dur && ro.duracion < 0) obs = (obs ? obs + " " : "") + "[⏱ " + dur + (d.intentos > 1 ? " · " + d.intentos + " intentos" : "") + "]";
+    if (obs) set(ro.obs, obs);
+
+    // Si agendó free pass: fecha y hora del FP en ESTA llamada, y se crea en Pipedrive.
+    if (estado === "AGENDADO" && d.fechaFp) {
+      set(ro.fpFecha, ll_fechaTexto(d.fechaFp));
+      if (d.horaFp) set(ro.fpHora, d.horaFp);
+    }
+    SpreadsheetApp.flush();
+    if (estado === "AGENDADO" && typeof procesarFilaFP === "function" && BASES_FP.indexOf(hoja.getName()) >= 0) {
+      try { procesarFilaFP(hoja, d.fila); } catch (err) { console.error("procesarFilaFP: " + err); }
+    }
+    return { fila: d.fila, ronda: libre + 1, fecha: hoy };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/* ---------- utilidades ---------- */
+
+// Hora EXACTA de la llamada en Lima, como "7:12 pm" (la columna HORA de la llamada ya no
+// tiene desplegable; la HORA FP sí, porque los free pass se agendan en medias horas).
+function ll_horaDeLista(fecha) {
+  const l = new Date(fecha.getTime() - 5 * 3600 * 1000);
+  const h = l.getUTCHours(), m = l.getUTCMinutes();
+  return (((h + 11) % 12) + 1) + ":" + ll_2(m) + " " + (h < 12 ? "am" : "pm");
+}
+
+// 135 → "2:15"
+function ll_duracion(seg) {
+  const s = Math.max(0, Math.round(Number(seg) || 0));
+  return Math.floor(s / 60) + ":" + ll_2(s % 60);
+}
+
+// "2026-10-09" (lo que manda un <input type=date>) → "09/10/2026"
+function ll_fechaTexto(f) {
+  const m = String(f).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? m[3] + "/" + m[2] + "/" + m[1] : String(f);
+}
+
+// Si la celda tiene una lista desplegable estricta que no incluye ese nombre (p. ej. "OMAR" o una
+// asesora nueva), se agrega el nombre a la lista de ESA celda; si no, setValue falla y no se guarda.
+function ll_permitirEnLista(rango, nombre) {
+  const v = rango.getDataValidation();
+  if (!nombre || !v || v.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) return;
+  const crit = v.getCriteriaValues(), lista = crit[0] || [];
+  if (lista.some(function (x) { return String(x).trim().toUpperCase() === nombre; })) return;
+  rango.setDataValidation(v.copy().requireValueInList(lista.concat([nombre]), crit[1] !== false).build());
+}
+
+// Una fila con el celular tal como se ve en el Sheet (no se rompe si NUMERO tiene formato de fecha).
+function ll_leerFila(hoja, est, n) {
+  const fila = hoja.getRange(n, 1, 1, est.ancho).getValues()[0];
+  if (est.numero >= 0) fila[est.numero] = hoja.getRange(n, est.numero + 1).getDisplayValue();
+  return fila;
+}
+
+function ll_limpiarTel(v) {
+  let s = String(v == null ? "" : v).trim();
+  if (s.indexOf("E") > 0 || s.indexOf("e") > 0) s = Number(s).toFixed(0);
+  s = s.replace(/\.0+$/, "").replace(/\D/g, "");
+  return s.length >= 9 ? s.slice(-9) : "";
+}
+
+// Fechas a texto SIN Utilities.formatDate: esa función es lentísima repetida miles de
+// veces (la cola tardaba ~40 s). Perú es UTC-5 todo el año, así que basta restar 5 h.
+function ll_partes(d) {
+  const l = new Date(d.getTime() - 5 * 3600 * 1000);
+  return [l.getUTCFullYear(), l.getUTCMonth() + 1, l.getUTCDate()];
+}
+const ll_2 = function (n) { return (n < 10 ? "0" : "") + n; };
+function ll_iso(d) { const p = ll_partes(d); return p[0] + "-" + ll_2(p[1]) + "-" + ll_2(p[2]); }
+
+function ll_comoTexto(v) {
+  if (v instanceof Date) { const p = ll_partes(v); return ll_2(p[2]) + "/" + ll_2(p[1]) + "/" + p[0]; }
+  return String(v == null ? "" : v).trim();
+}
+
+/* ---------- prueba manual desde el editor ---------- */
+function ll_probar() {
+  const est = ll_estructura(SpreadsheetApp.getActive().getSheetByName("2026"));
+  Logger.log(JSON.stringify(est.rondas));
+  Logger.log(JSON.stringify(ll_traerCola("2026", "", 2), null, 2));
+}

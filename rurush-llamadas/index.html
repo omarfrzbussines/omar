@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111111">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Llamadas">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icono-192.png">
+<link rel="apple-touch-icon" href="icono-192.png">
+<title>RURUSH Llamadas</title>
+<!-- Abre la app de Llamadas (Apps Script) a pantalla completa. La asesora abre su link ?k=<llave>
+     una vez y la agrega a la pantalla de inicio; la llave queda guardada en su celular (la app
+     instalada en Android abre sin el ?k=). La llave no está en este archivo. -->
+<style>
+  html, body { margin:0; height:100%; background:#111; color:#ccc; font:16px -apple-system, system-ui, sans-serif; }
+  body { padding-top: env(safe-area-inset-top); box-sizing:border-box; }
+  iframe { display:block; width:100%; height:100%; border:0; }
+  p { padding:24px; }
+</style>
+</head>
+<body>
+<script>
+  const EXEC = 'https://script.google.com/macros/s/AKfycbzsvzWanclhKavutDs3l1N-7MEbdY4hojdnS3Pm8WkMffgSPihvwQxPuppMgCNwKG95/exec';
+  let k = new URLSearchParams(location.search).get('k');
+  try { if (k) localStorage.setItem('rr_llave', k); else k = localStorage.getItem('rr_llave'); } catch (e) {}
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if (!k) {
+    // Sin llave (p. ej. un ícono antiguo): se puede pegar el link de la asesora aquí una sola vez.
+    document.body.innerHTML = '<p>Pega aquí tu link de Llamadas (te lo da Omar):</p>' +
+      '<p><input id="l" style="width:100%;padding:12px;font-size:16px;border-radius:10px;border:1px solid #444;background:#1c1c1e;color:#eee" placeholder="https://…?k=…"></p>' +
+      '<p><button id="b" style="width:100%;padding:14px;font-size:17px;border:0;border-radius:10px;background:#e53935;color:#fff">Entrar</button></p>';
+    document.getElementById('b').onclick = () => {
+      const v = document.getElementById('l').value.trim(), m = v.match(/[?&]k=([A-Za-z0-9]+)/) || v.match(/^([A-Za-z0-9]{16,})$/);
+      if (!m) return alert('Ese link no tiene la llave (?k=…).');
+      try { localStorage.setItem('rr_llave', m[1]); } catch (e) {}
+      location.href = './?k=' + m[1];
+    };
+  }
+  else {
+    const f = document.createElement('iframe');
+    f.src = EXEC + '?k=' + encodeURIComponent(k);
+    f.allow = 'microphone; clipboard-write';
+    document.body.appendChild(f);
+  }
+</script>
+</body>
+</html>

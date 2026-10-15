@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="es">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="theme-color" content="#111111">
+<style>
+  :root { --bg:#111; --card:#1c1c1e; --line:#2c2c2e; --tx:#f2f2f2; --mut:#9a9a9f; --red:#e53935; --grn:#34c759; --ice:#64b5f6; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--tx); font:16px -apple-system, system-ui, Roboto, sans-serif; }
+  header { padding:14px 16px 10px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--bg); z-index:5; }
+  .top { display:flex; justify-content:space-between; align-items:center; }
+  h1 { font-size:19px; margin:0; } h1 b { color:var(--red); }
+  .sub { color:var(--mut); font-size:12px; margin-top:3px; }
+  .btn-s { background:var(--card); color:var(--tx); border:1px solid var(--line); border-radius:10px; padding:8px 12px; font-size:15px; }
+  .marcador { display:flex; gap:6px; overflow-x:auto; margin-top:10px; }
+  .m { flex:none; background:var(--card); border-radius:10px; padding:6px 10px; font-size:12px; color:var(--mut); }
+  .m b { color:var(--tx); font-size:15px; margin-right:3px; }
+  main { padding:14px 16px 40px; }
+  .card { background:var(--card); border-radius:16px; padding:16px; }
+  .nombre { font-size:22px; font-weight:700; word-break:break-word; }
+  .num { color:var(--mut); margin-top:4px; font-size:15px; }
+  .meta { margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; }
+  .tag { padding:2px 8px; border-radius:8px; font-size:12px; background:var(--line); color:var(--mut); }
+  .acciones { display:grid; grid-template-columns:2fr 1fr; gap:10px; margin:16px 0 4px; }
+  .llamar, .wa { display:flex; align-items:center; justify-content:center; gap:8px; border-radius:14px; padding:16px; font-size:18px; font-weight:700; text-decoration:none; }
+  .llamar { background:var(--grn); color:#062b12; } .wa { background:#1f3d2b; color:var(--grn); }
+  h2 { font-size:13px; color:var(--mut); font-weight:600; margin:18px 0 8px; text-transform:uppercase; letter-spacing:.04em; }
+  .hist { font-size:13px; color:var(--mut); border-left:2px solid var(--line); padding-left:10px; }
+  .hist div { margin:4px 0; } .hist b { color:var(--tx); font-weight:600; }
+  .estados { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .est { background:var(--card); border:1px solid var(--line); color:var(--tx); border-radius:12px; padding:13px 8px; font-size:15px; }
+  .est.on { border-color:var(--ice); background:#13293d; color:#fff; font-weight:700; }
+  textarea, select, input { width:100%; background:var(--card); color:var(--tx); border:1px solid var(--line); border-radius:12px; padding:12px; font-family:inherit; font-size:16px; }
+  textarea { min-height:84px; resize:vertical; }
+  .tip { color:var(--mut); font-size:12px; margin-top:6px; }
+  .fila2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
+  .guardar { width:100%; margin-top:16px; background:var(--red); color:#fff; border:0; border-radius:14px; padding:16px; font-size:17px; font-weight:700; }
+  .guardar:disabled { opacity:.45; }
+  .saltar { width:100%; margin-top:8px; background:none; border:0; color:var(--mut); padding:10px; font-size:14px; }
+  .toast { position:fixed; left:16px; right:16px; bottom:16px; background:#2c2c2e; color:#fff; padding:12px 14px; border-radius:12px; font-size:14px; display:none; z-index:20; }
+  .toast.err { background:#5c1f1f; }
+  .vacio { text-align:center; color:var(--mut); padding:60px 10px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <div><h1><b>RURUSH</b> Llamadas</h1><div class="sub" id="sub">Hola <?= asesora ?> · base 2026</div></div>
+    <button class="btn-s" id="recargar">🔄</button>
+  </div>
+  <div class="marcador" id="marcador"></div>
+</header>
+<main id="main"><div class="vacio">Cargando tu cola…</div></main>
+<div class="toast" id="toast"></div>
+
+<script>
+const LLAVE = <?!= JSON.stringify(llave) ?>;
+const ASESORA = <?!= JSON.stringify(asesora) ?>;
+const BASE = '2026';
+let cola = [], idx = 0, estado = null, ESTADOS = [], HORAS = [], hoy = {}, pend = null, trayendo = false;
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+function toast(t, err) {
+  const el = $('#toast'); el.textContent = t; el.className = 'toast' + (err ? ' err' : ''); el.style.display = 'block';
+  clearTimeout(el._t); el._t = setTimeout(() => el.style.display = 'none', err ? 6000 : 2200);
+}
+
+function traer(reset) {
+  if (trayendo) return; trayendo = true;
+  const excluir = reset ? [] : cola.slice(idx).map((x) => x.fila);
+  const t0 = Date.now();
+  google.script.run
+    .withSuccessHandler((r) => {
+      trayendo = false;
+      ESTADOS = r.estados; HORAS = r.horas; hoy = r.hoy; pend = r.pendientes;
+      if (reset) { cola = r.cola; idx = 0; } else { cola = cola.concat(r.cola); }
+      $('#sub').textContent = `Hola ${ASESORA} · base 2026 · cargó en ${((Date.now() - t0) / 1000).toFixed(1)} s`;
+      pintarMarcador();
+      if (reset || !actual()) pintar();
+    })
+    .withFailureHandler((e) => { trayendo = false; toast(e.message || String(e), true); if (!cola.length) $('#main').innerHTML = `<div class="vacio">${esc(e.message || e)}</div>`; })
+    .getCola(LLAVE, BASE, excluir);
+}
+
+const actual = () => cola[idx];
+
+function pintarMarcador() {
+  const total = Object.values(hoy).reduce((a, b) => a + b, 0);
+  const cont = (hoy.CONTESTO || 0) + (hoy.CORTO || 0) + (hoy.AGENDADO || 0) + (hoy.CLIENTE || 0);
+  $('#marcador').innerHTML =
+    `<div class="m"><b>${total}</b>llamadas hoy</div><div class="m"><b>${cont}</b>contestaron</div>` +
+    `<div class="m"><b>${hoy.AGENDADO || 0}</b>agendados</div>` +
+    (pend ? `<div class="m"><b>${pend.nuevos}</b>nuevos</div><div class="m"><b>${pend.seguimiento}</b>en seguimiento</div>` : '');
+}
+
+function pintar() {
+  const p = actual();
+  estado = null;
+  if (!p) { $('#main').innerHTML = '<div class="vacio">🎉 No hay más personas en tu cola por ahora.<br><br>Toca 🔄 para buscar de nuevo.</div>'; return; }
+  const esNum = /^[+\d\s()-]+$/.test(p.nombre);
+  const hist = p.rondas.length
+    ? `<h2>Llamadas anteriores</h2><div class="hist">${p.rondas.map((r) => `<div><b>${r.n}ª</b> · ${esc(r.fecha)} · ${esc(r.asesor)} · <b>${esc(r.estado)}</b>${r.obs ? ' — ' + esc(r.obs) : ''}</div>`).join('')}</div>`
+    : '';
+  const fp = p.ronda === 1 ? `<div id="fpbox" style="display:none"><h2>Fecha y hora del Free Pass</h2>
+      <div class="fila2"><input type="date" id="fpf"><select id="fph"><option value="">Hora</option>${HORAS.map((h) => `<option>${h}</option>`).join('')}</select></div></div>` : '';
+  $('#main').innerHTML = `
+    <div class="card">
+      <div class="nombre">${esc(esNum || !p.nombre ? 'Sin nombre' : p.nombre)}</div>
+      <div class="num">+51 ${esc(p.numero.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3'))}</div>
+      <div class="meta"><span class="tag">${p.ronda}ª llamada</span>${p.dia ? `<span class="tag">lead del ${esc(p.dia)}</span>` : ''}${p.origen ? `<span class="tag">${esc(p.origen)}</span>` : ''}</div>
+      <div class="acciones">
+        <a class="llamar" href="tel:+51${p.numero}">📞 Llamar</a>
+        <a class="wa" href="https://wa.me/51${p.numero}" target="_blank">💬</a>
+      </div>
+    </div>
+    ${hist}
+    <h2>¿Cómo salió?</h2>
+    <div class="estados">${ESTADOS.map((e) => `<button class="est" data-e="${esc(e)}">${esc(e)}</button>`).join('')}</div>
+    ${fp}
+    <h2>Observación</h2>
+    <textarea id="obs" placeholder="Toca aquí y usa el 🎤 del teclado para dictar"></textarea>
+    <div class="tip">🎤 Toca el cuadro y el micrófono del teclado: habla y se escribe solo.</div>
+    <button class="guardar" id="guardar" disabled>Guardar y siguiente</button>
+    <button class="saltar" id="saltar">Saltar (no llamé)</button>`;
+  document.querySelectorAll('.est').forEach((b) => b.onclick = () => {
+    estado = b.dataset.e;
+    document.querySelectorAll('.est').forEach((x) => x.classList.toggle('on', x === b));
+    $('#guardar').disabled = false;
+    const box = $('#fpbox'); if (box) box.style.display = estado === 'AGENDADO' ? 'block' : 'none';
+  });
+  $('#guardar').onclick = guardar;
+  $('#saltar').onclick = () => { idx++; pintar(); revisarCola(); };
+  window.scrollTo(0, 0);
+}
+
+// Guardado en segundo plano: la asesora pasa a la siguiente sin esperar.
+function guardar() {
+  const p = actual(); if (!p || !estado) return;
+  const obs = $('#obs').value;
+  const fpf = $('#fpf') ? $('#fpf').value : '', fph = $('#fph') ? $('#fph').value : '';
+  const e = estado;
+  hoy[e] = (hoy[e] || 0) + 1; pintarMarcador();
+  idx++; pintar(); revisarCola();
+  google.script.run
+    .withSuccessHandler(() => toast(`✓ Guardado: ${e}`))
+    .withFailureHandler((err) => { hoy[e]--; pintarMarcador(); toast(`No se guardó (${p.numero}): ${err.message || err}`, true); })
+    .guardar(LLAVE, BASE, p.fila, p.numero, e, obs, fpf, fph);
+}
+
+function revisarCola() { if (cola.length - idx <= 5) traer(false); }
+
+$('#recargar').onclick = () => { $('#main').innerHTML = '<div class="vacio">Cargando…</div>'; traer(true); };
+traer(true);
+</script>
+</body>
+</html>

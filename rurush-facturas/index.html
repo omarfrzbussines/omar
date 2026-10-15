@@ -1,0 +1,1184 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#111111">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Facturas">
+<link rel="icon" href="https://em-content.zobj.net/source/apple/391/receipt_1f9fe.png">
+<link rel="apple-touch-icon" href="https://em-content.zobj.net/source/apple/391/receipt_1f9fe.png">
+<title>RURUSH Facturas</title>
+<!-- Microsoft (login + OneDrive) y SheetJS (solo para crear el Excel la primera vez) -->
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root { --bg:#111; --card:#1c1c1e; --line:#2c2c2e; --tx:#f2f2f2; --mut:#9a9a9f; --red:#e53935; --or:#ff7a1a; --grn:#34c759; --ice:#64b5f6; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--tx); font:15px -apple-system, system-ui, Roboto, sans-serif; padding-bottom:72px; }
+  header { position:sticky; top:0; z-index:5; background:var(--bg); padding:14px 16px 8px; border-bottom:1px solid var(--line); }
+  .top { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  h1 { font-size:20px; margin:0; } h1 b { color:var(--red); }
+  .sub { color:var(--mut); font-size:12px; margin-top:2px; }
+  .btn { background:var(--card); color:var(--tx); border:1px solid var(--line); border-radius:10px; padding:8px 12px; font-size:14px; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .chips.scroll { flex-wrap:nowrap; overflow-x:auto; padding-bottom:2px; }
+  .chip { flex:none; padding:8px 13px; border-radius:16px; background:var(--card); border:1px solid var(--line); color:var(--mut); font-size:14px; }
+  .chip.on { background:var(--red); border-color:var(--red); color:#fff; }
+  .chip small { display:block; font-size:11px; opacity:.8; }
+  main { padding:12px 16px; }
+  label { display:block; color:var(--mut); font-size:12px; margin:14px 0 6px; }
+  label i { color:var(--red); font-style:normal; }
+  input, select, textarea { width:100%; background:var(--card); color:var(--tx); border:1px solid var(--line); border-radius:10px; padding:11px 12px; font-size:16px; font-family:inherit; }
+  textarea { min-height:110px; font-size:14px; }
+  input:focus, textarea:focus { outline:none; border-color:var(--or); }
+  .dos { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .dos label { margin-top:14px; }
+  .foto { display:flex; align-items:center; justify-content:center; flex-direction:column; gap:4px; width:100%; min-height:120px; background:var(--card); border:2px dashed var(--line); border-radius:14px; color:var(--tx); font-size:16px; }
+  .foto span { font-size:34px; }
+  .fotos { display:flex; gap:8px; overflow-x:auto; }
+  .fotos div { position:relative; flex:none; }
+  .fotos img { width:96px; height:128px; object-fit:cover; border-radius:10px; display:block; }
+  .fotos div button { position:absolute; top:4px; right:4px; width:26px; height:26px; border-radius:50%; border:0; background:rgba(0,0,0,.7); color:#fff; font-size:14px; }
+  .fotos .mas { width:96px; height:128px; border-radius:10px; border:2px dashed var(--line); background:var(--card); color:var(--mut); font-size:13px; }
+  .calc { background:var(--card); border-radius:14px; padding:12px; margin-top:18px; }
+  .calc h3 { margin:0 0 8px; font-size:13px; color:var(--mut); font-weight:600; }
+  .calc .r { display:flex; justify-content:space-between; padding:4px 0; font-size:14px; }
+  .calc .r b { font-variant-numeric:tabular-nums; }
+  .calc .r.tot { border-top:1px solid var(--line); margin-top:4px; padding-top:8px; font-size:16px; }
+  .calc .arch { color:var(--mut); font-size:11px; margin-top:8px; word-break:break-all; }
+  .desc { color:#ffb74d; }
+  .guardar { width:100%; margin-top:18px; padding:15px; border:0; border-radius:14px; background:var(--grn); color:#06210f; font-size:17px; font-weight:700; }
+  .guardar:disabled { background:var(--line); color:var(--mut); }
+  .falta { color:var(--mut); font-size:12px; text-align:center; margin-top:8px; }
+  .estado { border-radius:12px; padding:10px 12px; margin-bottom:12px; font-size:13px; display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .estado.sub { background:#13293d; color:var(--ice); } .estado.err { background:#3d1b1b; color:#ff8a80; } .estado.ok { background:#1f3d2b; color:var(--grn); }
+  .estado button { flex:none; background:none; border:1px solid currentColor; color:inherit; border-radius:8px; padding:5px 9px; font-size:12px; }
+  .list { background:var(--card); border-radius:14px; overflow:hidden; }
+  .row { display:flex; align-items:center; gap:10px; padding:11px 12px; border-top:1px solid var(--line); }
+  .row:first-child { border-top:0; }
+  .row .main { flex:1; min-width:0; }
+  .row .t { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .row .d { color:var(--mut); font-size:12px; margin-top:2px; }
+  .row .m { font-weight:700; font-variant-numeric:tabular-nums; }
+  .tag { display:inline-block; padding:1px 7px; border-radius:8px; font-size:11px; margin-left:4px; background:var(--line); color:var(--mut); }
+  .tag.ok { background:#1f3d2b; color:var(--grn); } .tag.pend { background:#13293d; color:var(--ice); } .tag.err { background:#3d1b1b; color:#ff8a80; }
+  h2 { font-size:15px; margin:18px 0 8px; display:flex; justify-content:space-between; align-items:baseline; }
+  h2 small { color:var(--mut); font-weight:400; font-size:12px; }
+  .vacio { color:var(--mut); padding:14px 12px; font-size:13px; }
+  .ayuda { color:var(--mut); font-size:12px; margin-top:6px; line-height:1.45; }
+  .ayuda code { background:var(--card); padding:1px 5px; border-radius:5px; color:var(--tx); }
+  .login { text-align:center; padding:60px 20px; }
+  .login p { color:var(--mut); line-height:1.5; }
+  .login .guardar { max-width:320px; }
+  nav { position:fixed; bottom:0; left:0; right:0; display:flex; background:#161618; border-top:1px solid var(--line); padding-bottom:env(safe-area-inset-bottom); }
+  nav button { flex:1; background:none; border:0; color:var(--mut); padding:10px 0 12px; font-size:12px; }
+  nav button span { display:block; font-size:20px; }
+  nav button.on { color:var(--tx); }
+  .toast { position:fixed; left:16px; right:16px; bottom:84px; background:#2c2c2e; color:var(--tx); padding:12px 14px; border-radius:12px; font-size:14px; text-align:center; opacity:0; transition:opacity .25s; pointer-events:none; z-index:20; }
+  .toast.on { opacity:1; }
+  .hide { display:none !important; }
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <div><h1><b>RURUSH</b> Facturas</h1><div class="sub" id="sub">Cargando…</div></div>
+  </div>
+</header>
+<main id="main"><div class="login"><p>Cargando…</p></div></main>
+<nav id="nav" class="hide">
+  <button data-tab="nueva" class="on"><span>📷</span>Nueva</button>
+  <button data-tab="hist"><span>🧾</span>Historial</button>
+  <button data-tab="conf"><span>⚙️</span>Ajustes</button>
+</nav>
+<input type="file" id="cam" accept="image/*" capture="environment" class="hide">
+<input type="file" id="gal" accept="image/*,application/pdf,.pdf" multiple class="hide">
+<div class="toast" id="toast"></div>
+
+<script>
+/* RURUSH Facturas — control de los gastos del día a día (agua, limpieza, útiles,
+   arreglo de máquinas…). Se toma la foto del comprobante, se llena lo importante
+   y la app calcula el resto y lo sube sola a OneDrive:
+     • la foto (comprimida) en  <carpeta>/AAAA-MM MES/
+     • una fila en              <carpeta>/Control de gastos.xlsx  (tabla "Gastos")
+   Si no hay internet, queda en cola en el celular y se sube apenas vuelva.
+   Ajustes compartidos (personas, categorías, comprobantes) viven en <carpeta>/config.json. */
+
+// ⬇️ PEGA AQUÍ el "Id. de aplicación (cliente)" de Azure (ver INSTALAR.md, paso 1).
+const CLIENT_ID = '6e095c1c-f8a0-4afc-bee9-d13f0a2bdb2d';
+
+// Solo estas cuentas de Microsoft pueden usar la app. Cualquier otra ve "cuenta no autorizada"
+// y la app no hace nada en su OneDrive. Solo la DUEÑA puede crear la carpeta y quedar de admin.
+const DUENA = 'rurushfitclub@outlook.com';
+const CUENTAS = [DUENA, 'rurush.gastos1@outlook.com'];
+
+const SCOPES = ['User.Read', 'Files.ReadWrite.All'];
+const GRAPH = 'https://graph.microsoft.com/v1.0';
+const EXCEL = 'Control de gastos.xlsx';
+const TABLA = 'Gastos';
+const HOJA = 'Registro';
+const MESES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SETIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+const COLUMNAS = ['ID', 'Fecha', 'Mes', 'Semana', 'Registrado por', 'Categoría', 'Descripción', 'Cantidad', 'Precio unitario',
+  'Proveedor', 'RUC', 'Comprobante', 'Nº comprobante', 'Base imponible', 'IGV', 'Total', 'Pagado con',
+  'Fotos', 'Ver foto', 'Observación', 'Registrado el', 'Subido por'];
+// Carpeta COMPRAS que comparte la contadora; adentro van AAAA / "MM MES" (ej. 2026 / 10 OCTUBRE).
+const FOTOS_BASE = 'CONTABILIDAD - RURUSH/COMPRAS';
+const CONFIG_BASE = {
+  igv: 18,
+  personas: ['DANNA', 'LAURA', 'MÓNICA', 'VALERIA', 'DILAN', 'OMAR'],
+  categorias: ['Agua', 'Limpieza', 'Útiles y oficina', 'Mantenimiento de máquinas', 'Reparaciones del local', 'Servicios', 'Movilidad', 'Otros'],
+  // igv: true = ese comprobante trae el IGV desglosado (sirve como crédito fiscal)
+  comprobantes: [
+    { nombre: 'Boleta', igv: false }, { nombre: 'Factura', igv: true },
+    { nombre: 'Recibo / nota', igv: false }, { nombre: 'Sin comprobante', igv: false }
+  ],
+  metodos: ['Caja chica', 'Yape', 'Plin', 'Tarjeta', 'Transferencia']
+};
+
+/* ---------- utilidades ---------- */
+
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pad = (n) => String(n).padStart(2, '0');
+const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+const soles = (n) => 'S/ ' + r2(n).toFixed(2);
+// "59.50", "59,50", "1,200" (mil doscientos), "1,200.50", "1.200,50"
+function num(v) {
+  let t = String(v || '').replace(/[^\d.,]/g, '');
+  if (t.includes(',') && t.includes('.')) t = t.lastIndexOf(',') > t.lastIndexOf('.') ? t.replace(/\./g, '').replace(',', '.') : t.replace(/,/g, '');
+  else if (/^\d{1,3}(,\d{3})+$/.test(t)) t = t.replace(/,/g, '');
+  else t = t.replace(',', '.');
+  const n = parseFloat(t);
+  return isNaN(n) ? 0 : n;
+}
+const isoLocal = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+const fm = (iso) => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : '';
+const limpio = (s) => String(s || '').replace(/[\\/:*?"<>|#%]/g, '').replace(/\s+/g, ' ').trim();
+const nombreOk = (s) => limpio(s).slice(0, 150).replace(/[. ]+$/, '');
+const ls = {
+  get(k, d) { try { const v = localStorage.getItem('fac_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('fac_' + k, JSON.stringify(v)); } catch (e) { /* lleno o bloqueado */ } }
+};
+function toast(t, ms) {
+  const el = $('#toast'); el.textContent = t; el.classList.add('on');
+  clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), ms || 2600);
+}
+
+// Semana del año (ISO) con su año, p. ej. "2026-S41": así ordena bien en tablas dinámicas.
+function semana(iso) {
+  const d = new Date(iso + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const n = Math.ceil(((d - Date.UTC(d.getUTCFullYear(), 0, 1)) / 86400e3 + 1) / 7);
+  return d.getUTCFullYear() + '-S' + pad(n);
+}
+
+// El link "?carpeta=..." que manda el admin queda guardado en este celular.
+(() => {
+  const p = new URLSearchParams(location.search);
+  if (p.get('carpeta')) {
+    ls.set('carpeta', p.get('carpeta'));
+    history.replaceState(null, '', location.pathname + location.hash);
+  }
+})();
+
+/* ---------- login Microsoft ---------- */
+
+let MS = null, permitirLogin = false;
+async function iniciarMsal() {
+  MS = new msal.PublicClientApplication({
+    auth: { clientId: CLIENT_ID, authority: 'https://login.microsoftonline.com/common', redirectUri: location.origin + location.pathname.replace(/index\.html$/, '') },
+    cache: { cacheLocation: 'localStorage' }
+  });
+  if (MS.initialize) await MS.initialize();
+  const r = await MS.handleRedirectPromise();
+  if (r && r.account) MS.setActiveAccount(r.account);
+  if (!MS.getActiveAccount() && MS.getAllAccounts()[0]) MS.setActiveAccount(MS.getAllAccounts()[0]);
+  return MS.getActiveAccount();
+}
+const cuenta = () => MS && MS.getActiveAccount();
+async function token() {
+  const account = cuenta();
+  if (!account) throw new Error('Inicia sesión con Microsoft.');
+  try {
+    return (await MS.acquireTokenSilent({ scopes: SCOPES, account })).accessToken;
+  } catch (e) {
+    if (e instanceof msal.InteractionRequiredAuthError) {
+      // Volver a entrar recarga la página: si hay un gasto a medio llenar se perdería.
+      if (!formVacio() && !permitirLogin) throw new Error('La sesión de Microsoft venció. Guarda el gasto y toca Reintentar para volver a entrar.');
+      await MS.acquireTokenRedirect({ scopes: SCOPES, account });
+      return new Promise(() => {});   // la página se va al login de Microsoft
+    }
+    throw e;
+  }
+}
+
+/* ---------- Microsoft Graph (OneDrive) ---------- */
+
+async function g(method, ruta, body, extra) {
+  const h = Object.assign({ Authorization: 'Bearer ' + await token() }, extra || {});
+  let cuerpo = body;
+  if (body != null && !(body instanceof Blob) && typeof body !== 'string' && !(body instanceof ArrayBuffer)) {
+    h['Content-Type'] = 'application/json'; cuerpo = JSON.stringify(body);
+  }
+  return fetch(ruta.startsWith('http') ? ruta : GRAPH + ruta, { method, headers: h, body: cuerpo == null ? undefined : cuerpo });
+}
+async function gj(method, ruta, body, extra) {
+  const r = await g(method, ruta, body, extra);
+  if (r.ok) return r.status === 204 ? null : r.json();
+  let msj = 'OneDrive respondió ' + r.status;
+  try { const j = await r.json(); if (j.error && j.error.message) msj += ': ' + j.error.message; } catch (e) { /* sin cuerpo */ }
+  const err = new Error(msj); err.status = r.status; throw err;
+}
+const ruta = (...partes) => partes.join('/').split('/').filter(Boolean).map(encodeURIComponent).join('/');
+const shareId = (url) => 'u!' + btoa(unescape(encodeURIComponent(url))).replace(/=+$/, '').replace(/\//g, '_').replace(/\+/g, '-');
+const espera = (ms) => new Promise((res) => setTimeout(res, ms));
+
+// Carpeta hija por nombre; la crea si no existe.
+async function carpeta(driveId, padreId, nombre) {
+  const r = await g('GET', `/drives/${driveId}/items/${padreId}:/${ruta(nombre)}`);
+  if (r.ok) return (await r.json()).id;
+  if (r.status !== 404) throw new Error('OneDrive respondió ' + r.status + ' al buscar la carpeta ' + nombre);
+  try {
+    return (await gj('POST', `/drives/${driveId}/items/${padreId}/children`, { name: nombre, folder: {}, '@microsoft.graph.conflictBehavior': 'fail' })).id;
+  } catch (e) {
+    if (e.status === 409) return (await gj('GET', `/drives/${driveId}/items/${padreId}:/${ruta(nombre)}`)).id;   // la creó otro celular a la vez
+    throw e;
+  }
+}
+
+// Carpeta raíz: un link compartido (https://1drv.ms/... o https://...sharepoint.com/...) o un nombre en mi OneDrive.
+const carpetaConf = () => ls.get('carpeta', 'RURUSH Facturas');
+async function raiz() {
+  const conf = carpetaConf();
+  const c = ls.get('raiz');
+  if (c && c.conf === conf && (c.compartida || yo() === DUENA)) return c;
+  let item, compartida = false;
+  if (/^https?:\/\//i.test(conf)) {
+    compartida = true;
+    // Prefer: redeemSharingLink = la cuenta acepta el vínculo de "personas específicas" (sin esto OneDrive da 403).
+    item = await gj('GET', `/shares/${shareId(conf)}/driveItem`, null, { Prefer: 'redeemSharingLink' });
+    if (!item.folder) throw new Error('El link de la carpeta no es de una carpeta.');
+    if (!item.parentReference || !item.parentReference.driveId) throw new Error('No pude abrir la carpeta compartida: comparte una subcarpeta, no todo el OneDrive.');
+  } else {
+    const drive = await gj('GET', '/me/drive');
+    const root = await gj('GET', '/me/drive/root');
+    const partes = conf.split('/').map((s) => s.trim()).filter(Boolean);
+    let d = { driveId: drive.id, id: root.id };
+    // Si la carpeta no está en Mis archivos pero me la compartieron (ej. la cuenta del equipo),
+    // se usa la compartida: así todas abren el mismo link y caen en la carpeta del gym.
+    const primera = sinTildes(partes[0] || '');
+    let it = (await hijos(d)).find((x) => sinTildes(x.name) === primera && (yo() === DUENA || x.remoteItem));
+    if (!it) {
+      try { it = ((await gj('GET', '/me/drive/sharedWithMe')).value || []).find((x) => x.remoteItem && sinTildes(x.name) === primera); } catch (e) { /* no disponible */ }
+    }
+    if (it) { d = destinoDe(it, d.driveId); compartida = !!it.remoteItem; partes.shift(); }
+    else if (yo() !== DUENA) throw new Error(`La carpeta "${partes[0]}" no está compartida con ${yo()}. Pídele a ${DUENA} que se la comparta (con permiso de edición).`);
+    for (const parte of partes) d = { driveId: d.driveId, id: await carpeta(d.driveId, d.id, parte) };
+    item = await gj('GET', `/drives/${d.driveId}/items/${d.id}`);
+    item.parentReference = Object.assign({}, item.parentReference, { driveId: d.driveId });
+  }
+  const res = { conf, driveId: item.parentReference.driveId, id: item.id, nombre: item.name, web: item.webUrl, compartida };
+  ls.set('raiz', res);
+  return res;
+}
+
+/* ---------- config compartida (config.json en la carpeta) ---------- */
+
+let CFG = normalizar(ls.get('config', CONFIG_BASE));
+// config.json tal como está en OneDrive (null si todavía no existe).
+async function leerConfig() {
+  const R = await raiz();
+  const r = await g('GET', `/drives/${R.driveId}/items/${R.id}:/config.json:/content`);
+  if (r.ok) return normalizar(await r.json());
+  if (r.status === 404) return null;
+  throw new Error('OneDrive respondió ' + r.status + ' al leer config.json');
+}
+async function cargarConfig() {
+  const c = await leerConfig();
+  const mia = !(await raiz()).compartida && yo() === DUENA;
+  if (c && (Object.values(c.celulares).some((x) => x && x.admin) || !mia)) CFG = c;
+  else if (mia) {
+    // Carpeta nueva (o sin administrador) en MI OneDrive: este celular queda aprobado y de administrador.
+    CFG = normalizar(c || CONFIG_BASE);
+    CFG.celulares[codigoCelular()] = { nombre: 'Administrador', modelo: modelo(), cuenta: yo(), fecha: isoLocal(new Date()), admin: true };
+    await guardarConfig(CFG);
+  } else CFG = normalizar(CONFIG_BASE);   // carpeta compartida sin config: su dueño debe abrir la app primero
+  ls.set('config', CFG);
+}
+function normalizar(c) {
+  const lista = (x, d) => Array.isArray(x) && x.length ? x.map((v) => String(v).trim()).filter(Boolean) : d;
+  c = c && typeof c === 'object' ? c : {};
+  const comp = Array.isArray(c.comprobantes) && c.comprobantes.length
+    ? c.comprobantes.map((x) => typeof x === 'string' ? { nombre: x, igv: false } : { nombre: String(x.nombre || '').trim(), igv: !!x.igv }).filter((x) => x.nombre)
+    : CONFIG_BASE.comprobantes;
+  return Object.assign({}, c, {
+    igv: Number(c.igv) >= 0 ? Number(c.igv) : CONFIG_BASE.igv,
+    personas: lista(c.personas, CONFIG_BASE.personas), categorias: lista(c.categorias, CONFIG_BASE.categorias),
+    metodos: lista(c.metodos, CONFIG_BASE.metodos), comprobantes: comp.length ? comp : CONFIG_BASE.comprobantes,
+    // Dónde van las fotos: carpeta de la contadora (ruta o link). Vacío = <carpeta>/AAAA-MM MES.
+    fotos: c.fotos === undefined ? FOTOS_BASE : String(c.fotos || '').trim(),
+    celulares: c.celulares && typeof c.celulares === 'object' && !Array.isArray(c.celulares) ? c.celulares : {}
+  });
+}
+
+/* ---------- seguridad: solo celulares aprobados ----------
+   Cada celular tiene un código propio (guardado en el celular). Si no está en
+   config.json → celulares, la app queda bloqueada y manda una solicitud a
+   <carpeta>/solicitudes/ para que un administrador la apruebe desde ⚙️ Ajustes.
+   Administrador = un CELULAR aprobado con admin: true (no una cuenta: si el equipo
+   comparte una cuenta Microsoft, igual solo tus celulares administran). */
+
+function codigoCelular() {
+  let c = ls.get('celular');
+  if (!c) {
+    const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    c = Array.from(crypto.getRandomValues(new Uint8Array(8)), (x) => A[x % 32]).join('');
+    c = c.slice(0, 4) + '-' + c.slice(4);
+    ls.set('celular', c);
+  }
+  return c;
+}
+function modelo() {
+  const m = navigator.userAgent.match(/\(([^)]+)\)/);
+  return m ? m[1].replace(/Linux; |U; |; wv|; K/g, '').slice(0, 60) : 'Celular';
+}
+const yo = () => ((cuenta() && cuenta().username) || '').toLowerCase();
+const autorizado = () => !!CFG.celulares[codigoCelular()];
+const esAdmin = () => !!(CFG.celulares[codigoCelular()] || {}).admin;
+const hayAdmin = () => Object.values(CFG.celulares).some((x) => x && x.admin);
+
+async function solicitarAcceso(nombre) {
+  const R = await raiz();
+  const sol = await carpeta(R.driveId, R.id, 'solicitudes');
+  const datos = { codigo: codigoCelular(), nombre, modelo: modelo(), cuenta: yo(), fecha: isoLocal(new Date()) };
+  await gj('PUT', `/drives/${R.driveId}/items/${sol}:/${ruta(codigoCelular() + '.json')}:/content`, JSON.stringify(datos), { 'Content-Type': 'application/json' });
+  ls.set('solicitud', { nombre, raiz: R.id });   // enviada a ESTA carpeta
+}
+let SOLIS = {};
+async function cargarSolicitudes() {
+  const R = await raiz();
+  const r = await g('GET', `/drives/${R.driveId}/items/${R.id}:/solicitudes:/children`);
+  if (r.status === 404) return [];
+  if (!r.ok) throw new Error('OneDrive respondió ' + r.status + ' al leer las solicitudes');
+  const lista = [];
+  for (const it of (await r.json()).value || []) {
+    if (!/\.json$/i.test(it.name)) continue;
+    const codigo = it.name.replace(/\.json$/i, '').toUpperCase();
+    if (CFG.celulares[codigo]) { g('DELETE', `/drives/${R.driveId}/items/${it.id}`); continue; }   // ya aprobado
+    let d;
+    try { d = await gj('GET', `/drives/${R.driveId}/items/${it.id}/content`); } catch (e) { d = { error: e.message }; }
+    // Aunque no se pueda leer el contenido, la solicitud se muestra con su código (el nombre del archivo).
+    lista.push(Object.assign({ nombre: '(sin nombre)', modelo: '', cuenta: '', fecha: '' }, d && typeof d === 'object' ? d : {}, { codigo, sid: it.id }));
+  }
+  SOLIS = {};
+  lista.forEach((x) => { SOLIS[x.codigo] = x; });
+  return lista;
+}
+// Siempre sobre la última versión de config.json, para no pisar cambios de otro celular.
+async function cambiarCelulares(fn) {
+  const c = (await leerConfig()) || CFG;
+  fn(c.celulares);
+  await guardarConfig(c);
+}
+async function aprobar(codigo) {
+  const x = SOLIS[codigo]; if (!x) return;
+  await cambiarCelulares((cel) => { cel[codigo] = { nombre: x.nombre, modelo: x.modelo, cuenta: x.cuenta, fecha: isoLocal(new Date()) }; });
+  const R = await raiz();
+  await g('DELETE', `/drives/${R.driveId}/items/${x.sid}`);
+}
+async function rechazar(codigo) {
+  const x = SOLIS[codigo]; if (!x) return;
+  const R = await raiz();
+  await g('DELETE', `/drives/${R.driveId}/items/${x.sid}`);
+}
+async function quitarCelular(codigo) {
+  await cambiarCelulares((cel) => { delete cel[codigo]; });
+}
+
+function pantallaCuentaNoPermitida() {
+  $('#nav').classList.add('hide');
+  $('#sub').textContent = 'Cuenta no autorizada';
+  $('#main').innerHTML = `<div class="login">
+    <div style="font-size:54px">⛔</div>
+    <p>La cuenta <b>${esc(yo())}</b> no puede usar esta app.<br>Entra con la cuenta del gym que te dieron.</p>
+    <button class="guardar" id="cSalir">Cerrar sesión y entrar con otra cuenta</button></div>`;
+}
+function pantallaBloqueo() {
+  $('#nav').classList.add('hide');
+  $('#sub').textContent = 'Celular no autorizado';
+  const sol = ls.get('solicitud', null);
+  const enviada = sol && sol.raiz && sol.raiz === (ls.get('raiz') || {}).id ? sol.nombre : '';
+  const R = ls.get('raiz') || {};
+  // La cuenta del equipo sin conexión a la carpeta compartida: pedir el link (no mostrar datos de cachés viejas).
+  const sinCarpeta = yo() !== DUENA && !R.compartida;
+  const sinAdmin = !hayAdmin();
+  $('#main').innerHTML = `<div class="login">
+    <div style="font-size:54px">🔒</div>
+    <p>Este celular todavía no está autorizado.</p>
+    <div class="calc" style="text-align:center"><h3>CÓDIGO DE ESTE CELULAR</h3><div style="font-size:28px;font-weight:700;letter-spacing:2px">${esc(codigoCelular())}</div></div>
+    ${sinCarpeta ? `<div class="estado err"><span>Todavía no está conectado a la carpeta del gym.${ERROR_INICIO ? '<br><small>' + esc(ERROR_INICIO) + '</small>' : ''}</span></div>
+         <label style="text-align:left">Pega el link de la carpeta "RURUSH Facturas" que te pasó el administrador</label>
+         <input id="bLink" placeholder="https://1drv.ms/f/…" autocomplete="off">
+         <button class="guardar" id="bConectar">🔗 Conectar</button>`
+      : sinAdmin ? `<div class="estado err"><span>Esta carpeta todavía no tiene administrador: su dueño debe abrir la app primero.</span></div>`
+      : enviada ? `<div class="estado ok"><span>✅ Solicitud enviada como <b>${esc(enviada)}</b>. Avísale al administrador para que la apruebe.</span></div>`
+      : `<label style="text-align:left">Tu nombre</label><input id="bNombre" placeholder="Ej. LAURA" autocomplete="off">
+         <button class="guardar" id="bSolicitar">📨 Pedir acceso</button>`}
+    <button class="btn" id="bRevisar" style="width:100%;margin-top:12px">🔄 Ya me aprobaron</button>
+    <p style="font-size:12px">Sesión: ${esc(yo() || '—')} · <a href="#" id="cSalir" style="color:var(--or)">cerrar sesión</a>
+      <br>Carpeta: ${sinCarpeta ? 'sin conectar' : esc(R.nombre || '—') + (R.compartida ? ' (compartida ✅)' : '')}</p></div>`;
+}
+let appVisible = false, ERROR_INICIO = '';
+function mostrarApp() {
+  appVisible = true;
+  $('#nav').classList.remove('hide');
+  pintarSub(); pintar();
+}
+async function guardarConfig(c) {
+  const R = await raiz();
+  await gj('PUT', `/drives/${R.driveId}/items/${R.id}:/config.json:/content`, JSON.stringify(c, null, 2), { 'Content-Type': 'application/json' });
+  CFG = c; ls.set('config', c);
+}
+
+/* ---------- Excel ---------- */
+
+function colLetra(n) { let s = ''; for (n++; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + (n - 1) % 26) + s; return s; }
+
+async function excel() {
+  const R = await raiz();
+  const c = ls.get('excel');
+  if (c && c.raiz === R.id) return c.id;
+  const r = await g('GET', `/drives/${R.driveId}/items/${R.id}:/${ruta(EXCEL)}`);
+  let id;
+  if (r.ok) id = (await r.json()).id;
+  else if (r.status === 404) id = await crearExcel(R);
+  else throw new Error('OneDrive respondió ' + r.status + ' al buscar el Excel');
+  ls.set('excel', { raiz: R.id, id });
+  return id;
+}
+async function crearExcel(R) {
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([COLUMNAS]);
+  ws['!cols'] = COLUMNAS.map((h) => ({ wch: Math.max(12, h.length + 2) }));
+  XLSX.utils.book_append_sheet(wb, ws, HOJA);
+  const datos = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+  let item;
+  try {
+    item = await gj('PUT', `/drives/${R.driveId}/items/${R.id}:/${ruta(EXCEL)}:/content?@microsoft.graph.conflictBehavior=fail`,
+      new Blob([datos], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  } catch (e) {
+    if (e.status === 409) return (await gj('GET', `/drives/${R.driveId}/items/${R.id}:/${ruta(EXCEL)}`)).id;
+    throw e;
+  }
+  // Convierte el encabezado en la tabla "Gastos" (Excel online tarda unos segundos en abrir un archivo recién subido).
+  const base = `/drives/${R.driveId}/items/${item.id}/workbook`;
+  for (let i = 0; ; i++) {
+    try {
+      const t = await gj('POST', base + '/tables/add', { address: `${HOJA}!A1:${colLetra(COLUMNAS.length - 1)}1`, hasHeaders: true });
+      await gj('PATCH', base + '/tables/' + encodeURIComponent(t.id), { name: TABLA });
+      break;
+    } catch (e) {
+      if (i >= 4) throw e;
+      await espera(2000 * (i + 1));
+    }
+  }
+  return item.id;
+}
+async function agregarFila(valores) {
+  const R = await raiz();
+  const id = await excel();
+  try {
+    await gj('POST', `/drives/${R.driveId}/items/${id}/workbook/tables/${TABLA}/rows`, { values: [valores] });
+  } catch (e) {
+    if (e.status === 404) { ls.set('excel', null); throw new Error('No encuentro la tabla "' + TABLA + '" en ' + EXCEL + ' (¿la borraron o renombraron?).'); }
+    if (e.status === 409 || e.status === 423) throw new Error('El Excel está bloqueado (alguien lo tiene abierto en la app de escritorio). Se reintenta solo.');
+    throw e;
+  }
+}
+
+/* ---------- cola en el celular (IndexedDB): nada se pierde sin internet ---------- */
+
+const DB = new Promise((res, rej) => {
+  const q = indexedDB.open('rurush-facturas', 1);
+  q.onupgradeneeded = () => q.result.createObjectStore('cola', { keyPath: 'id' });
+  q.onsuccess = () => res(q.result);
+  q.onerror = () => rej(q.error);
+});
+async function idb(modo, fn) {
+  const db = await DB;
+  return new Promise((res, rej) => {
+    const tx = db.transaction('cola', modo), st = tx.objectStore('cola');
+    const q = fn(st);
+    tx.oncomplete = () => res(q && q.result);
+    tx.onerror = () => rej(tx.error);
+  });
+}
+const colaTodo = () => idb('readonly', (s) => s.getAll());
+const colaPut = (x) => idb('readwrite', (s) => s.put(x));
+const colaDel = (id) => idb('readwrite', (s) => s.delete(id));
+
+let subiendo = false, otraVuelta = false, ultimoError = '';
+async function procesarCola() {
+  if (!cuenta() || !CUENTAS.includes(yo()) || !autorizado()) return;
+  if (subiendo) { otraVuelta = true; return; }
+  otraVuelta = false;
+  subiendo = true; pintarEstado();
+  try {
+    const items = (await colaTodo()).sort((a, b) => a.creado - b.creado);
+    ultimoError = '';
+    for (const it of items) {
+      try {
+        await subir(it);
+        await colaDel(it.id);
+        historial(it.id, { estado: 'ok', foto: it.subidas[0] && it.subidas[0].web });
+      } catch (e) {
+        ultimoError = e.message || String(e);
+        it.error = ultimoError; await colaPut(it);
+        historial(it.id, { estado: 'err', error: ultimoError });
+        if (e.status === 404) { ls.set('raiz', null); ls.set('excel', null); BASE_FOTOS = null; Object.keys(MES_CACHE).forEach((k) => delete MES_CACHE[k]); }   // movieron o borraron la carpeta: buscarla de nuevo
+        if (!navigator.onLine || /Failed to fetch|NetworkError|Load failed|sesión/i.test(ultimoError)) break;
+      }
+    }
+  } finally {
+    subiendo = false; permitirLogin = false; pintarEstado();
+    if (tab === 'hist') pintar();
+    if (otraVuelta && !ultimoError) setTimeout(procesarCola, 0);
+  }
+}
+
+/* ---------- carpeta de fotos (contabilidad) ----------
+   CFG.fotos es un link de carpeta o una ruta como "CONTABILIDAD - RURUSH/COMPRAS".
+   La ruta se busca en Mis archivos (sirve un acceso directo a la carpeta compartida)
+   y si no, en "Compartidos conmigo". Adentro: año / mes ("2026 / 10 OCTUBRE",
+   "09 SETIEMBRE"…). Esas carpetas son de la contadora: la app NO crea, renombra,
+   borra ni sobrescribe nada ahí, solo agrega fotos (con nombre nuevo si ya existe uno igual).
+   Si la carpeta del mes todavía no existe, la foto espera en la cola hasta que la creen. */
+
+const sinTildes = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+// Un acceso directo (o un elemento compartido) apunta a la carpeta real en el OneDrive de otra persona.
+const destinoDe = (it, driveId) => it.remoteItem
+  ? { driveId: it.remoteItem.parentReference.driveId, id: it.remoteItem.id, nombre: it.name }
+  : { driveId: (it.parentReference && it.parentReference.driveId) || driveId, id: it.id, nombre: it.name };
+async function hijos(d) {
+  const r = await gj('GET', `/drives/${d.driveId}/items/${d.id}/children?$select=id,name,folder,remoteItem,parentReference&$top=500`);
+  return r.value || [];
+}
+let BASE_FOTOS = null;
+const MES_CACHE = {};
+// Link de la carpeta de la contadora guardado en ESTE celular (para la cuenta del equipo,
+// que no la ve por ruta); si no hay, la ruta/link de los ajustes compartidos.
+const fotosConf = () => ls.get('fotosLink', '') || CFG.fotos;
+async function baseFotos() {
+  const conf = fotosConf();
+  if (BASE_FOTOS && BASE_FOTOS.conf === conf) return BASE_FOTOS;
+  let d;
+  if (/^https?:\/\//i.test(conf)) {
+    const it = await gj('GET', `/shares/${shareId(conf)}/driveItem`, null, { Prefer: 'redeemSharingLink' });
+    d = destinoDe(it);
+  } else {
+    const partes = conf.split('/').map((x) => x.trim()).filter(Boolean);
+    const drive = await gj('GET', '/me/drive');
+    const root = await gj('GET', '/me/drive/root');
+    d = { driveId: drive.id, id: root.id };
+    for (let i = 0; i < partes.length; i++) {
+      let it = (await hijos(d)).find((x) => sinTildes(x.name) === sinTildes(partes[i]));
+      if (!it && i === 0) {
+        try { it = ((await gj('GET', '/me/drive/sharedWithMe')).value || []).find((x) => sinTildes(x.name) === sinTildes(partes[0])); } catch (e) { /* no disponible */ }
+      }
+      if (!it) throw new Error(`La cuenta ${yo()} no ve la carpeta "${partes[i]}": pídele a la contadora que se la comparta (con permiso de edición) y pega el link de su carpeta en ⚙️ Ajustes de este celular. Se sube sola cuando lo hagas.`);
+      d = destinoDe(it, d.driveId);
+    }
+  }
+  BASE_FOTOS = Object.assign({ conf }, d);
+  return BASE_FOTOS;
+}
+// Carpeta hija que cumple `ok` (solo busca, nunca crea).
+async function buscar(d, ok, falta) {
+  const it = (await hijos(d)).find((x) => x.folder && ok(sinTildes(x.name)));
+  if (!it) { const e = new Error(falta); e.esperar = true; throw e; }
+  return destinoDe(it, d.driveId);
+}
+// Nuestra copia: <carpeta de la app>/AAAA-MM MES.
+async function carpetaPropia(fechaIso) {
+  const R = await raiz();
+  const nombre = fechaIso.slice(0, 7) + ' ' + MESES[Number(fechaIso.slice(5, 7)) - 1];
+  return { driveId: R.driveId, id: await carpeta(R.driveId, R.id, nombre), ruta: (R.nombre || '') + ' / ' + nombre };
+}
+// Copia para la contadora: <CFG.fotos>/AAAA/MM MES.
+async function carpetaFotos(fechaIso) {
+  const clave = fotosConf() + '|' + fechaIso.slice(0, 7);
+  if (MES_CACHE[clave]) return MES_CACHE[clave];
+  const base = await baseFotos();
+  const anio = fechaIso.slice(0, 4), m = Number(fechaIso.slice(5, 7));
+  const mes = MESES[m - 1], alias = m === 9 ? ['SETIEMBRE', 'SEPTIEMBRE'] : [mes];
+  const espera = (c) => `La contadora todavía no creó la carpeta ${c}. La foto se sube sola cuando exista.`;
+  const esMes = (n) => new RegExp('^0?' + m + '(\\D|$)').test(n) || alias.some((a) => n.includes(a));
+  // El link puede ser de COMPRAS (lo normal), de la carpeta del año o de la del mes.
+  const nb = sinTildes(base.nombre);
+  const dA = /^\d{4}$/.test(nb) ? (nb === anio ? base : null) : esMes(nb) ? null : await buscar(base, (n) => n === anio, espera(anio));
+  if (!dA && !esMes(nb)) { const e = new Error('El link guardado es de la carpeta ' + base.nombre + ', no de ' + anio + '. Usa el link de COMPRAS.'); e.esperar = true; throw e; }
+  const dM = esMes(nb) && !/^\d{4}$/.test(nb) ? base : await buscar(dA, esMes, espera(anio + ' / ' + pad(m) + ' ' + mes));
+  MES_CACHE[clave] = Object.assign(dM, { ruta: (base.nombre || '') + ' / ' + anio + ' / ' + dM.nombre });
+  return MES_CACHE[clave];
+}
+
+// Sube las fotos que falten de `lista` a la carpeta que da `donde`, guardando el avance.
+async function subirFotos(it, lista, donde) {
+  if (it[lista].length >= it.fotos.length) return;
+  const dest = await donde(it.gasto.fecha);
+  for (let i = it[lista].length; i < it.fotos.length; i++) {
+    const pdf = it.fotos[i].type === 'application/pdf';
+    const nombre = it.archivo + (it.fotos.length > 1 ? ' (' + (i + 1) + ')' : '') + (pdf ? '.pdf' : '.jpg');
+    const f = await subirArchivo(dest, nombre, it.fotos[i], pdf ? 'application/pdf' : 'image/jpeg');
+    it[lista].push({ nombre: f.name, web: f.webUrl });
+    await colaPut(it);
+  }
+}
+
+// Hasta 4 MB de una vez; más grande (PDF pesados) por sesión de carga en partes.
+async function subirArchivo(dest, nombre, blob, tipo) {
+  const base = `/drives/${dest.driveId}/items/${dest.id}:/${ruta(nombre)}:`;
+  if (blob.size <= 4 * 1024 * 1024) return gj('PUT', base + '/content?@microsoft.graph.conflictBehavior=rename', blob, { 'Content-Type': tipo });
+  const ses = await gj('POST', base + '/createUploadSession', { item: { '@microsoft.graph.conflictBehavior': 'rename' } });
+  const parte = 5 * 320 * 1024;   // múltiplo de 320 KB, como pide OneDrive
+  for (let ini = 0; ini < blob.size; ini += parte) {
+    const fin = Math.min(ini + parte, blob.size);
+    const r = await fetch(ses.uploadUrl, { method: 'PUT', body: blob.slice(ini, fin),
+      headers: { 'Content-Range': `bytes ${ini}-${fin - 1}/${blob.size}` } });   // URL ya autorizada: sin token
+    if (!r.ok && r.status !== 202) throw new Error('OneDrive respondió ' + r.status + ' al subir el PDF');
+    if (fin === blob.size) return r.json();
+  }
+}
+
+// Paso a paso y guardando el avance: si se corta a la mitad, no duplica fotos ni filas.
+// Orden: 1) nuestra copia, 2) fila en nuestro Excel, 3) copia para la contadora.
+// Si falla la 3, lo nuestro ya quedó y solo se reintenta la copia de la contadora.
+async function subir(it) {
+  const v = it.gasto;
+  it.subidas = it.subidas || [];
+  it.subidasConta = it.subidasConta || [];
+  await subirFotos(it, 'subidas', carpetaPropia);
+  if (!it.filaOk) {
+    // HYPERLINK acepta hasta 255 caracteres; si el link es más largo va como texto.
+    const web = it.subidas[0] ? it.subidas[0].web.replace(/"/g, '') : '';
+    const foto = !web ? '' : web.length <= 250 ? `=HYPERLINK("${web}","Ver")` : web;
+    // Todo lo escrito a mano va como texto: "=…", "-5 bidones", "3/4" o un RUC no se vuelven fórmula, fecha ni número.
+    const texto = (x) => x ? "'" + x : '';
+    await agregarFila([v.id, v.fecha, v.fecha.slice(0, 7) + ' ' + v.mes, v.semana, texto(v.persona), texto(v.categoria),
+      texto(v.descripcion), v.cantidad, v.unitario, texto(v.proveedor), texto(v.ruc), texto(v.comprobante), texto(v.numero),
+      v.base, v.igv, v.total, texto(v.metodo), it.fotos.length, foto, texto(v.obs), v.registrado, (cuenta() && cuenta().username) || '']);
+    it.filaOk = true;
+    await colaPut(it);
+  }
+  if (CFG.fotos) {
+    try { await subirFotos(it, 'subidasConta', carpetaFotos); }
+    catch (e) { throw new Error('Tu foto y el Excel ya están. ' + (e.esperar ? e.message : 'Falta la copia para la contadora: ' + e.message)); }
+  }
+}
+
+/* ---------- historial de este celular ---------- */
+
+function historial(id, cambios) {
+  const h = ls.get('hist', []);
+  const i = h.findIndex((x) => x.id === id);
+  if (i >= 0) Object.assign(h[i], cambios);
+  else if (cambios.descripcion) h.unshift(Object.assign({ id }, cambios));
+  ls.set('hist', h.slice(0, 400));
+}
+
+/* ---------- fotos: comprimir antes de subir (≈300 KB en vez de 4 MB) ---------- */
+
+function comprimir(file) {
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const max = 1800, k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      c.toBlob((b) => b ? res(b) : rej(new Error('No pude procesar la foto.')), 'image/jpeg', 0.82);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('No pude abrir la foto.')); };
+    img.src = url;
+  });
+}
+
+/* ---------- formulario ---------- */
+
+let tab = 'nueva';
+let F = nuevoForm();
+function nuevoForm() {
+  const c = CFG.comprobantes[0];
+  return { fotos: [], categoria: '', descripcion: '', cantidad: '1', total: '', metodo: '',
+    comprobante: c ? c.nombre : '', proveedor: '', ruc: '', numero: '', fecha: isoLocal(new Date()), obs: '' };
+}
+const persona = () => ls.get('persona', '');
+const formVacio = () => !F.fotos.length && !F.descripcion.trim() && !F.total.trim();
+const proveedores = () => ls.get('proveedores', {});   // PROVEEDOR → RUC, se aprende de cada gasto
+const compActual = () => CFG.comprobantes.find((c) => c.nombre === F.comprobante);
+
+function calcular() {
+  const total = r2(num(F.total)), cant = num(F.cantidad) || 1;
+  const comp = compActual();
+  const tasa = comp && comp.igv ? Number(CFG.igv) || 0 : 0;
+  const base = r2(tasa ? total / (1 + tasa / 100) : total);
+  const ahora = new Date();
+  const fecha = F.fecha || isoLocal(ahora);
+  return {
+    total, cantidad: cant, unitario: r2(total / cant), tasa, base, igv: r2(total - base),
+    fecha, mes: MESES[Number(fecha.slice(5, 7)) - 1], semana: semana(fecha),
+    hoy: isoLocal(ahora), hora: pad(ahora.getHours()) + ':' + pad(ahora.getMinutes())
+  };
+}
+function faltan() {
+  const f = [];
+  if (!persona()) f.push('quién registra');
+  if (!F.fotos.length) f.push('foto');
+  if (!F.categoria) f.push('categoría');
+  if (!F.descripcion.trim()) f.push('qué se compró');
+  if (!num(F.total)) f.push('total');
+  if (!F.metodo) f.push('pagado con');
+  return f;
+}
+function nombreArchivo(c) {
+  return nombreOk([c.fecha, F.categoria.toUpperCase(), F.proveedor || F.descripcion, 'S' + c.total, persona()].join(' - '));
+}
+
+const chips = (lista, actual, attr) => lista.map((v) =>
+  `<button class="chip ${v === actual ? 'on' : ''}" data-${attr}="${esc(v)}">${esc(v)}</button>`).join('');
+
+function pintarNueva() {
+  const c = calcular(), f = faltan();
+  const fotos = F.fotos.map((b, i) => b.pdf
+    ? `<div><div class="mas" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px;text-align:center;word-break:break-all;font-size:11px"><span style="font-size:30px">📄</span>${esc(b.nombre || 'PDF')}</div><button data-quitar="${i}">✕</button></div>`
+    : `<div><img src="${b.url}"><button data-quitar="${i}">✕</button></div>`).join('');
+  return `
+    <div id="estado"></div>
+    <label>¿Quién registra? <i>*</i></label>
+    <div class="chips scroll">${chips(CFG.personas, persona(), 'per')}</div>
+
+    <label>Foto del comprobante <i>*</i></label>
+    ${F.fotos.length
+      ? `<div class="fotos">${fotos}<button class="mas" id="tomarFoto">📷<br>＋ Otra foto</button><button class="mas" id="galeria">🖼️📄<br>＋ Galería / PDF</button></div>`
+      : `<button class="foto" id="tomarFoto"><span>📷</span>Tomar foto</button>
+         <button class="btn" id="galeria" style="width:100%;margin-top:8px">🖼️ Galería o PDF (p. ej. llegó por WhatsApp)</button>`}
+
+    <label>Categoría <i>*</i></label>
+    <div class="chips">${chips(CFG.categorias, F.categoria, 'cat')}</div>
+
+    <label>¿Qué se compró o se pagó? <i>*</i></label>
+    <input id="descripcion" placeholder="Ej. bidones de agua, lejía, arreglo de la polea" autocomplete="off" value="${esc(F.descripcion)}">
+    <div class="dos">
+      <div><label>Total pagado <i>*</i></label><input id="total" inputmode="decimal" placeholder="0.00" value="${esc(F.total)}"></div>
+      <div><label>Cantidad</label><input id="cantidad" inputmode="decimal" value="${esc(F.cantidad)}"></div>
+    </div>
+
+    <label>Pagado con <i>*</i></label>
+    <div class="chips">${chips(CFG.metodos, F.metodo, 'metodo')}</div>
+
+    <label>Comprobante</label>
+    <div class="chips">${chips(CFG.comprobantes.map((x) => x.nombre), F.comprobante, 'comp')}</div>
+
+    <label>Proveedor / tienda</label>
+    <input id="proveedor" list="provs" placeholder="Opcional" autocomplete="off" value="${esc(F.proveedor)}">
+    <datalist id="provs">${Object.keys(proveedores()).map((p) => `<option value="${esc(p)}">`).join('')}</datalist>
+    <div class="dos">
+      <div><label>RUC</label><input id="ruc" inputmode="numeric" maxlength="11" value="${esc(F.ruc)}"></div>
+      <div><label>Nº comprobante</label><input id="numero" placeholder="F001-123" autocomplete="off" value="${esc(F.numero)}"></div>
+    </div>
+    <label>Fecha del comprobante</label>
+    <input id="fecha" type="date" value="${esc(F.fecha)}">
+    <label>Observación</label>
+    <input id="obs" placeholder="Opcional" autocomplete="off" value="${esc(F.obs)}">
+
+    <div class="calc" id="calc">${pintarCalc(c)}</div>
+    <button class="guardar" id="guardar" ${f.length ? 'disabled' : ''}>✅ Guardar y subir</button>
+    <div class="falta" id="falta">${f.length ? 'Falta: ' + f.join(', ') : 'Se sube solo a OneDrive'}</div>`;
+}
+function pintarCalc(c) {
+  const comp = compActual();
+  const avisos = [];
+  if (comp && comp.igv && !F.ruc.trim()) avisos.push('Factura sin RUC del proveedor');
+  if (F.ruc.trim() && !/^\d{11}$/.test(F.ruc.trim())) avisos.push('El RUC debe tener 11 dígitos');
+  if (c.fecha > c.hoy) avisos.push('La fecha del comprobante es futura');
+  return `<h3>🧮 SE CALCULA SOLO</h3>
+    <div class="r"><span>Fecha</span><b>${fm(c.fecha)}</b></div>
+    <div class="r"><span>Mes / semana</span><b>${c.mes} · sem ${Number(c.semana.slice(6))}</b></div>
+    ${c.cantidad > 1 ? `<div class="r"><span>Precio unitario</span><b>${soles(c.unitario)} × ${c.cantidad}</b></div>` : ''}
+    ${c.tasa ? `<div class="r"><span>Base imponible</span><b>${soles(c.base)}</b></div>
+    <div class="r"><span>IGV ${c.tasa}%</span><b>${soles(c.igv)}</b></div>` : ''}
+    <div class="r tot"><span>Total</span><b>${soles(c.total)}</b></div>
+    ${avisos.map((a) => `<div class="r desc"><span>⚠️ ${esc(a)}</span></div>`).join('')}
+    <div class="arch">📁 ${esc((ls.get('raiz') || {}).nombre || carpetaConf())} / ${c.fecha.slice(0, 7)} ${c.mes}
+      ${CFG.fotos ? `<br>📁 ${esc(CFG.fotos.split('/').pop())} / ${c.fecha.slice(0, 4)} / ${pad(Number(c.fecha.slice(5, 7)))} ${c.mes} <i>(contadora)</i>` : ''}
+      <br>🧾 ${esc(nombreArchivo(c))}.jpg</div>`;
+}
+function refrescarCalc() {
+  const el = $('#calc'); if (!el) return;
+  el.innerHTML = pintarCalc(calcular());
+  const f = faltan();
+  $('#guardar').disabled = !!f.length;
+  $('#falta').textContent = f.length ? 'Falta: ' + f.join(', ') : 'Se sube solo a OneDrive';
+}
+
+async function guardar() {
+  const f = faltan();
+  if (f.length) return toast('Falta: ' + f.join(', '));
+  const c = calcular();
+  const id = 'G' + c.hoy.replace(/-/g, '') + '-' + c.hora.replace(':', '') + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+  const gasto = {
+    id, fecha: c.fecha, mes: c.mes, semana: c.semana, persona: persona(), categoria: F.categoria,
+    descripcion: F.descripcion.trim(), cantidad: c.cantidad, unitario: c.unitario,
+    proveedor: F.proveedor.trim().toUpperCase(), ruc: F.ruc.trim(), comprobante: F.comprobante, numero: F.numero.trim().toUpperCase(),
+    base: c.base, igv: c.igv, total: c.total, metodo: F.metodo, obs: F.obs.trim(), registrado: c.hoy + ' ' + c.hora
+  };
+  await colaPut({ id, creado: Date.now(), gasto, archivo: nombreArchivo(c), fotos: F.fotos.map((x) => x.blob), subidas: [], filaOk: false });
+  historial(id, { estado: 'pend', reg: c.hoy, fecha: c.fecha, descripcion: gasto.descripcion, categoria: gasto.categoria,
+    metodo: gasto.metodo, total: gasto.total, persona: gasto.persona });
+  if (gasto.proveedor) { const p = proveedores(); p[gasto.proveedor] = gasto.ruc || p[gasto.proveedor] || ''; ls.set('proveedores', p); }
+  F.fotos.forEach((x) => URL.revokeObjectURL(x.url));
+  F = nuevoForm();
+  window.scrollTo(0, 0);
+  pintar();
+  toast('✅ Guardado. Subiendo a OneDrive…');
+  procesarCola();
+}
+
+/* ---------- historial y ajustes ---------- */
+
+function pintarHist() {
+  const h = ls.get('hist', []);
+  const hoy = isoLocal(new Date()), mes = hoy.slice(0, 7);
+  const deHoy = h.filter((x) => x.reg === hoy);
+  const suma = (l) => l.reduce((t, x) => t + (Number(x.total) || 0), 0);
+  const fila = (x) => {
+    const tag = x.estado === 'ok' ? '<span class="tag ok">subido</span>' : x.estado === 'err' ? '<span class="tag err">reintentando</span>' : '<span class="tag pend">en cola</span>';
+    const t = `<div class="main"><div class="t">${esc(x.descripcion)}${tag}</div><div class="d">${fm(x.fecha).slice(0, 5)} · ${esc(x.categoria)} · ${esc(x.metodo)} · ${esc(x.persona)}${x.estado === 'err' && x.error ? '<br>' + esc(x.error) : ''}</div></div><div class="m">${soles(x.total)}</div>`;
+    return x.foto ? `<a class="row" style="color:inherit;text-decoration:none" href="${esc(x.foto)}" target="_blank" rel="noopener">${t}</a>` : `<div class="row">${t}</div>`;
+  };
+  const delMes = h.filter((x) => (x.fecha || '').slice(0, 7) === mes);
+  const porCat = {};
+  delMes.forEach((x) => { porCat[x.categoria] = (porCat[x.categoria] || 0) + (Number(x.total) || 0); });
+  const cats = Object.keys(porCat).sort((a, b) => porCat[b] - porCat[a]);
+  const R = ls.get('raiz');
+  return `<div id="estado"></div>
+    <h2>Hoy en este celular <small>${deHoy.length} · ${soles(suma(deHoy))}</small></h2>
+    <div class="list">${deHoy.length ? deHoy.map(fila).join('') : '<div class="vacio">Todavía nada hoy.</div>'}</div>
+    <h2>${MESES[new Date().getMonth()]} por categoría <small>${soles(suma(delMes))}</small></h2>
+    <div class="list">${cats.map((k) => `<div class="row"><div class="main"><div class="t">${esc(k)}</div></div><div class="m">${soles(porCat[k])}</div></div>`).join('') || '<div class="vacio">—</div>'}</div>
+    <div class="ayuda">Solo lo registrado en este celular. El total de todas está en el Excel.</div>
+    <h2>Anteriores</h2>
+    <div class="list">${h.filter((x) => x.reg !== hoy).slice(0, 40).map(fila).join('') || '<div class="vacio">—</div>'}</div>
+    ${R && R.web ? `<a class="btn" style="display:block;text-align:center;margin-top:16px;text-decoration:none" href="${esc(R.web)}" target="_blank" rel="noopener">📁 Abrir carpeta en OneDrive</a>` : ''}`;
+}
+
+function pintarConf() {
+  const R = ls.get('raiz');
+  const propio = `
+    <h2>Este celular</h2>
+    <div class="ayuda">Sesión: <b>${esc(yo() || '—')}</b>${esAdmin() ? ' · <span class="tag ok">administrador</span>' : ''}<br>
+      Código: <b>${esc(codigoCelular())}</b> · Carpeta: <b>${esc((R && R.nombre) || carpetaConf())}</b></div>`;
+  const salir = `<button class="btn" id="cSalir" style="width:100%;margin-top:18px">Cerrar sesión de Microsoft</button>`;
+  if (!esAdmin()) return propio + (CFG.fotos ? `
+    <label>📷 Link de la carpeta de la contadora (COMPRAS)</label>
+    <input id="cFotosLink" value="${esc(ls.get('fotosLink', ''))}" placeholder="https://1drv.ms/f/…" autocomplete="off">
+    <div class="ayuda">Solo si este celular no la encuentra solo. Las fotos van a <code>COMPRAS / 2026 / 10 OCTUBRE</code>.</div>
+    <div class="dos"><button class="btn" id="cGuardarFotosLink" style="margin-top:8px">💾 Guardar link</button>
+      <button class="btn" id="cProbarFotos" style="margin-top:8px">🔍 Probar</button></div>` : '')
+    + `<div class="ayuda" style="margin-top:12px">Los demás ajustes los cambia el administrador.</div>` + salir;
+  const cel = Object.keys(CFG.celulares).map((k) => {
+    const x = CFG.celulares[k] || {};
+    const este = k === codigoCelular();
+    return `<div class="row"><div class="main"><div class="t">${esc(x.nombre || '—')}${x.admin ? '<span class="tag ok">admin</span>' : ''}${este ? '<span class="tag pend">este</span>' : ''}</div>
+      <div class="d">${esc(k)} · ${esc(x.modelo || '')} · ${esc(x.cuenta || '')} · desde ${fm(x.fecha || '')}</div></div>
+      ${este ? '' : `<button class="btn" data-admincel="${esc(k)}" title="Administrador">${x.admin ? '★' : '☆'}</button><button class="btn" data-quitarcel="${esc(k)}">Quitar</button>`}</div>`;
+  }).join('');
+  return propio + `
+    <label>📷 Copia de las fotos para la contadora</label>
+    <input id="cFotos" value="${esc(CFG.fotos)}" placeholder="Vacío = sin copia para la contadora">
+    <div class="ayuda">Las fotos siempre quedan en tu carpeta (abajo) y además se copian aquí.
+      En la carpeta de la contadora la app <b>solo agrega fotos</b>: no crea carpetas ni toca lo que hay.
+      Ruta (ej. <code>CONTABILIDAD - RURUSH/COMPRAS</code>) o link de la carpeta. Adentro la app usa
+      la carpeta del mes que ya creó la contadora (<code>2026 / 10 OCTUBRE</code>). Si aún no existe, espera.</div>
+    <button class="btn" id="cProbarFotos" style="margin-top:8px">🔍 Probar carpeta de fotos</button>
+    <label>Carpeta de la app (Excel y ajustes)</label>
+    <input id="cCarpeta" value="${esc(carpetaConf())}">
+    <div class="ayuda">Un nombre (se crea en <i>tu</i> OneDrive) o el <b>link de una carpeta compartida</b> (con permiso de edición) para que todas suban a la misma.</div>
+    <button class="btn" id="cCopiar" style="margin-top:8px">🔗 Copiar link para el equipo</button>
+    <div class="ayuda">Mándales ese link: al abrirlo, su celular queda apuntando a la misma carpeta y te pide acceso.</div>
+
+    <h2>📱 Solicitudes de acceso <button class="btn" id="cSolis" style="padding:4px 10px;font-size:12px">🔄</button></h2>
+    <div class="list" id="solis"><div class="vacio">Cargando…</div></div>
+    <div class="ayuda">¿No aparece? Aprueba escribiendo el código que sale en su pantalla:</div>
+    <div class="dos"><input id="cCodigo" placeholder="X9ZP-K3VW" autocomplete="off" style="text-transform:uppercase">
+      <input id="cCodNombre" placeholder="Nombre (ej. MÓNICA)" autocomplete="off"></div>
+    <button class="btn" id="cAprobarCod" style="margin-top:8px">✅ Aprobar este código</button>
+    <h2>📱 Celulares autorizados <small>${Object.keys(CFG.celulares).length}</small></h2>
+    <div class="list">${cel || '<div class="vacio">Ninguno.</div>'}</div>
+    <div class="ayuda">Quitar: ese celular queda bloqueado la próxima vez que abra la app con internet.
+      ★ = administrador (aprueba celulares y cambia ajustes). Ten al menos 2 celulares admin por si pierdes uno.</div>
+
+    <h2>Para todas <small>se guarda en config.json</small></h2>
+    <label>Categorías (una por línea)</label>
+    <textarea id="cCategorias">${esc(CFG.categorias.join('\n'))}</textarea>
+    <label>Quién registra (una por línea)</label>
+    <textarea id="cPersonas" style="min-height:90px">${esc(CFG.personas.join('\n'))}</textarea>
+    <label>Pagado con (uno por línea)</label>
+    <textarea id="cMetodos" style="min-height:90px">${esc(CFG.metodos.join('\n'))}</textarea>
+    <label>Comprobantes (uno por línea; <code>| igv</code> si trae IGV desglosado)</label>
+    <textarea id="cComprobantes" style="min-height:90px">${esc(CFG.comprobantes.map((c) => c.nombre + (c.igv ? ' | igv' : '')).join('\n'))}</textarea>
+    <label>IGV %</label>
+    <input id="cIgv" inputmode="decimal" value="${esc(CFG.igv)}">
+    <button class="guardar" id="cGuardar">💾 Guardar ajustes</button>` + salir;
+}
+async function pintarSolicitudes() {
+  const el = $('#solis'); if (!el) return;
+  try {
+    const l = await cargarSolicitudes();
+    if (!$('#solis')) return;
+    $('#solis').innerHTML = l.map((x) => `<div class="row"><div class="main"><div class="t">${esc(x.nombre)}</div>
+      <div class="d">${esc(x.codigo)} · ${esc(x.modelo || '')} · ${esc(x.cuenta || '')} · ${fm(x.fecha || '')}${x.error ? '<br>⚠️ ' + esc(x.error) : ''}</div></div>
+      <button class="btn" data-aprobar="${esc(x.codigo)}" style="color:var(--grn)">Aprobar</button>
+      <button class="btn" data-rechazar="${esc(x.codigo)}">✕</button></div>`).join('') || '<div class="vacio">No hay solicitudes.</div>';
+  } catch (e) { if ($('#solis')) $('#solis').innerHTML = `<div class="vacio">⚠️ ${esc(e.message)}</div>`; }
+}
+
+async function guardarAjustes() {
+  const lineas = (id) => $(id).value.split('\n').map((s) => s.trim()).filter(Boolean);
+  const nueva = Object.assign({}, CFG, {
+    categorias: lineas('#cCategorias'), personas: lineas('#cPersonas').map((s) => s.toUpperCase()), metodos: lineas('#cMetodos'),
+    comprobantes: lineas('#cComprobantes').map((l) => {
+      const [nombre, marca] = l.split('|').map((s) => s.trim());
+      return { nombre, igv: /^igv$/i.test(marca || '') };
+    }),
+    igv: num($('#cIgv').value),
+    fotos: $('#cFotos').value.trim()
+  });
+  if (!nueva.categorias.length || !nueva.personas.length || !nueva.metodos.length || !nueva.comprobantes.length) return toast('No dejes listas vacías.');
+  const carpetaNueva = $('#cCarpeta').value.trim() || 'RURUSH Facturas';
+  const btn = $('#cGuardar'); btn.disabled = true; btn.textContent = 'Guardando…';
+  try {
+    if (carpetaNueva !== carpetaConf()) {
+      ls.set('carpeta', carpetaNueva); ls.set('raiz', null); ls.set('excel', null);
+      await raiz();
+      await cargarConfig();   // la carpeta nueva puede tener su propio config.json
+      toast('📁 Carpeta cambiada. Revisa los ajustes y vuelve a guardar si quieres cambiarlos.', 4000);
+    } else {
+      const ultima = await leerConfig();   // celulares aprobados mientras tanto
+      if (ultima) nueva.celulares = ultima.celulares;
+      await guardarConfig(nueva);
+      toast('💾 Ajustes guardados para todas');
+    }
+    if (!compActual()) F.comprobante = (CFG.comprobantes[0] || {}).nombre || '';
+    pintarSub(); pintar();
+  } catch (e) {
+    btn.disabled = false; btn.textContent = '💾 Guardar ajustes';
+    toast('❌ ' + e.message, 5000);
+  }
+}
+
+/* ---------- pantalla ---------- */
+
+async function pintarEstado() {
+  const el = $('#estado'); if (!el) return;
+  const n = (await colaTodo()).length;
+  if (!n) { el.innerHTML = ''; return; }
+  if (subiendo) el.innerHTML = `<div class="estado sub"><span>⏫ Subiendo ${n} a OneDrive…</span></div>`;
+  else if (!navigator.onLine) el.innerHTML = `<div class="estado sub"><span>📴 Sin internet: ${n} en cola. Se suben solas al volver.</span></div>`;
+  else el.innerHTML = `<div class="estado err"><span>⚠️ ${n} sin subir${ultimoError ? ': ' + esc(ultimoError) : ''}</span><button id="reintentar">Reintentar</button></div>`;
+}
+function pintarSub() {
+  const R = ls.get('raiz');
+  $('#sub').textContent = (persona() ? persona() + ' · ' : '') + '📁 ' + ((R && R.nombre) || carpetaConf());
+}
+function pintar() {
+  $('#main').innerHTML = tab === 'nueva' ? pintarNueva() : tab === 'hist' ? pintarHist() : pintarConf();
+  if (tab === 'conf' && esAdmin()) pintarSolicitudes();
+  clearInterval(pintar.t);
+  if (tab === 'conf' && esAdmin()) pintar.t = setInterval(() => { if (tab === 'conf' && document.visibilityState === 'visible') pintarSolicitudes(); }, 8000);
+  document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
+  pintarEstado();
+}
+
+function pantallaLogin(msj) {
+  $('#nav').classList.add('hide');
+  $('#sub').textContent = 'Control de facturas';
+  $('#main').innerHTML = `<div class="login">
+    <div style="font-size:54px">🧾</div>
+    <p>Toma la foto del comprobante (agua, limpieza, arreglos…), llena lo importante y se sube solo a OneDrive.</p>
+    ${msj ? `<div class="estado err"><span>${esc(msj)}</span></div>` : ''}
+    <button class="guardar" id="login">Entrar con Microsoft</button></div>`;
+}
+
+/* ---------- eventos ---------- */
+
+document.addEventListener('click', async (ev) => {
+  const t = ev.target.closest('button, [data-tab], a#cSalir');
+  if (t && t.id === 'cSalir' && t.tagName === 'A') ev.preventDefault();
+  if (!t) return;
+  if (t.dataset.tab) { tab = t.dataset.tab; pintar(); window.scrollTo(0, 0); return; }
+  if (t.id === 'login') return MS.loginRedirect({ scopes: SCOPES, prompt: 'select_account' });
+  if (t.id === 'tomarFoto') { $('#cam').value = ''; return $('#cam').click(); }
+  if (t.id === 'galeria') { $('#gal').value = ''; return $('#gal').click(); }
+  if (t.dataset.quitar != null) { const [x] = F.fotos.splice(Number(t.dataset.quitar), 1); URL.revokeObjectURL(x.url); return pintar(); }
+  if (t.dataset.per != null) { ls.set('persona', t.dataset.per); pintarSub(); return pintar(); }
+  if (t.dataset.cat != null) { F.categoria = t.dataset.cat; return pintar(); }
+  if (t.dataset.comp != null) { F.comprobante = t.dataset.comp; return pintar(); }
+  if (t.dataset.metodo != null) { F.metodo = t.dataset.metodo; return pintar(); }
+  if (t.id === 'guardar') { t.disabled = true; try { await guardar(); } catch (e) { t.disabled = false; toast('❌ ' + e.message, 5000); } return; }
+  if (t.id === 'reintentar') { permitirLogin = true; try { await cargarConfig(); BASE_FOTOS = null; Object.keys(MES_CACHE).forEach((k) => delete MES_CACHE[k]); } catch (e) { /* sin internet */ } return procesarCola(); }
+  if (t.id === 'cGuardar') return guardarAjustes();
+  if (t.id === 'cCopiar') {
+    const link = location.origin + location.pathname + '?carpeta=' + encodeURIComponent($('#cCarpeta').value.trim() || carpetaConf());
+    try { await navigator.clipboard.writeText(link); toast('🔗 Link copiado'); } catch (e) { prompt('Copia este link:', link); }
+    return;
+  }
+  if (t.id === 'bSolicitar') {
+    const nombre = ($('#bNombre').value || '').trim().toUpperCase();
+    if (!nombre) return toast('Escribe tu nombre.');
+    t.disabled = true;
+    try { await solicitarAcceso(nombre); pantallaBloqueo(); } catch (e) { t.disabled = false; toast('❌ ' + e.message, 5000); }
+    return;
+  }
+  if (t.id === 'bConectar') {
+    const link = ($('#bLink').value || '').trim();
+    const url = (link.match(/https?:\/\/\S+/) || [])[0];
+    if (!url) return toast('Pega el link completo (empieza con https://).', 4000);
+    ls.set('carpeta', url); ['raiz', 'excel', 'config', 'solicitud'].forEach((k) => ls.set(k, null));
+    location.reload();
+    return;
+  }
+  if (t.id === 'bRevisar') {
+    t.disabled = true;
+    try { await cargarConfig(); } catch (e) { toast('❌ ' + e.message, 5000); }
+    if (autorizado()) { ls.set('solicitud', ''); mostrarApp(); procesarCola(); } else { t.disabled = false; toast('Todavía no está aprobado.'); }
+    return;
+  }
+  if (t.id === 'cSolis') return pintarSolicitudes();
+  if (t.id === 'cAprobarCod') {
+    const k = $('#cCodigo').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^(.{4})(.{4})$/, '$1-$2');
+    const nombre = ($('#cCodNombre').value || '').trim().toUpperCase() || 'SIN NOMBRE';
+    if (!/^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(k)) return toast('Escribe el código como sale en su pantalla (ej. X9ZP-K3VW).', 4000);
+    t.disabled = true;
+    try {
+      await cambiarCelulares((cel) => { cel[k] = { nombre, modelo: '', cuenta: '', fecha: isoLocal(new Date()) }; });
+      toast('✅ ' + k + ' aprobado. En ese celular: "Ya me aprobaron".', 4000);
+      pintar();
+    } catch (e) { t.disabled = false; toast('❌ ' + e.message, 5000); }
+    return;
+  }
+  if (t.id === 'cGuardarFotosLink') {
+    const url = (($('#cFotosLink').value || '').match(/https?:\/\/\S+/) || [''])[0];
+    ls.set('fotosLink', url); BASE_FOTOS = null; Object.keys(MES_CACHE).forEach((k) => delete MES_CACHE[k]);
+    toast(url ? '💾 Link guardado. Las fotos pendientes se suben ahora.' : 'Link borrado.', 4000);
+    procesarCola();
+    return;
+  }
+  if (t.id === 'cProbarFotos') {
+    const antes = CFG.fotos, antesLink = ls.get('fotosLink', '');
+    if ($('#cFotos')) CFG.fotos = $('#cFotos').value.trim();
+    if ($('#cFotosLink')) ls.set('fotosLink', (($('#cFotosLink').value || '').match(/https?:\/\/\S+/) || [''])[0]);
+    t.disabled = true; t.textContent = 'Buscando…';
+    try {
+      const d = await carpetaFotos(isoLocal(new Date()));
+      toast('✅ Las fotos de hoy irán a: ' + d.ruta, 5000);
+    } catch (e) { toast('❌ ' + e.message, 7000); }
+    CFG.fotos = antes; ls.set('fotosLink', antesLink);
+    t.disabled = false; t.textContent = $('#cFotos') ? '🔍 Probar carpeta de fotos' : '🔍 Probar';
+    return;
+  }
+  if (t.dataset.aprobar || t.dataset.rechazar || t.dataset.quitarcel || t.dataset.admincel) {
+    const k = t.dataset.aprobar || t.dataset.rechazar || t.dataset.quitarcel || t.dataset.admincel;
+    if (t.dataset.quitarcel && !confirm('¿Quitar el acceso a ' + ((CFG.celulares[k] || {}).nombre || k) + '?')) return;
+    t.disabled = true;
+    try {
+      if (t.dataset.aprobar) { await aprobar(k); toast('✅ Aprobado'); }
+      else if (t.dataset.rechazar) { await rechazar(k); toast('Solicitud rechazada'); }
+      else if (t.dataset.admincel) { await cambiarCelulares((cel) => { if (cel[k]) cel[k].admin = !cel[k].admin; }); toast('Listo'); }
+      else { await quitarCelular(k); toast('Celular quitado'); }
+      pintar();
+    } catch (e) { t.disabled = false; toast('❌ ' + e.message, 5000); }
+    return;
+  }
+  if (t.id === 'cSalir') { if (confirm('¿Cerrar sesión de Microsoft en este celular?')) MS.logoutRedirect({ account: cuenta() }); }
+});
+
+document.addEventListener('input', (ev) => {
+  const id = ev.target.id;
+  if (!['descripcion', 'total', 'cantidad', 'proveedor', 'ruc', 'numero', 'fecha', 'obs'].includes(id)) return;
+  F[id] = ev.target.value;
+  // Proveedor conocido en este celular → su RUC se llena solo.
+  const ruc = proveedores()[F.proveedor.trim().toUpperCase()];
+  if (id === 'proveedor' && ruc && !F.ruc) { F.ruc = ruc; $('#ruc').value = ruc; }
+  refrescarCalc();
+});
+
+async function agregarFotos(ev) {
+  for (const file of Array.from(ev.target.files || []).slice(0, 5)) {
+    try {
+      // PDF (facturas electrónicas): se sube tal cual, sin comprimir.
+      if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
+        if (file.size > 50 * 1024 * 1024) throw new Error('El PDF pesa más de 50 MB.');
+        F.fotos.push({ blob: new Blob([file], { type: 'application/pdf' }), pdf: true, nombre: file.name });
+        continue;
+      }
+      const blob = await comprimir(file);
+      F.fotos.push({ blob, url: URL.createObjectURL(blob) });
+    } catch (e) { toast('❌ ' + e.message, 4000); }
+  }
+  pintar();
+}
+$('#cam').addEventListener('change', agregarFotos);
+$('#gal').addEventListener('change', agregarFotos);
+
+window.addEventListener('online', procesarCola);
+// Con la app abierta, lo pendiente se reintenta solo cada 2 minutos.
+setInterval(() => { if (document.visibilityState === 'visible') procesarCola(); }, 120000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') procesarCola(); });
+
+/* ---------- arranque ---------- */
+
+// Guarda la app en el celular para que abra aunque no haya internet (ver sw.js).
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+
+(async () => {
+  if (!/^[0-9a-f-]{36}$/i.test(CLIENT_ID)) {
+    $('#sub').textContent = 'Falta configurar';
+    $('#main').innerHTML = `<div class="login"><div style="font-size:54px">🛠️</div><p>Falta pegar el <b>CLIENT_ID</b> de Azure en <code>index.html</code>.<br>Mira <b>INSTALAR.md</b>, paso 1.</p></div>`;
+    return;
+  }
+  if (typeof msal === 'undefined') return pantallaLogin('No cargó el login de Microsoft. Revisa el internet y recarga.');
+  let acc;
+  try { acc = await iniciarMsal(); } catch (e) { return pantallaLogin(e.message); }
+  if (!acc) return pantallaLogin();
+  if (!CUENTAS.includes(yo())) return pantallaCuentaNoPermitida();
+  // Otra cuenta en este celular: olvidar carpeta, Excel y ajustes de la cuenta anterior
+  // (si no, seguiría usando la carpeta y el permiso de admin de la otra cuenta).
+  if (ls.get('cuenta', '') !== yo()) {
+    ['raiz', 'excel', 'config', 'solicitud'].forEach((k) => ls.set(k, null));
+    CFG = normalizar(CONFIG_BASE);
+    ls.set('cuenta', yo());
+  }
+  // Con la config guardada: si este celular ya estaba aprobado, abre al toque (también sin internet).
+  if (autorizado()) mostrarApp();
+  else $('#main').innerHTML = '<div class="login"><p>Revisando este celular…</p></div>';
+  try {
+    await raiz();
+    await cargarConfig();
+    if (!compActual()) F.comprobante = (CFG.comprobantes[0] || {}).nombre || '';
+  } catch (e) {
+    // Sin internet o sin permiso: se trabaja con la config guardada y todo queda en cola.
+    ERROR_INICIO = e.message;
+    toast('⚠️ ' + e.message, 5000);
+  }
+  if (!autorizado()) { appVisible = false; return pantallaBloqueo(); }   // nunca aprobado, o lo quitaron
+  if (!appVisible) mostrarApp();
+  else { pintarSub(); if (formVacio()) pintar(); }
+  procesarCola();
+})();
+</script>
+</body>
+</html>

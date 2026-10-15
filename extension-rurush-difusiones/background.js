@@ -226,7 +226,18 @@ async function iniciar() {
   procesar();
 }
 
+// Turno compartido con Rurush FP (misma pestaña de WhatsApp Web, ver turnoWA en content.js):
+// mientras Difusiones envía lo renueva en cada contacto; si FP lo tiene, Difusiones espera.
+const QUIEN_TURNO = 'Rurush Difusiones';
+async function turno(tabId, accion, ms) {
+  return ask(tabId, { type: 'turno', accion, quien: QUIEN_TURNO, ms });
+}
+async function soltarTurno() {
+  try { const tabs = await chrome.tabs.query({ url: 'https://web.whatsapp.com/*' }); for (const t of tabs) await turno(t.id, 'soltar'); } catch (e) {}
+}
+
 async function pausar(motivo) {
+  await soltarTurno();
   const run = await getRun();
   if (!run) return;
   run.estado = 'pausado';
@@ -391,6 +402,7 @@ async function unPaso() {
   if (run.idx >= run.items.length) {
     run.estado = 'terminado';
     await setRun(run);
+    await soltarTurno();
     const r = run.res;
     const linea = `✅ ${r.enviados} enviados · 🧪 ${r.simulados} simulados · ⏭️ ${r.saltados} saltados · ⚠️ ${r.alertas} alertas`;
     await log('ok', `Terminó ${run.tab} · ${run.asesora}: ${linea}`);
@@ -462,6 +474,12 @@ async function unPaso() {
   if (!status) throw new Error('WhatsApp Web no cargó o no tiene sesión iniciada.');
   if (!status.wid || status.wid !== run.linea) {
     throw new Error(`WhatsApp Web está en ${status.wid || 'un número desconocido'} y esta tanda es de ${run.asesora} (${run.linea}). Cambia de sesión y reanuda.`);
+  }
+  const t = await turno(tab.id, 'tomar', ((cfg.pausaMaxS || 90) + 180) * 1000);
+  if (t && t.ok === false) {
+    await log('info', `⏳ WhatsApp Web ocupado: ${t.quien} está enviando. Espero 1 min.`);
+    await programar(60);
+    return false;
   }
 
   // 4. el chat: ¿ya le escribimos? Se abre UNA sola vez, ya con el mensaje cargado
@@ -599,12 +617,15 @@ async function revisarRespuestas(motivo) {
   try {
     const cfg = await getConfig();
     const { tab, asesora } = await lineaAbierta();
+    const t = await turno(tab.id, 'tomar', 4 * 60e3);
+    if (t && t.ok === false) { const e = new Error(`WhatsApp Web ocupado: ${t.quien} está enviando. Reviso en 10 min.`); e.ocupado = true; throw e; }
     const { items } = await api({ a: 'porRevisar', asesora, dias: cfg.revisarDias });
     await log('info', `💬 Revisando respuestas (${motivo}): ${items.length} chats de ${asesora}.`);
     for (const it of items) {
       const tel = normPhone(it.celular);
       const inicio = normTexto(it.inicio).slice(0, 30);
       if (!tel || inicio.length < 10) continue;
+      await turno(tab.id, 'tomar', 4 * 60e3);
       const chat = await openChat(tab.id, tel);
       if (!chat || chat.invalid) continue;
       await sleep(1500);
@@ -641,6 +662,7 @@ async function revisarRespuestas(motivo) {
     return res;
   } finally {
     revisando = false;
+    await soltarTurno();
   }
 }
 
@@ -658,7 +680,8 @@ async function hacerRevision(motivo, now) {
   try {
     await revisarRespuestas(motivo);
   } catch (e) {
-    await log('warn', `💬 No pude revisar respuestas: ${e.message || e}`);
+    await log(e.ocupado ? 'info' : 'warn', `💬 No pude revisar respuestas: ${e.message || e}`);
+    if (e.ocupado) return;   // Rurush FP está enviando: se revisa en la próxima vuelta (10 min)
   }
   await chrome.storage.local.set({ revisadoHasta: Date.now(), revisionDia: now.date });
 }
@@ -771,12 +794,30 @@ async function siguientePestanaAuto(run) {
 
 function programarAuto() {
   chrome.alarms.create('auto', { delayInMinutes: 1, periodInMinutes: 10 });
+  chrome.alarms.create('recarga', { delayInMinutes: 2, periodInMinutes: 5 });
+}
+
+// Autorrecarga: cuando ACTUALIZAR.bat deja archivos nuevos en la carpeta de la extensión, esta se
+// recarga sola (cada 5 min se compara la versión del manifest en disco), pero nunca a mitad de un envío.
+async function autoRecarga() {
+  try {
+    const r = await fetch(chrome.runtime.getURL('manifest.json'), { cache: 'no-store' });
+    const v = (await r.json()).version;
+    if (!v || v === chrome.runtime.getManifest().version) return;
+    if (await ocupadoParaRecargar()) return;
+    chrome.runtime.reload();
+  } catch (e) { /* manifest a medio copiar: se intenta en la próxima vuelta */ }
+}
+async function ocupadoParaRecargar() {
+  const run = await getRun();
+  return procesando || revisando || (run && run.estado === 'corriendo');
 }
 
 // ───────────────────────── disparadores ─────────────────────────
 chrome.alarms.onAlarm.addListener((a) => {
   if (a.name === 'next') procesar();
   if (a.name === 'auto') autoCheck();
+  if (a.name === 'recarga') autoRecarga();
 });
 
 chrome.runtime.onStartup.addListener(async () => {
