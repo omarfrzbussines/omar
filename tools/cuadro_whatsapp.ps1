@@ -12,20 +12,28 @@ $log = Join-Path $aqui "cuadro_log.txt"
 function Anotar($t) { Add-Content -Path $log -Value ((Get-Date -Format "dd/MM HH:mm:ss") + "  " + $t) -Encoding UTF8 }
 
 try {
-  # --- configuración (cuadro.txt no se sube a GitHub) ---
-  $cfgFile = Join-Path $aqui "cuadro.txt"
-  if (-not (Test-Path $cfgFile)) { throw "Falta tools\cuadro.txt (copia cuadro.ejemplo.txt y llénalo)." }
-  $cfg = @{}
-  Get-Content $cfgFile -Encoding UTF8 | ForEach-Object { if ($_ -match '^\s*([a-z]+)\s*=\s*(.+?)\s*$') { $cfg[$matches[1]] = $matches[2] } }
-  if (-not $cfg.link -or $cfg.link -match 'PEGA-AQUI') { throw "Falta el link en tools\cuadro.txt" }
-  $numero = ($cfg.numero -replace '\D', '')
-  if (-not $SoloFoto -and $numero.Length -lt 11) { throw "Falta tu número en tools\cuadro.txt (con 51 adelante)" }
-
-  # --- 1) HTML del cuadro ---
-  $url = $cfg.link + $(if ($Noche) { "&noche=1" } else { "" })
+  # --- configuración: todo solo. La PC crea su clave (cuadro_clave.txt, no va a GitHub) y la pide de alta;
+  #     a Omar le llega un correo para autorizarla y poner su número. Hasta entonces no envía nada.
+  $exec = "https://script.google.com/macros/s/AKfycbxQ43YCw8-Jrgqncz1QiW0lIA4mmNW5_-QGYhKGS68aomEJUaZ5P2t01WqESRlCXfbZ/exec"
   [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
   $wc = New-Object Net.WebClient
   $wc.Encoding = [Text.Encoding]::UTF8
+  $claveF = Join-Path $aqui "cuadro_clave.txt"
+  if (-not (Test-Path $claveF)) { Set-Content $claveF ([guid]::NewGuid().ToString("N")) -Encoding ASCII }
+  $clave = (Get-Content $claveF -Raw).Trim()
+  $alta = $wc.DownloadString("$exec`?cuadroalta=$clave").Trim()
+  if ($alta -ne "OK") {
+    Anotar ("Esperando que autorices la PC desde tu correo (" + $alta + ")")
+    Write-Host "Revisa tu correo: toca 'Autorizar' y pon tu número. Luego vuelve a probar." -ForegroundColor Yellow
+    exit 0
+  }
+  $info = $wc.DownloadString("$exec`?cuadro=$clave&info=1") | ConvertFrom-Json
+  $numero = ($info.numero -replace '\D', '')
+  if (-not $SoloFoto -and $numero.Length -lt 11) { throw "Falta tu número (vuelve a autorizar desde el correo)." }
+  $cfg = @{ link = "$exec`?cuadro=$clave" }
+
+  # --- 1) HTML del cuadro ---
+  $url = $cfg.link + $(if ($Noche) { "&noche=1" } else { "" })
   $html = $wc.DownloadString($url)
   if ($html -notmatch 'RURUSH FITNESS CLUB') { throw "El link no devolvió el cuadro: " + $html.Substring(0, [Math]::Min(120, $html.Length)) }
   $tmp = Join-Path $env:TEMP "rurush_cuadro.html"

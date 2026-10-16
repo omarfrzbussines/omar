@@ -28,15 +28,13 @@ function doGet(e) {
     hoy_enviarLink_();
     return ContentService.createTextOutput('Listo: el link de RURUSH Hoy y el PIN llegaron al correo de Omar.');
   }
-  // 📲 cuadro de ventas para la PC (solo lectura, clave propia)
-  if (p.cuadrolink && !CacheService.getScriptCache().get('cuadro_reenvio')) {
-    CacheService.getScriptCache().put('cuadro_reenvio', '1', 3600);
-    cuadro_enviarLink_();
-    return ContentService.createTextOutput('Listo: el link del cuadro llegó al correo de Omar.');
-  }
+  // 📲 cuadro de ventas para la PC (solo lectura, clave propia de la PC, autorizada por Omar desde su correo)
+  if (p.cuadroalta) return ContentService.createTextOutput(cuadro_alta_(p.cuadroalta));
+  if (p.cuadrook) return cuadro_okPagina_(p.cuadrook, p.numero);
   if (p.cuadro) {
     const t = props.getProperty('CUADRO_TOKEN');
     if (!t || p.cuadro !== t) return ContentService.createTextOutput('Link no válido.');
+    if (p.info) return hoy_json_({ ok: true, numero: props.getProperty('CUADRO_NUMERO') || '' });
     // ?ver=1: se ve en Safari (Atajo del iPhone saca captura); sin ver: HTML para la PC
     if (p.ver) return HtmlService.createHtmlOutput(dv_cuadroTexto(p.noche === '1')).setTitle('RURUSH · Cuadro')
       .addMetaTag('viewport', 'width=device-width, initial-scale=1');

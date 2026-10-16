@@ -1,5 +1,0 @@
-# RURUSH - Cuadro de ventas a tu WhatsApp. Copia este archivo como cuadro.txt (ese no se sube a GitHub).
-# link: te llega al correo al abrir el link "?cuadrolink=1" de RURUSH Hoy (ver LEEME).
-link=PEGA-AQUI
-# tu número de WhatsApp con 51 adelante, sin espacios (a este chat llega la foto)
-numero=51XXXXXXXXX
