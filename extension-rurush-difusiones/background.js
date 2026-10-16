@@ -786,6 +786,7 @@ async function siguientePestanaAuto(run) {
 function programarAuto() {
   chrome.alarms.create('auto', { delayInMinutes: 1, periodInMinutes: 10 });
   chrome.alarms.create('recarga', { delayInMinutes: 2, periodInMinutes: 5 });
+  chrome.alarms.create('cuadro', { delayInMinutes: 1, periodInMinutes: 5 });
 }
 
 // Autorrecarga: cuando ACTUALIZAR.bat deja archivos nuevos en la carpeta de la extensión, esta se
@@ -801,7 +802,108 @@ async function autoRecarga() {
 }
 async function ocupadoParaRecargar() {
   const run = await getRun();
-  return procesando || revisando || (run && run.estado === 'corriendo');
+  return procesando || revisando || cuadroOcupado || (run && run.estado === 'corriendo');
+}
+
+// ───────────────────────── 📊 cuadro de ventas ─────────────────────────
+// Lun-vie 7:00 am (lo que necesitan HOY) y 9:00 pm (cierre del día): baja el cuadro de RURUSH Hoy,
+// lo convierte en imagen y lo manda a los números de la pestaña «📲 CUADRO WHATSAPP» (Hoja de Reportes).
+// La extensión pide su alta una vez: a Omar le llega un correo para autorizarla. Respeta el turno con FP.
+const CUADRO_EXEC = 'https://script.google.com/macros/s/AKfycbxQ43YCw8-Jrgqncz1QiW0lIA4mmNW5_-QGYhKGS68aomEJUaZ5P2t01WqESRlCXfbZ/exec';
+const CUADRO_HORAS = [{ h: 7, m: 0, noche: false }, { h: 21, m: 0, noche: true }];
+const CUADRO_VENTANA_MIN = 120;   // si a esa hora no se pudo (WhatsApp ocupado/cerrado), se reintenta hasta 2 h después
+let cuadroOcupado = false;
+
+async function cuadroGet(params) {
+  const url = new URL(CUADRO_EXEC);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
+  const r = await fetch(url, { redirect: 'follow', cache: 'no-store' });
+  if (!r.ok) throw new Error('RURUSH Hoy → HTTP ' + r.status);
+  return r.text();
+}
+async function cuadroClave() {
+  let { cuadroClave: c } = await chrome.storage.local.get('cuadroClave');
+  if (!c) {
+    c = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('');
+    await chrome.storage.local.set({ cuadroClave: c });
+  }
+  return c;
+}
+function cuadroTurnoActual() {
+  const now = limaNow();
+  if (now.dow === 0 || now.dow === 6) return null;
+  const min = now.hour * 60 + now.min;
+  const s = CUADRO_HORAS.find((x) => min >= x.h * 60 + x.m && min < x.h * 60 + x.m + CUADRO_VENTANA_MIN);
+  return s ? { id: now.date + (s.noche ? '-noche' : '-manana'), noche: s.noche } : null;
+}
+async function cuadroPng(html) {
+  try {
+    const ya = chrome.offscreen.hasDocument ? await chrome.offscreen.hasDocument() : false;
+    if (!ya) await chrome.offscreen.createDocument({ url: 'offscreen.html', reasons: ['DOM_PARSER'], justification: 'Dibujar el cuadro de ventas como imagen' });
+  } catch (e) { if (!/single offscreen|already/i.test(String(e.message || e))) throw e; }
+  const r = await chrome.runtime.sendMessage({ type: 'cuadroPng', html });
+  if (!r || !r.ok) throw new Error('no pude dibujar el cuadro: ' + ((r && r.error) || 'sin respuesta'));
+  return r.b64;
+}
+// prueba = true: lo manda ahora mismo (botón de prueba), sin mirar la hora
+async function cuadroTick(prueba) {
+  if (cuadroOcupado || procesando || revisando) return;
+  const turnoHoy = prueba ? { id: 'prueba-' + Date.now(), noche: limaNow().hour >= 14 } : cuadroTurnoActual();
+  if (!turnoHoy) return;
+  const { cuadroHecho = {} } = await chrome.storage.local.get('cuadroHecho');
+  if (cuadroHecho[turnoHoy.id]) return;
+  const run = await getRun();
+  if (run && run.estado === 'corriendo') return;           // primero termina la difusión
+  cuadroOcupado = true;
+  let tab = null, tomado = false;
+  try {
+    const clave = await cuadroClave();
+    const alta = (await cuadroGet({ cuadroalta: clave })).trim();
+    if (alta !== 'OK') {
+      if (!cuadroHecho['aviso-' + limaNow().date]) {
+        cuadroHecho['aviso-' + limaNow().date] = 1; await chrome.storage.local.set({ cuadroHecho });
+        await log('warn', '📊 Cuadro de ventas: falta autorizar esta extensión. Omar: revisa tu correo y toca «Autorizar».');
+      }
+      return;
+    }
+    const info = JSON.parse(await cuadroGet({ cuadro: clave, info: 1 }));
+    const cfg = await getConfig();
+    const destinos = [...new Set((info.destinos && info.destinos.length ? info.destinos : [info.numero]).map(normPhone).filter(Boolean))]
+      .filter((n) => !(cfg.blocklist || []).includes(n));
+    if (!destinos.length) throw new Error('no hay números en la pestaña 📲 CUADRO WHATSAPP');
+    const html = await cuadroGet(turnoHoy.noche ? { cuadro: clave, noche: 1 } : { cuadro: clave });
+    if (!/RURUSH FITNESS CLUB/.test(html)) throw new Error('RURUSH Hoy no devolvió el cuadro');
+    const b64 = await cuadroPng(html);
+    tab = await waTab();
+    const ping = await ask(tab.id, { type: 'ping' });
+    if (!ping || !ping.loggedIn) { await log('warn', '📊 Cuadro: WhatsApp Web no está abierto con sesión; reintento en 5 min.'); return; }
+    const t = await turno(tab.id, 'tomar', 5 * 60e3);
+    if (!t || !t.ok) { await log('info', `📊 Cuadro: WhatsApp ocupado por ${(t && t.quien) || 'otro envío'}; reintento en 5 min.`); return; }
+    tomado = true;
+    const ahora = limaNow();
+    const texto = (turnoHoy.noche ? '🌙 Cierre de ventas ' : '📊 Ventas de hoy ') + ahora.date.slice(8) + '/' + ahora.date.slice(5, 7);
+    let ok = 0;
+    for (const ph of destinos) {
+      await turno(tab.id, 'tomar', 5 * 60e3);
+      const st = await openChat(tab.id, ph);
+      if (!st || st.invalid) { await log('warn', `📊 Cuadro: ${ph} no tiene WhatsApp o no abrió el chat.`); continue; }
+      const r = await ask(tab.id, { type: 'enviarImagen', b64, mime: 'image/png', nombre: 'cuadro-ventas.png', texto }, 60000);
+      if (r && r.ok) ok++; else await log('warn', `📊 Cuadro: no salió a ${ph} (${(r && r.error) || 'sin respuesta'}).`);
+      await sleep(3000);
+    }
+    if (ok) {
+      cuadroHecho[turnoHoy.id] = Date.now();
+      const lim = Date.now() - 10 * 864e5;
+      Object.keys(cuadroHecho).forEach((k) => { if (typeof cuadroHecho[k] === 'number' && cuadroHecho[k] > 1 && cuadroHecho[k] < lim) delete cuadroHecho[k]; });
+      await chrome.storage.local.set({ cuadroHecho });
+    }
+    await log(ok ? 'info' : 'warn', `📊 Cuadro de ventas ${turnoHoy.noche ? '(cierre) ' : ''}enviado a ${ok}/${destinos.length}.`);
+  } catch (e) {
+    await log('error', '📊 Cuadro de ventas: ' + (e.message || e));
+  } finally {
+    if (tomado) await soltarTurno();
+    cuadroOcupado = false;
+  }
 }
 
 // ───────────────────────── disparadores ─────────────────────────
@@ -809,6 +911,7 @@ chrome.alarms.onAlarm.addListener((a) => {
   if (a.name === 'next') procesar();
   if (a.name === 'auto') autoCheck();
   if (a.name === 'recarga') autoRecarga();
+  if (a.name === 'cuadro') cuadroTick(false);
 });
 
 chrome.runtime.onStartup.addListener(async () => {
@@ -829,6 +932,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     case 'pausar': responder(pausar()); return true;
     case 'detener': responder(detener()); return true;
     case 'revisar': responder(revisarRespuestas('manual')); return true;
+    case 'cuadroProbar': responder(cuadroTick(true)); return true;
     case 'waActivity': chrome.storage.local.set({ waActivity: Date.now() }); return false;
     default: return false;
   }

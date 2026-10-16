@@ -130,3 +130,12 @@ for (const id of ['iniciar', 'pausar', 'detener']) {
 chrome.storage.onChanged.addListener(pintar);
 cargarInfo();
 pintar();
+
+// 📊 Cuadro de ventas: lo manda ahora (prueba) a los números de la pestaña 📲 CUADRO WHATSAPP
+$('cuadro').addEventListener('click', async () => {
+  $('cuadro').disabled = true;
+  $('cuadro').textContent = 'Enviando cuadro… (~1 min)';
+  await send({ type: 'cuadroProbar' });
+  $('cuadro').textContent = '📊 Probar cuadro de ventas ahora';
+  $('cuadro').disabled = false;
+});

@@ -242,6 +242,12 @@ function cuadro_okPagina_(code, numero) {
     '<div style="font:18px -apple-system,Roboto,sans-serif;padding:24px;max-width:420px;margin:auto">' + t + '</div>').setTitle('RURUSH · Cuadro');
   if (!okCode || code !== okCode) return page('Link vencido o no válido.');
   const n = String(numero || '').replace(/\D/g, '');
+  // si ya hay números (pestaña 📲 CUADRO WHATSAPP o el de antes), se autoriza sin pedir nada
+  if (n.length < 9 && (cuadro_destinos_().length || props.getProperty('CUADRO_NUMERO'))) {
+    props.setProperty('CUADRO_TOKEN', props.getProperty('CUADRO_PEND') || '');
+    props.deleteProperty('CUADRO_OKCODE');
+    return page('<h2>✅ Listo</h2><p>Quedó autorizado. El cuadro sale lun-vie a las 7:45 am y 8:00 pm a los números de la pestaña 📲 CUADRO WHATSAPP.</p>');
+  }
   if (n.length < 9) {
     return page('<h2>📲 Cuadro de ventas a tu WhatsApp</h2><p>Escribe tu número de WhatsApp (a ese chat llega la foto):</p>' +
       '<form method="get" action="' + ScriptApp.getService().getUrl() + '" target="_top"><input type="hidden" name="cuadrook" value="' + code + '">' +
@@ -252,4 +258,20 @@ function cuadro_okPagina_(code, numero) {
   props.setProperty('CUADRO_TOKEN', props.getProperty('CUADRO_PEND') || '');
   props.deleteProperty('CUADRO_OKCODE');
   return page('<h2>✅ Listo</h2><p>Tu PC quedó autorizada. El cuadro te llega a tu WhatsApp lun-vie a las 7:45 am y 8:00 pm.</p>');
+}
+
+/* A quién se manda el cuadro: pestaña "📲 CUADRO WHATSAPP" de la Hoja de Reportes (columna A, desde la fila 2).
+   Los números no van en el código (GitHub es público). Nunca a los números bloqueados. */
+const CUADRO_BLOQUEO = ['51942853538', '51953876647'];
+function cuadro_destinos_() {
+  try {
+    const v = Sheets.Spreadsheets.Values.get(DV_ID, "'📲 CUADRO WHATSAPP'!A2:A50").values || [];
+    const out = [];
+    v.forEach((f) => {
+      let n = String(f[0] || '').replace(/\D/g, '');
+      if (n.length === 9) n = '51' + n;
+      if (/^519\d{8}$/.test(n) && CUADRO_BLOQUEO.indexOf(n) < 0 && out.indexOf(n) < 0) out.push(n);
+    });
+    return out;
+  } catch (e) { return []; }
 }

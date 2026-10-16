@@ -15,15 +15,11 @@ CONECTAR_CUENTA.bat por cada cuenta, llenar proyectos.txt y doble clic en ACTUAL
 - **extensiones.txt**: si un Chrome carga una extensión desde otra carpeta, pon aquí `carpeta del repo | ruta "Cargado desde"` y ACTUALIZAR copiará ahí los archivos nuevos.
 - Las extensiones Rurush FP (2.8.4+) y Difusiones (1.3.8+) se recargan solas cuando ven archivos nuevos (cada 5 min, nunca a mitad de un envío).
 
-## 📲 Cuadro de ventas a tu WhatsApp (lun-vie 7:45 am y 8:00 pm)
+## 📲 Cuadro de ventas por WhatsApp (lun-vie 7:00 am y 9:00 pm)
 
-Se instala solo con la actualización automática:
-1. La PC crea su clave (`cuadro_clave.txt`, no va a GitHub) y las tareas "RURUSH Cuadro manana/noche".
-2. Te llega un correo **"Autoriza tu PC"** → tocas **Autorizar** y escribes tu número una vez.
-3. Desde ahí la foto llega a tu WhatsApp lun-vie 7:45 am (lo que necesitan HOY) y 8:00 pm (cierre).
-
-- Usa la app **WhatsApp de escritorio** si está instalada; si no, WhatsApp Web. La PC debe estar prendida y con tu sesión abierta.
-- Probar ahora: `CUADRO_PROBAR.bat`. Apagar: `CUADRO_QUITAR.bat`. Lo que pase queda en `cuadro_log.txt`.
-
-**iPhone (Atajo, respaldo):** Atajos → Automatización → Hora del día (7:45 y 20:00, lun-vie, "Ejecutar de inmediato") →
-*Abrir URL* (el link del cuadro + `&ver=1`; noche: `&ver=1&noche=1`) → *Esperar 8 s* → *Hacer captura de pantalla* → *Compartir* → WhatsApp.
+Lo envía la extensión **Rurush Difusiones** desde el WhatsApp Web donde está abierta (línea de Mónica):
+- A quién: pestaña **📲 CUADRO WHATSAPP** de la HOJA DE REPORTES 2026 (columna A, con 51). Agrega o borra filas ahí.
+- 7:00 am: lo que necesitan HOY · 9:00 pm: cierre del día. Si WhatsApp está ocupado, reintenta cada 5 min hasta 2 h.
+- La primera vez llega a tu correo "Autoriza…": tocas Autorizar y listo.
+- Probar ahora: ícono de la extensión → **📊 Probar cuadro de ventas ahora**.
+- `cuadro_whatsapp.ps1` (envío desde la PC) queda solo como respaldo manual: `CUADRO_PROBAR.bat`.

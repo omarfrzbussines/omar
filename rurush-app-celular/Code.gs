@@ -34,7 +34,7 @@ function doGet(e) {
   if (p.cuadro) {
     const t = props.getProperty('CUADRO_TOKEN');
     if (!t || p.cuadro !== t) return ContentService.createTextOutput('Link no válido.');
-    if (p.info) return hoy_json_({ ok: true, numero: props.getProperty('CUADRO_NUMERO') || '' });
+    if (p.info) return hoy_json_({ ok: true, numero: props.getProperty('CUADRO_NUMERO') || '', destinos: cuadro_destinos_() });
     // ?ver=1: se ve en Safari (Atajo del iPhone saca captura); sin ver: HTML para la PC
     if (p.ver) return HtmlService.createHtmlOutput(dv_cuadroTexto(p.noche === '1')).setTitle('RURUSH · Cuadro')
       .addMetaTag('viewport', 'width=device-width, initial-scale=1');
