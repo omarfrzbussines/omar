@@ -817,7 +817,8 @@ let cuadroOcupado = false;
 async function cuadroGet(params) {
   const url = new URL(CUADRO_EXEC);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
-  const r = await fetch(url, { redirect: 'follow', cache: 'no-store' });
+  // sin cookies: con varias cuentas de Google abiertas en Chrome, Apps Script responde 404
+  const r = await fetch(url, { redirect: 'follow', cache: 'no-store', credentials: 'omit' });
   if (!r.ok) throw new Error('RURUSH Hoy → HTTP ' + r.status);
   return r.text();
 }
