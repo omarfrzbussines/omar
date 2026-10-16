@@ -65,10 +65,12 @@ function dv_datos() {
   const diasRest = Math.max(1, dv_habiles(hoy, plazo));
   const esperado = diasTot ? diasPas / diasTot : 0;
 
-  // últimos 5 días hábiles hasta ayer
+  // semana de lunes a viernes (la de hoy; el lunes, la semana pasada completa)
   const ayer = dv_habilAnterior(hoy);
-  const ult = [ayer];
-  while (ult.length < 5) ult.unshift(dv_habilAnterior(ult[0]));
+  const wd = dv_d(hoy).getUTCDay();
+  let lunes = dv_mas(hoy, -((wd + 6) % 7));
+  if (wd === 1) lunes = dv_mas(lunes, -7);
+  const ult = [0, 1, 2, 3, 4].map((i) => dv_mas(lunes, i));
 
   let llam = {};
   try { llam = (getEquipo(false).llamadas || {}).ayer || {}; } catch (e) { /* sin llamadas */ }
@@ -132,9 +134,9 @@ function dv_html(d) {
       '<td align="right" style="vertical-align:top"><div style="font-size:12px;color:#52514e">Mes</div><div style="font-size:16px;font-weight:800">' + S(a.acum) + ' <span style="font-weight:600;color:#52514e">de ' + S(a.meta) + ' · ' + P(a.pct) + '</span></div></td></tr></table>' +
       barra(a.pct, c, d.esperado) +
       '<table width="100%" style="border-collapse:separate;border-spacing:4px 0;margin-top:8px"><tr>' +
-      d.ult.map((f, i) => '<td align="center" style="background:' + (a.ult[i] ? '#fff' : '#ebeae6') + ';border-radius:8px;padding:5px 0">' +
+      d.ult.map((f, i) => '<td align="center" style="background:' + (a.ult[i] ? '#fff' : f === d.hoy ? '#fff4d6' : '#ebeae6') + ';border-radius:8px;padding:5px 0">' +
         '<div style="font-size:11px;color:#52514e">' + dia(f) + '</div><div style="font-size:14px;font-weight:800;color:' + (a.ult[i] ? '#0b0b0b' : '#9a9994') + '">' +
-        (a.ult[i] ? Math.round(a.ult[i]).toLocaleString('en-US') : '–') + '</div></td>').join('') + '</tr></table>' +
+        (a.ult[i] ? Math.round(a.ult[i]).toLocaleString('en-US') : f === d.hoy ? 'HOY' : f > d.hoy ? '·' : '–') + '</div></td>').join('') + '</tr></table>' +
       (a.llam ? '<div style="font-size:12px;color:#52514e;margin-top:8px">📞 Ayer: <b>' + a.llam.n + '</b> llamadas · <b>' + a.llam.cont + '</b> contestaron · <b>' + a.llam.agend + '</b> FP agendados</div>' : '') +
       '</div>';
   });
