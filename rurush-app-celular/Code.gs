@@ -28,6 +28,20 @@ function doGet(e) {
     hoy_enviarLink_();
     return ContentService.createTextOutput('Listo: el link de RURUSH Hoy y el PIN llegaron al correo de Omar.');
   }
+  // 📲 cuadro de ventas para la PC (solo lectura, clave propia)
+  if (p.cuadrolink && !CacheService.getScriptCache().get('cuadro_reenvio')) {
+    CacheService.getScriptCache().put('cuadro_reenvio', '1', 3600);
+    cuadro_enviarLink_();
+    return ContentService.createTextOutput('Listo: el link del cuadro llegó al correo de Omar.');
+  }
+  if (p.cuadro) {
+    const t = props.getProperty('CUADRO_TOKEN');
+    if (!t || p.cuadro !== t) return ContentService.createTextOutput('Link no válido.');
+    // ?ver=1: se ve en Safari (Atajo del iPhone saca captura); sin ver: HTML para la PC
+    if (p.ver) return HtmlService.createHtmlOutput(dv_cuadroTexto(p.noche === '1')).setTitle('RURUSH · Cuadro')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+    return ContentService.createTextOutput(dv_cuadroTexto(p.noche === '1'));
+  }
   if (p.k !== llave) return p.accion ? hoy_json_({ ok: false, error: 'Link no válido.' }) : ContentService.createTextOutput('Link no válido.');
   if (p.accion === 'estado') return hoy_json_({ ok: hoy_celularOk_(p.d, p.h) });
   if (p.accion === 'activar') return hoy_json_(hoy_activar_(p.d, p.h, p.pin, p.modelo));

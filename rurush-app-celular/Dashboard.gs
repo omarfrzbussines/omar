@@ -30,8 +30,8 @@ const dv_num = (v) => (typeof v === 'number' ? v : (parseFloat(String(v || '').r
 const dv_nom = (v) => String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase();
 
 /* ---------- datos ---------- */
-function dv_datos() {
-  const hoy = fechaLima(0);
+function dv_datos(hoyIso) {
+  const hoy = hoyIso || fechaLima(0);
   const y = Number(hoy.slice(0, 4)), m = Number(hoy.slice(5, 7));
   const MES = MESES[m - 1];
   const r = Sheets.Spreadsheets.Values.batchGet(DV_ID, {
@@ -130,9 +130,10 @@ function dv_html(d) {
   const COL = { gano: ['#16a34a', '#ffffff'], algo: ['#facc15', '#3b2f00'], nada: ['#dc2626', '#ffffff'], hoy: ['#ffffff', '#24231f'], fut: ['#ebeae6', '#9a9994'] };
   const pctEq = d.meta ? d.acum / d.meta : 0;
 
+  const HOY = d.noche ? 'MAÑANA' : 'HOY';
   let h = '<div style="max-width:540px;margin:0 auto;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0b0b0b;background:#fcfcfb;padding:16px">' +
     '<table width="100%" style="border-collapse:collapse"><tr><td><div style="font-size:11px;letter-spacing:2px;color:#8a8984;font-weight:700">RURUSH FITNESS CLUB</div>' +
-    '<div style="font-size:22px;font-weight:800">Ventas · ' + dia(d.hoy) + '</div></td>' +
+    '<div style="font-size:22px;font-weight:800">' + (d.noche ? '🌙 Cierre · ' + dia(d.ayer) : 'Ventas · ' + dia(d.hoy)) + '</div></td>' +
     '<td align="right" style="font-size:12px;color:#52514e">Equipo <b style="color:#0b0b0b;font-size:16px">' + P(pctEq) + '</b> del mes<br>quedan <b>' + d.diasRest + ' días</b> al ' + Number(d.plazo.slice(8)) + '</td></tr></table>';
 
   h += '<div style="background:#24231f;color:#ffffff;border-radius:16px;padding:12px 16px;margin-top:10px">' +
@@ -143,24 +144,24 @@ function dv_html(d) {
       barra(a.pct, d.esperado, a.pct >= d.esperado ? '#22c55e' : '#f87171') +
       '<table width="100%" style="border-collapse:collapse;color:#c9c8c2;font-size:12px;margin-top:3px"><tr><td>Meta del mes <b style="color:#ffffff">' + S(a.meta) + '</b></td>' +
       '<td align="right">lleva <b style="color:#ffffff">' + S(a.acum) + '</b> · faltan ' + S(a.falta) + ' · semana <b style="color:#ffffff">' + S(a.semana) + '</b></td></tr></table></div>').join('') +
-    '<div style="font-size:11px;color:#a8a7a1;margin-top:8px"><span style="color:#f2b84b">┃</span> donde deberían ir hoy (' + P(d.esperado) + ')' +
-    (d.ult[0] !== lunes ? ' · semana pasada' : '') + '</div></div>';
+    '<div style="font-size:11px;color:#a8a7a1;margin-top:8px"><span style="color:#f2b84b">┃</span> donde deberían ir ' + (d.noche ? 'mañana' : 'hoy') + ' (' + P(d.esperado) + ')' +
+    (d.ult[0] !== lunes && !d.noche ? ' · semana pasada' : '') + '</div></div>';
 
   rank.forEach((a) => {
     h += '<div style="background:#f3f2ef;border-radius:14px;padding:8px 12px;margin-top:8px">' +
       '<table width="100%" style="border-collapse:collapse"><tr><td style="font-size:16px;font-weight:800">' + a.nombre + '</td>' +
-      '<td align="right" style="font-size:12px;color:#52514e">🎯 HOY necesita <b style="font-size:18px;color:#0b0b0b">' + S(a.metaHoy) + '</b></td></tr></table>' +
+      '<td align="right" style="font-size:12px;color:#52514e">🎯 ' + HOY + ' necesita <b style="font-size:18px;color:#0b0b0b">' + S(a.metaHoy) + '</b></td></tr></table>' +
       '<table width="100%" style="border-collapse:separate;border-spacing:4px 0;margin-top:6px"><tr>' +
       a.dias.map((x) => '<td align="center" style="width:20%;background:' + COL[x.c][0] + ';color:' + COL[x.c][1] + ';border-radius:8px;padding:4px 0' +
         (x.c === 'hoy' ? ';border:2px solid #24231f' : '') + '">' +
         '<div style="font-size:10px">' + dia(x.f) + '</div><div style="font-size:15px;font-weight:900">' +
-        (x.c === 'hoy' ? 'HOY' : x.c === 'fut' ? '·' : Math.round(x.v).toLocaleString('en-US')) + '</div></td>').join('') +
+        (x.c === 'hoy' ? (d.noche ? 'MAÑ' : 'HOY') : x.c === 'fut' ? '·' : Math.round(x.v).toLocaleString('en-US')) + '</div></td>').join('') +
       '</tr></table>' +
-      (a.llam ? '<div style="font-size:11px;color:#52514e;margin-top:5px">📞 Ayer: <b>' + a.llam.n + '</b> llamadas · <b>' + a.llam.cont + '</b> contestaron · <b>' + a.llam.agend + '</b> FP agendados</div>' : '') +
+      (a.llam && !d.noche ? '<div style="font-size:11px;color:#52514e;margin-top:5px">📞 Ayer: <b>' + a.llam.n + '</b> llamadas · <b>' + a.llam.cont + '</b> contestaron · <b>' + a.llam.agend + '</b> FP agendados</div>' : '') +
       '</div>';
   });
   return h + '<div style="font-size:11px;color:#9a9994;margin-top:10px">🟩 llegó a su meta del día · 🟨 vendió sin llegar · 🟥 no vendió · ' +
-    'HOY necesita = lo que falta del mes ÷ días hábiles que quedan. Ventas hasta ayer.</div></div>';
+    'HOY necesita = lo que falta del mes ÷ días hábiles que quedan. ' + (d.noche ? 'Incluye lo cargado hasta ahora.' : 'Ventas hasta ayer.') + '</div></div>';
 }
 
 /* ---------- web (pestaña 📈 Ventas) y correo ---------- */
@@ -195,4 +196,34 @@ function dv_instalar() {
   MailApp.sendEmail({ to: DV_CORREO, subject: '📈 PRUEBA · Cuadro de ventas', htmlBody: dv_html(d), name: 'RURUSH Hoy' });
   Logger.log('Listo: correo de prueba enviado a ' + DV_CORREO + '. ' +
     d.lista.map((a) => a.nombre + ' ' + Math.round(a.acum) + '/' + a.meta + ' → hoy ' + Math.round(a.metaHoy)).join(' | '));
+}
+
+/* ---------- 📲 Cuadro para WhatsApp (la PC de Omar saca la foto y lo envía) ----------
+   Link de solo lectura con su propia clave (CUADRO_TOKEN): devuelve el HTML del cuadro y nada más.
+   ?cuadro=<clave>          → el de la mañana (ventas hasta ayer, lo que necesitan HOY)
+   ?cuadro=<clave>&noche=1  → el cierre de la noche (incluye lo de hoy, lo que necesitan MAÑANA) */
+function dv_cuadroTexto(noche) {
+  let d;
+  if (noche) {
+    let man = fechaLima(1);
+    while (!dv_habil(man)) man = dv_mas(man, 1);
+    // fin de mes: el cierre se hace con el mes que termina (no con el mes nuevo vacío)
+    d = man.slice(0, 7) === fechaLima(0).slice(0, 7) ? dv_datos(man) : dv_datos();
+    d.noche = man.slice(0, 7) === fechaLima(0).slice(0, 7);
+  } else d = dv_datos();
+  return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=540">' +
+    '<style>body{margin:0;background:#fcfcfb}</style></head><body>' + dv_html(d) + '</body></html>';
+}
+function cuadro_clave_() {
+  const props = PropertiesService.getScriptProperties();
+  let t = props.getProperty('CUADRO_TOKEN');
+  if (!t) { t = Utilities.getUuid().replace(/-/g, ''); props.setProperty('CUADRO_TOKEN', t); }
+  return t;
+}
+/* Manda al correo de Omar el link del cuadro para pegarlo en tools/cuadro.txt de la PC. */
+function cuadro_enviarLink_() {
+  const url = ScriptApp.getService().getUrl() + '?cuadro=' + cuadro_clave_();
+  MailApp.sendEmail({ to: DV_CORREO, subject: '📲 Link del cuadro de ventas para la PC', name: 'RURUSH Hoy',
+    body: 'Copia esta línea en el archivo tools/cuadro.txt de tu PC (reemplaza la línea link=...):\n\nlink=' + url +
+      '\n\nEs solo lectura: muestra el cuadro de ventas y nada más. No lo compartas.' });
 }
