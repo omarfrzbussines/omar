@@ -316,7 +316,7 @@ function textoConfirmacion(c) {
   const dia = c.fecha === iso(hoyD) ? 'Hoy' : c.fecha === iso(man) ? 'Mañana' : DIAS_SEM[f.getDay()] + ' ' + c.fecha.slice(8) + '/' + c.fecha.slice(5, 7);
   const primero = String(c.nombre || '').trim().split(/\s+/)[0] || '';
   const n = /^[a-záéíóúñ]{2,}$/i.test(primero) ? primero[0].toUpperCase() + primero.slice(1).toLowerCase() : '';
-  const yo = ASESORA[0] + ASESORA.slice(1).toLowerCase().replace('monica', 'mónica');
+  const yo = ({ MONICA: 'Mónica', ALVARO: 'Álvaro' })[ASESORA] || ASESORA[0] + ASESORA.slice(1).toLowerCase();
   return `¡Hola${n ? ' ' + n : ''}! 💪 Soy ${yo} de RURUSH Fitness Club 🔥\nTe confirmo tu Free Pass:\n📅 ${dia}${c.hora ? ' a las ' + c.hora : ''}\n`
     + `📍 Av. Larco 1164, Víctor Larco, al costado de Mass\n🎒 Trae ropa deportiva, toalla y agua 💧\n🗺️ ${GPS_RURUSH}\n¡Te esperamos! 🙌`;
 }
