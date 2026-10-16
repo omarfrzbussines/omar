@@ -34,6 +34,38 @@ function ads_api(params) {
 }
 const ads_conv = (row) => { const a = (row.actions || []).filter((x) => x.action_type === ADS_CONV)[0]; return a ? Math.round(Number(a.value) || 0) : 0; };
 const ads_r2 = (v) => Math.round(v * 100) / 100;
+
+/* Campos de persona en Pipedrive leídos por NOMBRE ("Video", "Asiste", "Cierre") con sus opciones actuales
+   (id → texto). Así, si alguien agrega o cambia opciones en Pipedrive, el informe las ve igual. Caché 6 h. */
+function ads_campos_() {
+  const cache = CacheService.getScriptCache();
+  const c = cache.get('pd_campos_ads'); if (c) return JSON.parse(c);
+  const norm = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+  const out = { video: { key: ADS_PD.VIDEO, opts: {} }, asiste: { key: ADS_PD.ASISTE, opts: {} }, cierre: { key: ADS_PD.CIERRE, opts: {} } };
+  for (let start = 0, v = 0; v < 6; v++) {
+    const j = pd('/personFields?limit=500&start=' + start);
+    (j.data || []).forEach((f) => {
+      const n = norm(f.name), opts = {};
+      (f.options || []).forEach((o) => { opts[String(o.id)] = String(o.label || '').trim(); });
+      const set = (k) => { out[k] = { key: f.key, opts: opts }; };
+      if (n === 'VIDEO' || (/VIDEO/.test(n) && out.video.key === ADS_PD.VIDEO && !Object.keys(out.video.opts).length)) set('video');
+      else if (/^ASIST/.test(n)) set('asiste');
+      else if (/^CIERRE/.test(n)) set('cierre');
+    });
+    const pg = j.additional_data && j.additional_data.pagination;
+    if (!pg || !pg.more_items_in_collection) break;
+    start = pg.next_start;
+  }
+  try { cache.put('pd_campos_ads', JSON.stringify(out), 6 * 3600); } catch (e) {}
+  return out;
+}
+// Texto de un campo de persona (las opciones vienen como id; si hay varias, separadas por coma).
+function ads_valor_(p, campo) {
+  const v = p ? p[campo.key] : null;
+  if (v == null || v === '') return '';
+  return String(v).split(',').map((x) => campo.opts[x.trim()] || x.trim()).join(', ').trim();
+}
+const ads_si = (t) => /^(SI|SÍ|YES)(?![A-ZÁÉÍÓÚÑ])/i.test(String(t || '').trim());
 const ads_corto = (n) => { const u = String(n || '').toUpperCase(); const k = ADS_PD.CORTO.filter((x) => u.indexOf(x[0]) >= 0)[0]; return k ? k[1] : null; };
 
 // Una semana completa (lun..dom) → registro igual al de datos_ads_semanal.json
@@ -52,6 +84,7 @@ function ads_semana(lun, dom) {
   });
 
   // Leads de la semana en Pipedrive (personas creadas, por campo "Video")
+  const CA = ads_campos_();
   const porCamp = {};
   let total = 0, sinDato = 0;
   for (let start = 0, vueltas = 0; vueltas < 12; vueltas++) {
@@ -62,7 +95,7 @@ function ads_semana(lun, dom) {
       if (at < lun) { pasado = true; return true; }
       if (at <= dom) {
         total++;
-        const cn = ADS_PD.VC[String(p[ADS_PD.VIDEO] || '')];
+        const cn = ads_corto(ads_valor_(p, CA.video));
         if (cn) porCamp[cn] = (porCamp[cn] || 0) + 1; else sinDato++;
       }
       return false;
@@ -101,28 +134,29 @@ function ads_semana(lun, dom) {
   Object.keys(porTel).forEach((tel) => {
     let vid = null, asiste = false, cierre = false;
     porTel[tel].forEach((x) => {
-      const v = x.p[ADS_PD.VIDEO];
-      if (v && !vid) vid = String(v);
-      if (/^(SÍ|SI|YES|47)$/i.test(String(x.p[ADS_PD.ASISTE] || '').trim())) asiste = true;
-      if (/^(SÍ|SI|YES|136)$/i.test(String(x.p[ADS_PD.CIERRE] || '').trim())) cierre = true;
+      const v = ads_valor_(x.p, CA.video);
+      if (v && !vid) vid = v.toUpperCase();
+      if (ads_si(ads_valor_(x.p, CA.asiste))) asiste = true;
+      if (ads_si(ads_valor_(x.p, CA.cierre))) cierre = true;
       if (hechas[x.pid]) asiste = true;
     });
     if (cierre) asiste = true;
-    const key = (vid && (ADS_PD.VC[vid] || ADS_PD.NO_AD[vid] || vid)) || 'SIN ETIQUETA';
+    const key = vid || 'SIN VIDEO EN PIPEDRIVE';
     const e = E[key] || (E[key] = { nombre: key, fp: 0, asiste: 0, cierre: 0, gasto: 0 });
     e.fp++; tFp++;
     if (asiste) { e.asiste++; tAs++; }
     if (cierre) { e.cierre++; tCi++; }
   });
   const gastoAdq = reg.campanas.filter((x) => x.tipo === 'adquisicion').reduce((t, x) => t + x.gasto, 0);
-  const vals = Object.keys(ADS_PD.VC).map((k) => ADS_PD.VC[k]);
+
   const origen = Object.keys(E).map((k) => E[k]).sort((a, b) => b.cierre - a.cierre || b.fp - a.fp);
   origen.forEach((o) => {
-    o.es_ad = vals.indexOf(o.nombre) >= 0;
-    const cx = reg.campanas.filter((x) => ads_corto(x.nombre) === o.nombre)[0];
+    const corto = ads_corto(o.nombre);
+    o.es_ad = !!corto;
+    const cx = corto ? reg.campanas.filter((x) => ads_corto(x.nombre) === corto)[0] : null;
     if (cx) o.gasto = cx.gasto;
   });
-  reg.embudo = { total_fp: tFp, asistieron: tAs, cerraron: tCi, gasto_adq: ads_r2(gastoAdq), cpi_global: tCi ? Math.round(gastoAdq / tCi) : 0, por_origen: origen.slice(0, 14) };
+  reg.embudo = { total_fp: tFp, asistieron: tAs, cerraron: tCi, gasto_adq: ads_r2(gastoAdq), cpi_global: tCi ? Math.round(gastoAdq / tCi) : 0, por_origen: origen.slice(0, 30) };
   return reg;
 }
 
@@ -258,7 +292,7 @@ function getAdsRango(desde, hasta, forzar) {
   const iso = /^\d{4}-\d{2}-\d{2}$/;
   if (!iso.test(desde) || !iso.test(hasta) || desde > hasta) throw new Error('Elige un rango de fechas válido.');
   if (hasta > fechaLima(0)) hasta = fechaLima(0);
-  const cache = CacheService.getScriptCache(), k = 'adsr_' + desde + '_' + hasta;
+  const cache = CacheService.getScriptCache(), k = 'adsr2_' + desde + '_' + hasta;
   if (!forzar) { const c = cache.get(k); if (c) return c; }
   const html = '<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0b0b0b">' +
     ads_html({ reg: ads_semana(desde, hasta), prev: null, hist: [] }) + '</div>';
