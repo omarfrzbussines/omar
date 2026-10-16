@@ -3,7 +3,7 @@
 // Módulos: recordatorio 2h, mañana, refuerzo noche anterior, no-shows (1pm, 8pm, día siguiente),
 // sábado y domingo. Ver MODULOS.
 
-const GPS = 'https://maps.app.goo.gl/8qmgUTHsMH7NHF698';
+const GPS = 'https://maps.app.goo.gl/x2K9xZYXsLtzhxuW6';
 const LIMA_OFFSET_H = -5; // Perú no tiene horario de verano
 
 const DEFAULTS = {
@@ -127,6 +127,8 @@ async function fpsEntre(token, desde, hasta) {
       out.push({
         id: a.id, subject: subj, personId: a.person_id, personName: a.person_name,
         classMs, date: lima.date, hour: lima.hour, min: lima.min,
+        addMs: a.add_time ? Date.parse(String(a.add_time).replace(' ', 'T') + 'Z') : 0,
+        asesora: asesoraDe(subj, a.owner_name),
       });
     }
     const pg = res.additional_data && res.additional_data.pagination;
@@ -134,6 +136,15 @@ async function fpsEntre(token, desde, hasta) {
     start = pg.next_start;
   }
   return out.sort((x, y) => x.classMs - y.classMs);
+}
+
+// "FP DANNA APC" → "Danna"; si el asunto no la trae, el dueño de la actividad en Pipedrive.
+const NO_ASESORA = /^(FP|FREE|PASS|APC|APL|APV|NUTRI|RURUSH)$/i;
+function asesoraDe(subject, owner) {
+  const w = String(subject || '').replace(/^(FP|FREE\s*PASS)\b/i, '').trim().split(/\s+/).find((x) => /^[A-ZÁÉÍÓÚÑ]{3,}$/i.test(x) && !NO_ASESORA.test(x));
+  const n = w || String(owner || '').trim().split(/\s+/)[0] || '';
+  const tildes = { MONICA: 'Mónica', VALERIA: 'Valeria', ALVARO: 'Álvaro' };
+  return n ? tildes[n.toUpperCase()] || n[0].toUpperCase() + n.slice(1).toLowerCase() : '';
 }
 
 function sumarDias(fecha, n) {
@@ -634,6 +645,8 @@ const MODULOS = {
   n1:     { nombre: 'Nutrición: recordatorio 7pm',  reemplaza: 'Recordatorio nutricion 7pm', hora: [19, 0], dias: [1, 2] },
   // invita, reagenda no-shows y lee respuestas; el "cerebro" (Apps Script de la hoja NUTRICIÓN) arma la lista y agenda en Pipedrive
   n2:     { nombre: 'Nutrición: seguimiento 11:30', reemplaza: 'Seguimiento nutricion wa 1130', hora: [11, 30], dias: [1, 2, 3, 4, 5] },
+  // apenas una asesora agenda un FP (app de llamadas → Pipedrive): confirmación con foto + GPS
+  cf:     { nombre: 'Confirmación al agendar (cada 5 min)', reemplaza: '(nuevo)', cadaMin: 5, dias: [0, 1, 2, 3, 4, 5, 6] },
 };
 const ETIQUETA_FP = 'FREE PASS';
 const MAX_ETIQUETAS_CORRIDA = 15;
@@ -645,6 +658,7 @@ const DIR = 'Av. Larco 1164, Víctor Larco, al costado de Mass';
 
 function modoDe(cfg, key) {
   if (cfg.modos && cfg.modos[key]) return cfg.modos[key];
+  if (key === 'cf') return 'real';   // pedido por Omar: la confirmación sale sola desde el inicio
   if (key === 'm1') return cfg.dryRun === false ? 'real' : 'sim'; // compatibilidad con la v1.x
   return 'sim';
 }
@@ -746,6 +760,31 @@ function msgDomingoNoShow(fp) {
     + `¿La retomamos mañana lunes ${h}? ¿O prefieres otro horario? 💪\n\n📍 ${DIR}\n📍 GPS: ${GPS}`;
 }
 
+// Confirmación al agendar: foto «cómo llegar» con este texto, y después el GPS en un mensaje aparte.
+function nombreDia(fp, now) {
+  if (fp.date === now.date) return 'Hoy';
+  if (fp.date === sumarDias(now.date, 1)) return 'Mañana';
+  const d = DIAS[diaSemana(fp.date)];
+  return d[0].toUpperCase() + d.slice(1) + ' ' + fp.date.slice(8) + '/' + fp.date.slice(5, 7);
+}
+function msgConfirmacion(fp, now) {
+  const n = firstName(fp.personName);
+  return `¡Hola${n ? ' ' + n : ''}! 💪 Soy ${fp.asesora || 'tu asesora'} de RURUSH Fitness Club 🔥\n`
+    + `Te confirmo tu Free Pass:\n📅 ${nombreDia(fp, now)} ${aLas(fp.hour, fp.min)}\n📍 ${DIR}\n`
+    + `🎒 Trae ropa deportiva, toalla y agua 💧\nCualquier cambio, escríbeme por aquí. ¡Te esperamos! 🙌`;
+}
+const RX_YA_CONFIRMADO = /(free\s*pass|clase de prueba|clase gratis|te esperamos|larco\s*11\d\d|maps\.app\.goo\.gl)/i;
+function decidirConfirmacion(fp, msgs, now) {
+  // si ya se le escribió la confirmación (la asesora por chat o un módulo) desde que se agendó, no repetir
+  const desde = (fp.addMs || now.ms) - 2 * 3600e3;
+  if (msgs.some((m) => m.out && RX_YA_CONFIRMADO.test(m.text || '') && (msgMs(m) == null || msgMs(m) >= desde))) {
+    return { saltar: 'ya tiene la confirmación en el chat', marcar: 'previo' };
+  }
+  const recientes = msgs.slice(-4).filter((m) => !m.out);
+  if (recientes.some((m) => RX_CANCELA.test(m.text || ''))) return { alerta: 'en el chat pide cancelar o cambiar — revisar a mano' };
+  return { enviar: msgConfirmacion(fp, now), imagen: true, extra: `🗺️ Ubicación GPS: ${GPS}` };
+}
+
 // ── decisiones por tipo ── devuelven { enviar: texto, imagen } | { saltar } | { alerta }
 function decidirRecordatorio2h(fp, msgs, now, cfg) {
   fp.cfgWindowH = cfg.sendWindowH;
@@ -844,6 +883,15 @@ async function candidatosDe(key, cfg, now) {
       const fps = pasados(await fpsEntre(tok, sumarDias(hoy, -5), hoy), 60);
       return { lista: porPersona(fps), total: fps.length, fpsPorPersona: await porPersonaMapa(fps.length ? fps[0].date : hoy), decidir: (fp, msgs, ctx) => decidirNoShow(fp, msgs, now, ctx, 'sabado') };
     }
+    case 'cf': {
+      // FP agendados en las últimas 3 h (desde que el módulo existe), con la clase todavía por venir
+      const fps = await fpsEntre(tok, hoy, sumarDias(hoy, 14));
+      const { cfDesde } = await chrome.storage.local.get('cfDesde');
+      const desde = Math.max(now.ms - 3 * 3600e3, cfDesde || now.ms);
+      if (!cfDesde) await chrome.storage.local.set({ cfDesde: now.ms });
+      const nuevos = fps.filter((f) => f.addMs >= desde && f.classMs > now.ms + 20 * 60e3);
+      return { lista: porPersona(nuevos), total: nuevos.length, decidir: (fp, msgs) => decidirConfirmacion(fp, msgs, now) };
+    }
     case 'et': {
       const fps = await fpsEntre(tok, hoy, sumarDias(hoy, 14));
       const { etiquetados = {} } = await chrome.storage.local.get('etiquetados');
@@ -932,7 +980,8 @@ async function correrModulo(key, reason, programado) {
     return;
   }
   const { waActivity = 0 } = await chrome.storage.local.get('waActivity');
-  if (!manual && Date.now() - waActivity < 4 * 60e3) {
+  if (!manual && Date.now() - waActivity < (key === 'cf' ? 60e3 : 4 * 60e3)) {
+    if (key === 'cf') return;   // vuelve a mirar en 5 min
     chrome.alarms.create(`retry:${key}:${programado || ''}`, { delayInMinutes: 10 });
     await log({ level: 'info', msg: `${nombre}: WhatsApp Web en uso, reintento en 10 min.` });
     return;
@@ -1047,6 +1096,11 @@ async function correrModulo(key, reason, programado) {
 
           await marcarSent(clave, 'intento');
           const r = await ask(tab.id, { type: 'sendReminder', text: d.enviar, phone, header: chat.header, conImagen: !!d.imagen });
+          if (r && r.ok && d.extra) {
+            await sleep(2000);
+            const r2 = await ask(tab.id, { type: 'sendReminder', text: d.extra, phone, header: chat.header, conImagen: false });
+            if (!r2 || !r2.ok) resumen.alertas.push(`${etiqueta}: salió la confirmación, pero no el link GPS (${(r2 && r2.error) || 'sin respuesta'})`);
+          }
           if (r && r.ok) {
             await marcarSent(clave, 'enviado');
             await registrarToque(phone, parte, fp.id);
@@ -1069,7 +1123,7 @@ async function correrModulo(key, reason, programado) {
      } catch (e) {
       // falló WhatsApp Web o Pipedrive para esta parte: reintentar en 10 min (hasta 3h de atraso)
       resumen.alertas.push(`${parte}: ${e.message || e}`);
-      if (!manual) chrome.alarms.create(`retry:${key}:${programado || ''}`, { delayInMinutes: 10 });
+      if (!manual && key !== 'cf') chrome.alarms.create(`retry:${key}:${programado || ''}`, { delayInMinutes: 10 });
      }
     }
   } catch (e) {
@@ -1452,6 +1506,7 @@ async function programar(soloFaltantes = false) {
   for (const [key, mod] of Object.entries(MODULOS)) {
     const hora = key === 'manana' ? [cfg.mananaHora, 0] : mod.hora;
     if (hora) crear(`mod:${key}`, { when: proximaLima(hora[0], hora[1]), periodInMinutes: mod.cadaMin || 1440 });
+    else if (mod.cadaMin) crear(`mod:${key}`, { delayInMinutes: 1, periodInMinutes: mod.cadaMin });
   }
 }
 

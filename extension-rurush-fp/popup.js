@@ -12,7 +12,7 @@ async function pintar() {
   const tabla = $('mods');
   tabla.innerHTML = '';
   for (const [k, nombre] of Object.entries(MODS)) {
-    const modo = (config.modos && config.modos[k]) || (k === 'm1' ? (config.dryRun === false ? 'real' : 'sim') : 'sim');
+    const modo = (config.modos && config.modos[k]) || (k === 'm1' ? (config.dryRun === false ? 'real' : 'sim') : k === 'cf' ? 'real' : 'sim');
     const tr = document.createElement('tr');
     tr.innerHTML = '<td></td><td style="text-align:right"><span class="badge"></span></td>';
     tr.firstChild.textContent = nombre;

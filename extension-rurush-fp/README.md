@@ -15,6 +15,7 @@ donde está abierto WhatsApp Web (Pipechat) de las asesoras.
 | Refuerzo noche anterior | dom–vie 20:00 | FP de mañana | FP 8PM (parte FP de mañana) |
 | No-show de la tarde | lun–sáb 20:10 | FP de hoy 11:30–18:30 | FP 8PM (parte no-shows) |
 | Domingo | dom 9:00 | FP del lunes + no-shows de la semana | DOMINGO REC FP 9 AM |
+| Confirmación al agendar | cada 5 min, todos los días 6:00–21:30 | FP agendados en las últimas 3h (app de llamadas o Pipedrive) | (nuevo) |
 | Etiquetar FREE PASS | cada 2h desde 8:40 | todo el que tenga FP en Pipedrive (hoy a 14 días) | (nuevo) |
 | Chats de anuncios | cada 30 min, 8–21h | leads nuevos de Pipedrive (3 días) | etiquetar a mano mirando la foto |
 
@@ -95,3 +96,13 @@ Nunca contacta los números de la lista de bloqueo (vienen cargados 51942853538 
   "a las 7" a secas no la detecta.
 - Si WhatsApp cambia su página, puede dejar de encontrar el botón Enviar: en ese caso
   avisa con ⚠️ y no manda nada a medias.
+
+## Confirmación al agendar
+
+Cada 5 min mira los FP **creados en Pipedrive en las últimas 3 h** (los que agendan las asesoras en la app de llamadas)
+y le manda al cliente, desde la línea principal:
+1. la imagen "cómo llegar" con el texto: «¡Hola {nombre}! 💪 Soy {asesora} de RURUSH Fitness Club 🔥 Te confirmo tu Free Pass: 📅 {día} a las {hora} · 📍 dirección · 🎒 ropa, toalla y agua»;
+2. aparte, el link de GPS (para que WhatsApp muestre el mapa).
+
+La asesora sale del asunto del FP («FP DANNA APC» → Danna). No repite: si en el chat ya hay una confirmación desde que se agendó, la salta.
+Si el chat pide cancelar/cambiar, avisa ⚠️. Viene en 📤 Envío real (se puede pasar a Simulación o Apagado en Opciones).
