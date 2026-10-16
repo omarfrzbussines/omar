@@ -97,54 +97,70 @@ function dv_datos() {
   };
 }
 
-/* ---------- HTML (sirve para el correo y para la pestaña 📈 Ventas) ---------- */
+/* ---------- HTML (sirve para el correo y para la pestaña 📈 Ventas) ----------
+   Arriba: ranking por % de la meta del mes (barra + raya de dónde deberían ir hoy).
+   Abajo: por asesora, lo que necesita HOY y su semana día por día:
+   🟩 llegó a lo que necesitaba ese día · 🟨 vendió sin llegar · 🟥 no vendió.
+   Solo tablas (sin position/flex) para que se vea igual en Gmail. */
 function dv_html(d) {
   const S = (v) => 'S/ ' + Math.round(v).toLocaleString('en-US');
   const P = (v) => Math.round(v * 100) + '%';
-  const COL = { 'META CUMPLIDA': '#0f8a4b', 'AL DÍA': '#0f8a4b', 'EN CAMINO': '#b7791f', 'EN RIESGO': '#d03b3b' };
-  const BG = { 'META CUMPLIDA': '#e3f3ea', 'AL DÍA': '#e3f3ea', 'EN CAMINO': '#fbf0d9', 'EN RIESGO': '#fae3e3' };
   const dia = (iso) => DV_DIAS[dv_d(iso).getUTCDay()] + ' ' + Number(iso.slice(8));
-  const barra = (pct, col, esp) =>
-    '<div style="position:relative;height:10px;background:#dcdbd6;border-radius:5px;margin:8px 0 4px">' +
-    '<div style="height:10px;width:' + Math.min(100, pct * 100).toFixed(1) + '%;background:' + col + ';border-radius:5px"></div>' +
-    '<div style="position:absolute;top:-4px;left:' + Math.min(100, esp * 100).toFixed(1) + '%;width:3px;height:18px;background:#24231f"></div></div>';
+  // barra con raya amarilla en "dónde deberían ir" hecha con celdas de tabla
+  const barra = (pct, esp, col) => {
+    const p = Math.min(100, Math.max(0, pct * 100)), e = Math.min(99, Math.max(0, esp * 100));
+    const seg = (w, bg) => w > 0 ? '<td style="width:' + w.toFixed(1) + '%;height:10px;background:' + bg + ';font-size:0;line-height:0">&nbsp;</td>' : '';
+    const cells = p <= e ? seg(p, col) + seg(e - p, '#4a4943') + seg(0.6, '#f2b84b') + seg(100 - e - 0.6, '#4a4943')
+                         : seg(e, col) + seg(0.6, '#f2b84b') + seg(p - e - 0.6, col) + seg(100 - p, '#4a4943');
+    return '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border-radius:5px;overflow:hidden;margin-top:5px"><tr>' + cells + '</tr></table>';
+  };
+  const lunes = dv_mas(d.hoy, -((dv_d(d.hoy).getUTCDay() + 6) % 7));
+  d.lista.forEach((a) => {
+    a.semana = 0;
+    a.dias = d.ult.map((f) => {
+      const v = a.porDia[f] || 0; a.semana += v;
+      if (f >= d.hoy) return { f: f, v: v, c: f === d.hoy ? 'hoy' : 'fut' };
+      let antes = 0; Object.keys(a.porDia).forEach((x) => { if (x < f) antes += a.porDia[x]; });
+      const need = Math.max(0, a.meta - antes) / Math.max(1, dv_habiles(f, d.plazo));
+      return { f: f, v: v, c: v >= need && need > 0 ? 'gano' : v > 0 ? 'algo' : 'nada' };
+    });
+  });
+  const rank = d.lista.slice().sort((p, q) => q.pct - p.pct || q.semana - p.semana);
+  const med = ['🥇', '🥈', '🥉'];
+  const COL = { gano: ['#16a34a', '#ffffff'], algo: ['#facc15', '#3b2f00'], nada: ['#dc2626', '#ffffff'], hoy: ['#ffffff', '#24231f'], fut: ['#ebeae6', '#9a9994'] };
   const pctEq = d.meta ? d.acum / d.meta : 0;
 
-  let h = '<div style="max-width:620px;margin:0 auto;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0b0b0b;background:#fcfcfb;padding:16px">' +
-    '<div style="font-size:12px;letter-spacing:2px;color:#8a8984;font-weight:700">RURUSH FITNESS CLUB</div>' +
-    '<div style="font-size:24px;font-weight:800;margin-top:2px">Cuadro de ventas · ' + dia(d.hoy) + '</div>' +
-    '<div style="font-size:14px;color:#52514e">Plazo: ' + Number(d.plazo.slice(8)) + ' · quedan <b>' + d.diasRest + ' días hábiles</b> (lun–vie)</div>' +
-    // equipo
-    '<div style="background:#24231f;color:#fff;border-radius:16px;padding:16px;margin-top:14px">' +
-    '<table width="100%" style="border-collapse:collapse;color:#fff"><tr>' +
-    '<td style="font-size:13px;font-weight:800;letter-spacing:1px">🎯 EQUIPO</td>' +
-    '<td align="right" style="font-size:26px;font-weight:800">' + S(d.acum) + ' <span style="font-size:14px;color:#c9c8c2;font-weight:600">de ' + S(d.meta) + '</span></td></tr></table>' +
-    '<div style="position:relative;height:12px;background:#4a4943;border-radius:6px;margin:10px 0 8px"><div style="height:12px;width:' + Math.min(100, pctEq * 100).toFixed(1) + '%;background:#fff;border-radius:6px"></div>' +
-    '<div style="position:absolute;top:-4px;left:' + Math.min(100, d.esperado * 100).toFixed(1) + '%;width:3px;height:20px;background:#f2b84b"></div></div>' +
-    '<table width="100%" style="border-collapse:collapse;color:#c9c8c2;font-size:13px"><tr><td><b style="color:#fff">' + P(pctEq) + '</b> logrado · deberíamos ir en <b style="color:#fff">' + P(d.esperado) + '</b></td>' +
-    '<td align="right">Faltan <b style="color:#fff;white-space:nowrap">' + S(d.falta) + '</b> → <b style="color:#fff;white-space:nowrap">' + S(d.falta / d.diasRest) + '/día</b></td></tr></table></div>';
+  let h = '<div style="max-width:540px;margin:0 auto;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0b0b0b;background:#fcfcfb;padding:16px">' +
+    '<table width="100%" style="border-collapse:collapse"><tr><td><div style="font-size:11px;letter-spacing:2px;color:#8a8984;font-weight:700">RURUSH FITNESS CLUB</div>' +
+    '<div style="font-size:22px;font-weight:800">Ventas · ' + dia(d.hoy) + '</div></td>' +
+    '<td align="right" style="font-size:12px;color:#52514e">Equipo <b style="color:#0b0b0b;font-size:16px">' + P(pctEq) + '</b> del mes<br>quedan <b>' + d.diasRest + ' días</b> al ' + Number(d.plazo.slice(8)) + '</td></tr></table>';
 
-  d.lista.forEach((a) => {
-    const c = COL[a.estado];
-    h += '<div style="background:#f3f2ef;border-radius:16px;padding:14px 16px;margin-top:12px">' +
-      '<table width="100%" style="border-collapse:collapse"><tr><td style="font-size:20px;font-weight:800">' + a.nombre + '</td>' +
-      '<td align="right"><span style="background:' + BG[a.estado] + ';color:' + c + ';font-size:12px;font-weight:800;padding:4px 10px;border-radius:99px">' + a.estado + '</span></td></tr></table>' +
-      '<table width="100%" style="border-collapse:collapse;margin-top:6px"><tr>' +
-      '<td style="vertical-align:top"><div style="font-size:12px;color:#52514e">Meta de HOY</div><div style="font-size:26px;font-weight:800">' + S(a.metaHoy) + '</div></td>' +
-      '<td align="right" style="vertical-align:top"><div style="font-size:12px;color:#52514e">Mes</div><div style="font-size:16px;font-weight:800">' + S(a.acum) + ' <span style="font-weight:600;color:#52514e">de ' + S(a.meta) + ' · ' + P(a.pct) + '</span></div></td></tr></table>' +
-      barra(a.pct, c, d.esperado) +
-      '<table width="100%" style="border-collapse:separate;border-spacing:4px 0;margin-top:8px"><tr>' +
-      d.ult.map((f, i) => '<td align="center" style="background:' + (a.ult[i] ? '#fff' : f === d.hoy ? '#fff4d6' : '#ebeae6') + ';border-radius:8px;padding:5px 0">' +
-        '<div style="font-size:11px;color:#52514e">' + dia(f) + '</div><div style="font-size:14px;font-weight:800;color:' + (a.ult[i] ? '#0b0b0b' : '#9a9994') + '">' +
-        (a.ult[i] ? Math.round(a.ult[i]).toLocaleString('en-US') : f === d.hoy ? 'HOY' : f > d.hoy ? '·' : '–') + '</div></td>').join('') + '</tr></table>' +
-      (a.llam ? '<div style="font-size:12px;color:#52514e;margin-top:8px">📞 Ayer: <b>' + a.llam.n + '</b> llamadas · <b>' + a.llam.cont + '</b> contestaron · <b>' + a.llam.agend + '</b> FP agendados</div>' : '') +
+  h += '<div style="background:#24231f;color:#ffffff;border-radius:16px;padding:12px 16px;margin-top:10px">' +
+    '<div style="font-size:12px;font-weight:800;letter-spacing:1px;color:#c9c8c2">🏆 RANKING · % DE LA META DEL MES</div>' +
+    rank.map((a, i) => '<div style="margin-top:8px"><table width="100%" style="border-collapse:collapse;color:#ffffff"><tr>' +
+      '<td style="font-size:18px;font-weight:800">' + (a.pct > 0 ? med[i] : '😴') + ' ' + a.nombre + '</td>' +
+      '<td align="right" style="font-size:24px;font-weight:900">' + P(a.pct) + '</td></tr></table>' +
+      barra(a.pct, d.esperado, a.pct >= d.esperado ? '#22c55e' : '#f87171') +
+      '<table width="100%" style="border-collapse:collapse;color:#c9c8c2;font-size:12px;margin-top:3px"><tr><td>Meta del mes <b style="color:#ffffff">' + S(a.meta) + '</b></td>' +
+      '<td align="right">lleva <b style="color:#ffffff">' + S(a.acum) + '</b> · faltan ' + S(a.falta) + ' · semana <b style="color:#ffffff">' + S(a.semana) + '</b></td></tr></table></div>').join('') +
+    '<div style="font-size:11px;color:#a8a7a1;margin-top:8px"><span style="color:#f2b84b">┃</span> donde deberían ir hoy (' + P(d.esperado) + ')' +
+    (d.ult[0] !== lunes ? ' · semana pasada' : '') + '</div></div>';
+
+  rank.forEach((a) => {
+    h += '<div style="background:#f3f2ef;border-radius:14px;padding:8px 12px;margin-top:8px">' +
+      '<table width="100%" style="border-collapse:collapse"><tr><td style="font-size:16px;font-weight:800">' + a.nombre + '</td>' +
+      '<td align="right" style="font-size:12px;color:#52514e">🎯 HOY necesita <b style="font-size:18px;color:#0b0b0b">' + S(a.metaHoy) + '</b></td></tr></table>' +
+      '<table width="100%" style="border-collapse:separate;border-spacing:4px 0;margin-top:6px"><tr>' +
+      a.dias.map((x) => '<td align="center" style="width:20%;background:' + COL[x.c][0] + ';color:' + COL[x.c][1] + ';border-radius:8px;padding:4px 0' +
+        (x.c === 'hoy' ? ';border:2px solid #24231f' : '') + '">' +
+        '<div style="font-size:10px">' + dia(x.f) + '</div><div style="font-size:15px;font-weight:900">' +
+        (x.c === 'hoy' ? 'HOY' : x.c === 'fut' ? '·' : Math.round(x.v).toLocaleString('en-US')) + '</div></td>').join('') +
+      '</tr></table>' +
+      (a.llam ? '<div style="font-size:11px;color:#52514e;margin-top:5px">📞 Ayer: <b>' + a.llam.n + '</b> llamadas · <b>' + a.llam.cont + '</b> contestaron · <b>' + a.llam.agend + '</b> FP agendados</div>' : '') +
       '</div>';
   });
-
-  if (d.ganadora) h += '<div style="background:#e3f3ea;color:#0f8a4b;border-radius:14px;padding:12px 16px;margin-top:12px;font-size:16px;font-weight:700">🏆 Ganadora de ayer (' + dia(d.ayer) + '): ' + d.ganadora.nombre + ' · ' + S(d.ganadora.monto) + '</div>';
-  h += '<div style="font-size:11px;color:#9a9994;margin-top:12px">AL DÍA = va al ritmo para llegar al ' + Number(d.plazo.slice(8)) + ' · EN CAMINO = 70–100% del ritmo · EN RIESGO = menos del 70%. ' +
-    'Meta de HOY = lo que falta ÷ días hábiles que quedan. Fuente: Hoja de Reportes 2026 (DATOS_ORIGEN). Ventas hasta ayer.</div></div>';
-  return h;
+  return h + '<div style="font-size:11px;color:#9a9994;margin-top:10px">🟩 llegó a su meta del día · 🟨 vendió sin llegar · 🟥 no vendió · ' +
+    'HOY necesita = lo que falta del mes ÷ días hábiles que quedan. Ventas hasta ayer.</div></div>';
 }
 
 /* ---------- web (pestaña 📈 Ventas) y correo ---------- */
