@@ -786,7 +786,8 @@ function decidirConfirmacion(fp, msgs, now) {
 }
 
 // ── decisiones por tipo ── devuelven { enviar: texto, imagen } | { saltar } | { alerta }
-function decidirRecordatorio2h(fp, msgs, now, cfg) {
+function decidirRecordatorio2h(fp, msgs, now, cfg, ctx) {
+  if (cfReciente(ctx, fp, 2)) return { saltar: 'recibió la confirmación al agendar hace menos de 2h' };
   fp.cfgWindowH = cfg.sendWindowH;
   const a = analizar(fp, msgs, now.date);
   if (a.cancelo) return { saltar: 'canceló/reagenda' };
@@ -798,6 +799,7 @@ function decidirRecordatorio2h(fp, msgs, now, cfg) {
 function decidirManana(fp, msgs, now, ctx = { sent: {} }) {
   // va aunque haya recibido el refuerzo de la noche anterior (así lo pidió Omar: noche + mañana + 2h)
   if (yaEnviado(ctx, fp.id, 'm1', 'manana')) return { saltar: 'ya recibió el recordatorio 2h' };
+  if (cfReciente(ctx, fp, 4)) return { saltar: 'recibió la confirmación al agendar hace menos de 4h' };
   if (entrantesDesde(msgs, now.ms - 48 * 3600e3).some((m) => RX_CANCELA.test(m.text))) return { saltar: 'canceló/reagenda' };
   const otra = otraHoraDesde(fp, msgs, now.ms - 48 * 3600e3);
   if (otra) return { alerta: `el chat menciona otra hora → «${otra}» — revisar a mano` };
@@ -807,7 +809,14 @@ function decidirManana(fp, msgs, now, ctx = { sent: {} }) {
   return { enviar: msgManana(fp), imagen: false };
 }
 
+// ¿se le mandó la confirmación al agendar hace poco? (para no mandarle dos mensajes seguidos)
+function cfReciente(ctx, fp, horas) {
+  const v = ctx && ctx.sent && ctx.sent[`cf:${fp.id}`];
+  return !!(v && v.estado === 'enviado' && Date.now() - Date.parse(v.at) < horas * 3600e3);
+}
+
 function decidirRefuerzo(fp, msgs, now, ctx) {
+  if (cfReciente(ctx, fp, 4)) return { saltar: 'recibió la confirmación al agendar hace menos de 4h' };
   if (ctx.sent[`m5a:${fp.id}`]) return { saltar: 'ya recibió el recordatorio del domingo' };
   if (entrantesDesde(msgs, now.ms - 48 * 3600e3).some((m) => RX_CANCELA.test(m.text))) return { saltar: 'canceló/reagenda' };
   const otra = otraHoraDesde(fp, msgs, now.ms - 48 * 3600e3);
@@ -856,7 +865,7 @@ async function candidatosDe(key, cfg, now) {
       const fps = await fpsEntre(tok, hoy, hoy);
       const ventana = cfg.sendWindowH * 3600e3;
       return { lista: fps.filter((f) => f.classMs > now.ms && f.classMs - now.ms <= ventana), total: fps.length,
-        decidir: (fp, msgs, ctx) => decidirRecordatorio2h(fp, msgs, now, cfg) };
+        decidir: (fp, msgs, ctx) => decidirRecordatorio2h(fp, msgs, now, cfg, ctx) };
     }
     case 'manana': {
       const fps = await fpsEntre(tok, hoy, hoy);
