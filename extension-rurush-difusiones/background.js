@@ -914,7 +914,7 @@ async function cuadroTick(prueba) {
 chrome.alarms.onAlarm.addListener((a) => {
   if (a.name === 'next') procesar();
   if (a.name === 'auto') autoCheck();
-  if (a.name === 'recarga') autoRecarga();
+  if (a.name === 'recarga') { autoRecarga(); recargarWASiLibre(); }
   if (a.name === 'cuadro') cuadroTick(false);
 });
 
@@ -925,7 +925,20 @@ chrome.runtime.onStartup.addListener(async () => {
   programarAuto();
 });
 
-chrome.runtime.onInstalled.addListener(programarAuto);
+chrome.runtime.onInstalled.addListener(async (d) => {
+  programarAuto();
+  // Tras actualizarse, la pestaña de WhatsApp Web queda con el script viejo: se recarga sola
+  // (si alguien la está usando en este momento, espera a que pase 1 min sin actividad).
+  if (d && d.reason === 'update') { await chrome.storage.local.set({ recargarWA: true }); recargarWASiLibre(); }
+});
+async function recargarWASiLibre() {
+  const { recargarWA, waActivity = 0 } = await chrome.storage.local.get(['recargarWA', 'waActivity']);
+  if (!recargarWA || Date.now() - waActivity < 60e3 || (await ocupadoParaRecargar())) return;
+  const tabs = await chrome.tabs.query({ url: 'https://web.whatsapp.com/*' });
+  for (const t of tabs) { try { await chrome.tabs.reload(t.id); } catch (e) {} }
+  await chrome.storage.local.set({ recargarWA: false });
+  await log('info', `🔄 Extensión actualizada a ${chrome.runtime.getManifest().version}: recargué WhatsApp Web.`);
+}
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   const responder = (p) => p.then((data) => reply({ ok: true, data })).catch((e) => reply({ ok: false, error: String(e.message || e) }));
