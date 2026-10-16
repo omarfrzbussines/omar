@@ -160,8 +160,8 @@ function dv_html(d) {
       (a.llam && !d.noche ? '<div style="font-size:11px;color:#52514e;margin-top:5px">📞 Ayer: <b>' + a.llam.n + '</b> llamadas · <b>' + a.llam.cont + '</b> contestaron · <b>' + a.llam.agend + '</b> FP agendados</div>' : '') +
       '</div>';
   });
-  return h + '<div style="font-size:11px;color:#9a9994;margin-top:10px">🟩 llegó a su meta del día · 🟨 vendió sin llegar · 🟥 no vendió · ' +
-    'HOY necesita = lo que falta del mes ÷ días hábiles que quedan. ' + (d.noche ? 'Incluye lo cargado hasta ahora.' : 'Ventas hasta ayer.') + '</div></div>';
+  return h + '<div style="font-size:11px;color:#9a9994;margin-top:8px">🟩 llegó a su meta del día · 🟨 vendió sin llegar · 🟥 no vendió · ' +
+    (d.noche ? 'incluye lo de hoy' : 'ventas hasta ayer') + '</div></div>';
 }
 
 /* ---------- web (pestaña 📈 Ventas) y correo ---------- */
