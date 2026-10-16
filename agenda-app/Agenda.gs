@@ -66,6 +66,51 @@ function completarTarea(row, titulo) {
   });
 }
 
+/**
+ * Pasa a HECHAS todas las filas de TAREAS con estado "Hecho" y las borra de TAREAS.
+ * Corre sola cada noche (ver instalarArchivoAutomatico) para las tareas que se
+ * marcan como hechas directo en el Sheet. Conserva la fecha que tenía la tarea.
+ */
+function archivarHechas() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const hoja = ss.getSheetByName(HOJA_TAREAS);
+    const ultima = hoja.getLastRow();
+    if (ultima < 2) return 0;
+    const vals = hoja.getRange(2, 1, ultima - 1, NUM_COLS).getValues();
+    const filas = [];
+    const copiar = [];
+    vals.forEach(function (r, i) {
+      if (r[0] && String(r[4]).trim() === 'Hecho') {
+        filas.push(i + 2);
+        copiar.push(r);
+      }
+    });
+    if (!copiar.length) return 0;
+    const hechas = ss.getSheetByName(HOJA_HECHAS);
+    hechas.getRange(hechas.getLastRow() + 1, 1, copiar.length, NUM_COLS).setValues(copiar);
+    // De abajo hacia arriba para que no se corran las filas.
+    for (let i = filas.length - 1; i >= 0; i--) hoja.deleteRow(filas[i]);
+    SpreadsheetApp.flush();
+    return copiar.length;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Ejecutar UNA vez desde el editor: programa archivarHechas todos los días a las 11 pm.
+ * Si se ejecuta de nuevo, reemplaza el programa anterior en vez de duplicarlo.
+ */
+function instalarArchivoAutomatico() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'archivarHechas') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('archivarHechas').timeBased().everyDays(1).atHour(23).create();
+}
+
 /** Agrega una tarea nueva en su lugar según estado y fecha. */
 function agregarTarea(t) {
   return conBloqueo_(function (ss, hoja, tz) {

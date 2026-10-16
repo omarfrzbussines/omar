@@ -45,6 +45,18 @@ El botón de micrófono intenta usar el reconocimiento de voz del navegador. Goo
 
 Después de pegar una versión nueva: **Implementar → Administrar implementaciones → editar (lápiz) → Versión: Nueva → Implementar**. La URL sigue siendo la misma.
 
+## Archivo automático de tareas hechas
+
+Las tareas que se marcan como **Hecho directo en el Sheet** (por ti o por el equipo) pasan solas a **HECHAS** cada noche a las 11 pm. Las que completas desde la app pasan al instante.
+
+Para activarlo, una sola vez:
+
+1. En el editor de Apps Script, elige la función `instalarArchivoAutomatico` arriba y pulsa **Ejecutar**.
+2. Acepta el permiso nuevo ("ejecutar cuando no estés presente").
+3. Para comprobarlo, entra a **Activadores** (ícono de reloj, a la izquierda): debe aparecer `archivarHechas`, diario, entre las 11 pm y las 12 am.
+
+Si quieres archivar en el momento, ejecuta `archivarHechas` desde el editor.
+
 ## Permiso de Google Calendar
 
 La versión con Calendar necesita un permiso nuevo. Después de pegar el código:
