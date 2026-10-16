@@ -201,9 +201,15 @@ async function cargar(tab, asesora) {
     diasAntiDup: data.diasAntiDup || cfg.diasAntiDup,
     res: { enviados: 0, simulados: 0, saltados: 0, alertas: 0 },
     simulacion: cfg.dryRun,
+    conImagen: !!data.imagen,
   };
+  // La imagen se baja una vez por carga y se guarda aparte (no viaja en cada guardado de la corrida).
+  if (run.conImagen) {
+    const img = await api({ a: 'imagen', tab });
+    await chrome.storage.local.set({ imagen: { tab, mime: img.mime, nombre: img.nombre, b64: img.b64 } });
+  }
   await setRun(run);
-  await log('info', `${tab} · ${asesora}: ${data.items.length} para enviar, ${data.excluidos.length} apartados.`);
+  await log('info', `${tab} · ${asesora}: ${data.items.length} para enviar, ${data.excluidos.length} apartados${run.conImagen ? ' · con imagen 🖼' : ''}.`);
   return run;
 }
 
@@ -273,7 +279,9 @@ async function limiteDeLinea(linea) {
   const h = limites[linea];
   return h && h >= limaNow().date ? h : null; // fecha (aaaa-mm-dd) hasta la que no puede abrir chats nuevos
 }
-const esInasist = (tab) => /INASIST/i.test(tab || '');
+// Pestañas a socios (🏃 INASISTENCIAS, 📣 SOCIOS ACTIVOS): son chats que ya existen, así que
+// no cuentan para el tope diario y siguen saliendo aunque la línea llegue al límite de chats nuevos.
+const esInasist = (tab) => /INASIST|SOCIOS/i.test(tab || '');
 
 // Lista de pestañas del modo automático. Una línea que termina en * toma TODAS las pestañas
 // del Sheet que empiezan así, en el orden en que están en el Sheet. Ej.: «📨 TANDA *» incluye
@@ -326,7 +334,7 @@ async function topeDeChatsNuevos(run, tabId, aviso) {
     return true;
   }
   const motivo = `WhatsApp: la línea de ${run.asesora} llegó al límite de chats nuevos del mes (no puede abrir más hasta el ${hasta}). `
-    + 'Hasta esa fecha esta línea solo envía 🏃 INASISTENCIAS; las tandas quedan pendientes.';
+    + 'Hasta esa fecha esta línea solo escribe a socios (🏃 INASISTENCIAS, 📣 SOCIOS); las tandas quedan pendientes.';
   await pausar(motivo);
   notify('Rurush Difusiones', `⛔ ${motivo}`);
   return false;
@@ -523,8 +531,17 @@ async function unPaso() {
 
   const inicio = normTexto(it.mensaje).slice(0, 30);
   const antes = await ask(tab.id, { type: 'lastOutgoing' });
-  const r = await ask(tab.id, { type: 'send' });
-  if (!r || !r.ok) throw new Error(`falló el clic en Enviar con ${etiqueta} (${(r && r.error) || 'sin respuesta'})`);
+  let r;
+  if (run.conImagen) {
+    // imagen con el mensaje como comentario: un solo envío
+    const { imagen } = await chrome.storage.local.get('imagen');
+    if (!imagen || imagen.tab !== run.tab) throw new Error('No tengo la imagen de esta pestaña. Vuelve a «Cargar pendientes».');
+    r = await ask(tab.id, { type: 'enviarImagen', b64: imagen.b64, mime: imagen.mime, nombre: imagen.nombre, texto: it.mensaje }, 60000);
+    if (!r || !r.ok) throw new Error(`no envié a ${etiqueta}: ${(r && r.error) || 'sin respuesta de WhatsApp Web'}. Revisa el chat y reanuda.`);
+  } else {
+    r = await ask(tab.id, { type: 'send' });
+    if (!r || !r.ok) throw new Error(`falló el clic en Enviar con ${etiqueta} (${(r && r.error) || 'sin respuesta'})`);
+  }
 
   // Confirmar la burbuja: se busca por su texto. Si tiene reloj se espera hasta 1 minuto;
   // si no se puede leer, no se espera de más (el cuadro ya quedó vacío: salió).
@@ -720,7 +737,7 @@ async function autoCheck() {
     }
     const enTope = !cfg.dryRun && (await contador(status.wid)) >= cfg.topeDiario;
     const limitada = await limiteDeLinea(status.wid);
-    if (limitada) await log('info', `🤖 ${asesora}: límite de chats nuevos de WhatsApp hasta el ${limitada}. Solo 🏃 INASISTENCIAS.`);
+    if (limitada) await log('info', `🤖 ${asesora}: límite de chats nuevos de WhatsApp hasta el ${limitada}. Solo socios (🏃 INASISTENCIAS, 📣 SOCIOS).`);
     const cola = (await colaAuto(cfg, info)).filter((c) => turnos.includes(c.clave)).map((c) => c.tab);
     for (const pestana of cola) {
       if ((limitada || enTope) && !esInasist(pestana)) continue;
