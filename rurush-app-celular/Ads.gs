@@ -250,3 +250,18 @@ function ads_probar() {
   Logger.log('OK ' + r.inicio + '..' + r.fin + ' | gasto S/' + r.gasto + ' | conv ' + r.conversaciones + ' | costo/conv S/' + r.costo_conv +
     ' | leads ' + r.leads_etiq + ' | FP ' + r.embudo.total_fp + '>' + r.embudo.asistieron + '>' + r.embudo.cerraron);
 }
+
+/* ---------- Meta Ads por rango de fechas (RURUSH Hoy → Semana → 📣 Meta Ads "Desde / Hasta") ----------
+   Mismo cálculo que el informe semanal (Meta + leads y embudo de Pipedrive), para cualquier rango.
+   Se guarda 3 h en caché por rango. */
+function getAdsRango(desde, hasta, forzar) {
+  const iso = /^\d{4}-\d{2}-\d{2}$/;
+  if (!iso.test(desde) || !iso.test(hasta) || desde > hasta) throw new Error('Elige un rango de fechas válido.');
+  if (hasta > fechaLima(0)) hasta = fechaLima(0);
+  const cache = CacheService.getScriptCache(), k = 'adsr_' + desde + '_' + hasta;
+  if (!forzar) { const c = cache.get(k); if (c) return c; }
+  const html = '<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0b0b0b">' +
+    ads_html({ reg: ads_semana(desde, hasta), prev: null, hist: [] }) + '</div>';
+  try { cache.put(k, html, 3 * 3600); } catch (e) { /* muy grande */ }
+  return html;
+}

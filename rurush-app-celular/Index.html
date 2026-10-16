@@ -390,6 +390,25 @@ function seccionLlamadas() {
   return h + '<div class="sub">Se actualiza cada hora desde el Sheet de leads.</div></details>';
 }
 
+/* ---------- 📣 Meta Ads por rango (Desde / Hasta) ---------- */
+let ADR = { desde: '', hasta: '', html: '', cargando: false, abierto: false };
+function cargarAdsRango() {
+  if (!ADR.desde || !ADR.hasta) return;
+  ADR.cargando = true; ADR.html = ''; ADR.abierto = true; pintar();
+  google.script.run
+    .withSuccessHandler((html) => { ADR.html = html; ADR.cargando = false; if (tab === 'sm') pintar(); })
+    .withFailureHandler((e) => { ADR.html = `<div class="err">⚠️ ${esc(e.message || e)}</div>`; ADR.cargando = false; if (tab === 'sm') pintar(); })
+    .getAdsRango(ADR.desde, ADR.hasta, false);
+}
+function seccionAdsRango() {
+  if (!ADR.desde) { ADR.desde = D.fecha.slice(0, 8) + '01'; ADR.hasta = D.fecha; }
+  return `<details id="adrBox" class="desp" ${ADR.abierto ? 'open' : ''}><summary>📣 Meta Ads por fechas <small>${fm(ADR.desde)} – ${fm(ADR.hasta)}</small></summary>
+    <div style="display:flex;gap:8px;align-items:center"><input type="date" class="sel" id="adrD" value="${ADR.desde}" max="${D.fecha}">
+    <input type="date" class="sel" id="adrH" value="${ADR.hasta}" max="${D.fecha}"></div>
+    <button class="sel" id="adrVer" style="margin-top:8px;font-weight:700">${ADR.cargando ? '⏳ Trayendo de Meta y Pipedrive… (~1 min)' : '🔎 Ver Meta Ads de este rango'}</button>
+    ${ADR.html || ''}</details>`;
+}
+
 function pintar() {
   if (!D) return;
   pintarChips();
@@ -443,6 +462,7 @@ function pintar() {
   if (tab === 'sm') {
     if (SM == null) { if (!smCargando) cargarSemanal(false); h = '<div class="cargando">Cargando informe semanal… (si es la primera vez tarda ~1 min)</div>'; }
     else h = SM;
+    h = seccionAdsRango() + h;
   }
 
   if (tab === 'ret') {
@@ -468,6 +488,8 @@ function pintar() {
   if (iF) { iF.onchange = cambioIng; iM.onchange = cambioIng; }
   const rm = $('#refMes'); if (rm) rm.onchange = () => { RF_MES = rm.value; pintar(); };
   const rb = $('#refBox'); if (rb) rb.ontoggle = () => { RF_ABIERTO = rb.open; };
+  const adD = $('#adrD'), adH = $('#adrH'), adV = $('#adrVer'), adB = $('#adrBox');
+  if (adD) { adD.onchange = () => { ADR.desde = adD.value; }; adH.onchange = () => { ADR.hasta = adH.value; }; adV.onclick = () => { if (!ADR.cargando) cargarAdsRango(); }; adB.ontoggle = () => { ADR.abierto = adB.open; }; }
   const lm = $('#llMes'); if (lm) lm.onchange = () => { LL_MES = lm.value; LL_DIA = ''; pintar(); };
   const ld = $('#llDia'); if (ld) ld.onchange = () => { LL_DIA = ld.value; if (LL_DIA) LL_MES = LL_DIA.slice(0, 7); pintar(); };
   const lx = $('#llDiaX'); if (lx) lx.onclick = () => { LL_DIA = ''; pintar(); };
