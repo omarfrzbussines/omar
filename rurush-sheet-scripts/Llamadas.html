@@ -73,6 +73,9 @@
   .chips { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
   .chips button { background:var(--line); color:var(--tx); border:0; border-radius:10px; padding:9px 12px; font-size:14px; }
   .m.prog { background:#3a2e10; color:#ffd666; } .m.prog b { color:#ffd666; }
+  .confirmar { display:flex; gap:8px; align-items:center; background:#12391f; color:#7ee2a0; border-radius:12px; padding:10px 12px; margin-bottom:12px; font-size:14px; }
+  .confirmar a { flex:1; text-align:center; background:#25d366; color:#062b12; border-radius:10px; padding:10px; font-weight:700; text-decoration:none; }
+  .confirmar button { background:none; border:0; color:#7ee2a0; font-size:18px; padding:4px 8px; }
   .aviso { background:#3a2e10; color:#ffd666; border-radius:10px; padding:10px; font-size:13px; margin-top:10px; }
 </style>
 </head>
@@ -248,7 +251,7 @@ function pintar() {
     : '';
   const fp = true ? `<div id="fpbox" style="display:none"><h2>Fecha y hora del Free Pass</h2>
       <div class="fila2"><input type="date" id="fpf"><select id="fph"><option value="">Hora</option>${HORAS.map((h) => `<option>${h}</option>`).join('')}</select></div></div>` : '';
-  $('#main').innerHTML = `
+  $('#main').innerHTML = bannerConfirmar() + `
     <div class="card${p.luego ? ' esLuego' : ''}">
       ${p.luego ? `<div class="luego">🔔 <b>LLAMAR AHORA</b> · pidió ${esc(p.luego.texto)}${p.luego.nota ? `<br>📝 ${esc(p.luego.nota)}` : ''}<br>Lo atendió ${esc(p.luego.asesora)}</div>` : ''}
       <div class="nombre">${esc(esNum || !p.nombre ? 'Sin nombre' : p.nombre)}</div>
@@ -298,7 +301,29 @@ function pintar() {
   actualizarBotones();
   if ($('#esSocio')) $('#esSocio').onclick = () => { estado = 'CLIENTE'; guardar(); };
   $('#saltar').onclick = () => { idx++; pintar(); revisarCola(); guardarLocal(); };
+  if ($('#confWa')) { $('#confWa').onclick = () => { setTimeout(() => { CONFIRMAR = null; const b = document.querySelector('.confirmar'); if (b) b.remove(); }, 800); }; $('#confX').onclick = () => { CONFIRMAR = null; document.querySelector('.confirmar').remove(); }; }
   window.scrollTo(0, 0);
+}
+
+// 📲 Confirmación del Free Pass desde el WhatsApp de la asesora (además, la línea principal manda la suya).
+let CONFIRMAR = null;
+const DIAS_SEM = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+const GPS_RURUSH = 'https:\/\/maps.app.goo.gl/x2K9xZYXsLtzhxuW6';
+function textoConfirmacion(c) {
+  const iso = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const hoyD = new Date(), man = new Date(Date.now() + 864e5);
+  const f = new Date(c.fecha + 'T12:00:00');
+  const dia = c.fecha === iso(hoyD) ? 'Hoy' : c.fecha === iso(man) ? 'Mañana' : DIAS_SEM[f.getDay()] + ' ' + c.fecha.slice(8) + '/' + c.fecha.slice(5, 7);
+  const primero = String(c.nombre || '').trim().split(/\s+/)[0] || '';
+  const n = /^[a-záéíóúñ]{2,}$/i.test(primero) ? primero[0].toUpperCase() + primero.slice(1).toLowerCase() : '';
+  const yo = ASESORA[0] + ASESORA.slice(1).toLowerCase().replace('monica', 'mónica');
+  return `¡Hola${n ? ' ' + n : ''}! 💪 Soy ${yo} de RURUSH Fitness Club 🔥\nTe confirmo tu Free Pass:\n📅 ${dia}${c.hora ? ' a las ' + c.hora : ''}\n`
+    + `📍 Av. Larco 1164, Víctor Larco, al costado de Mass\n🎒 Trae ropa deportiva, toalla y agua 💧\n🗺️ ${GPS_RURUSH}\n¡Te esperamos! 🙌`;
+}
+function bannerConfirmar() {
+  if (!CONFIRMAR) return '';
+  const url = 'https:\/\/wa.me/51' + CONFIRMAR.numero + '?text=' + encodeURIComponent(textoConfirmacion(CONFIRMAR));
+  return `<div class="confirmar"><span>✅ Agendado</span><a href="${url}" target="_blank" id="confWa">📲 Confirmar a ${esc(String(CONFIRMAR.nombre || '').split(' ')[0] || 'cliente')}</a><button id="confX">✕</button></div>`;
 }
 
 // Guardado en segundo plano: la asesora pasa a la siguiente sin esperar.
@@ -317,6 +342,7 @@ function guardar() {
   try { localStorage.removeItem('rr_llamada'); } catch (err) {}
   const k = e === 'LLAMAR LUEGO' ? 'CONTESTO' : e;   // en el Sheet queda como CONTESTO
   hoy[k] = (hoy[k] || 0) + 1; enVuelo[k] = (enVuelo[k] || 0) + 1; pintarMarcador();
+  CONFIRMAR = e === 'AGENDADO' && fpf ? { numero: p.numero, nombre: p.nombre, fecha: fpf, hora: fph } : null;
   idx++; pintar(); revisarCola(); guardarLocal();
   google.script.run
     .withSuccessHandler((r) => {
