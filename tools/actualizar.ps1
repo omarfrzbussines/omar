@@ -24,13 +24,6 @@ Linea "`n⬇️  Bajando lo nuevo de GitHub..." Cyan
 if (git status --porcelain) { git diff --ignore-cr-at-eol --quiet; if ($LASTEXITCODE -eq 0) { git checkout -- . } }
 git pull --ff-only
 $despues = (git rev-parse HEAD).Trim()
-# 📲 Cuadro de ventas a WhatsApp: la primera vez instala las tareas de 7:45 am y 8:00 pm y pide el alta (correo a Omar)
-if (-not $SoloComparar -and -not (Get-ScheduledTask -TaskName "RURUSH Cuadro manana" -ErrorAction SilentlyContinue)) {
-  try {
-    & (Join-Path $tools "cuadro_instalar.ps1")
-    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $tools "cuadro_whatsapp.ps1") -SoloFoto
-  } catch { Linea "   ⚠️ Cuadro WhatsApp: $($_.Exception.Message)" Yellow }
-}
 if ($Auto) {
   # Modo automático: si no hay nada pendiente se va en silencio; si hay, deja todo en auto_log.txt
   $pendiente = $false
@@ -184,5 +177,12 @@ if (Test-Path $extF) {
 $ext = @(); if ($antes -ne $despues) { $ext = git diff --name-only $antes $despues | Where-Object { $_ -like "extension-*" } | ForEach-Object { $_.Split("/")[0] } | Sort-Object -Unique }
 Linea "`n🧩 Extensiones de Chrome:" Cyan
 if ($ext.Count) { $ext | ForEach-Object { Linea "   🔄 «$_» cambió: se recarga sola en unos minutos (o toca ⟳ en chrome://extensions)" Yellow } } else { Linea "   Ninguna cambió." }
+# 📲 Cuadro de ventas a WhatsApp: la primera vez instala las tareas de 7:45 am y 8:00 pm y pide el alta (correo a Omar)
+if (-not $SoloComparar -and -not (Get-ScheduledTask -TaskName "RURUSH Cuadro manana" -ErrorAction SilentlyContinue)) {
+  try {
+    & (Join-Path $tools "cuadro_instalar.ps1")
+    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $tools "cuadro_whatsapp.ps1") -SoloFoto
+  } catch { Linea "   ⚠️ Cuadro WhatsApp: $($_.Exception.Message)" Yellow }
+}
 Linea "`nListo." Cyan
 if ($Auto) { Stop-Transcript | Out-Null }
