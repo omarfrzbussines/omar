@@ -289,8 +289,13 @@ function getDashboard(forzar) {
   const res = { fecha: hoy, generado: Utilities.formatDate(new Date(), 'America/Lima', 'HH:mm'), errores: [] };
 
   try {
-    const activos = appsfitClientes(1, hoy, '2099-12-31').map(function (c) {
+    const crudos = appsfitClientes(1, hoy, '2099-12-31');
+    // 🕐 hora habitual de cada socio (Horas.gs): se anota la visita nueva y se lee su mediana
+    let horas = {};
+    try { hs_instalarSiFalta_(); hs_anotar_(crudos); horas = hs_mapa_(); } catch (e) { res.errores.push('Horas de visita: ' + e.message); }
+    const activos = crudos.map(function (c) {
       const ua = c.UltimaAsistencia ? String(c.UltimaAsistencia).slice(0, 10) : null;
+      const hv = horas[hs_clave_(c)], uv = hs_visita_(c.UltimaAsistencia);
       const fin = String(c.FechaFin || '').slice(0, 10);
       return {
         nombre: ((c.Nombres || '') + ' ' + (c.Apellidos || '')).trim(),
@@ -300,7 +305,9 @@ function getDashboard(forzar) {
         vence: fin,
         diasVence: fin ? diasEntre(hoy, fin) : null,
         sinVenir: ua ? diasEntre(ua, hoy) : null,
-        saldo: (Number(c.Costo) || 0) - (Number(c.Pago) || 0)
+        saldo: (Number(c.Costo) || 0) - (Number(c.Pago) || 0),
+        hora: hv ? hv.h : (uv ? uv.min : null),   // minutos desde 00:00
+        horaN: hv ? hv.n : 0
       };
     });
     res.socios = activos;   // el filtro por asesora se hace en el celular

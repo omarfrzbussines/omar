@@ -64,6 +64,15 @@
   .monto { text-align:right; flex:none; } .monto b { display:block; } .monto span { font-size:11px; color:var(--mut); }
   .monto span.atr { color:#ff8a80; font-weight:600; } .monto span.hoy { color:#ffcc00; font-weight:600; }
   .mas { display:block; width:100%; background:none; border:0; border-top:1px solid var(--line); color:var(--or); padding:11px; font-size:13px; }
+  .tag.hr { background:#16263a; color:#8fc3ff; }
+  .hrs { background:var(--card); border-radius:14px; padding:10px 12px; }
+  .hb { display:flex; align-items:center; gap:8px; font-size:13px; margin:5px 0; } .hb span { width:132px; white-space:nowrap; flex:none; color:#cfcfd4; }
+  .hb .b { flex:1; height:9px; background:var(--line); border-radius:5px; overflow:hidden; } .hb i { display:block; height:100%; background:var(--or); } .hb b { width:36px; text-align:right; }
+  .desp2 { margin:8px 0; background:var(--card); border-radius:14px; overflow:hidden; }
+  .desp2 > summary { list-style:none; cursor:pointer; padding:12px 14px; font-size:15px; } .desp2 > summary::-webkit-details-marker { display:none; }
+  .desp2 > summary::after { content:'▾'; float:right; color:var(--mut); } .desp2[open] > summary::after { content:'▴'; }
+  .desp2 > summary small { display:block; color:var(--mut); font-size:12px; margin-top:3px; }
+  .desp2 .list { border-radius:0; } .trn { display:flex; gap:6px; padding:0 14px 10px; } .trn span { flex:1; text-align:center; background:var(--line); border-radius:8px; padding:5px 0; font-size:12px; }
 </style>
 </head>
 <body>
@@ -257,12 +266,53 @@ function lista(items, fila, vacio, max = 15) {
   return `<div class="list">${primeros}${resto ? `<div id="${id}" style="display:none">${resto}</div><button class="mas" onclick="document.getElementById('${id}').style.display='block';this.remove()">Ver ${items.length - max} más</button>` : ''}</div>`;
 }
 
-const filaSocio = (s) => {
+/* ---------- 🕐 hora habitual de cada socio (minutos desde 00:00) ---------- */
+const TURNOS = [['🌅', 'Mañana 5–9 am', 'de mañana'], ['☀️', 'Mediodía 9–3 pm', 'al mediodía'], ['🌇', 'Tarde 3–6 pm', 'de tarde'], ['🌙', 'Noche 6–10 pm', 'de noche']];
+const turno = (m) => m < 540 ? 0 : m < 900 ? 1 : m < 1080 ? 2 : 3;
+const hm = (m) => { const h = Math.floor(m / 60), mi = m % 60; return `${h % 12 || 12}:${String(mi).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`; };
+const tagHora = (s) => s.hora == null ? '' : `<span class="tag hr">${TURNOS[turno(s.hora)][0]} ${s.horaN >= 3 ? 'suele venir' : 'vino a las'} ${hm(s.hora)}</span>`;
+function repartoTurnos(socios) {
+  const con = socios.filter((s) => s.hora != null), n = [0, 0, 0, 0];
+  con.forEach((s) => n[turno(s.hora)]++);
+  const may = con.length ? n.indexOf(Math.max(...n)) : -1;
+  return { con, n, p: n.map((x) => pct(x, con.length)), may };
+}
+function seccionHoras(socios) {
+  const r = repartoTurnos(socios);
+  if (!r.con.length) return '';
+  const porHora = {};
+  r.con.forEach((s) => { const h = Math.floor(s.hora / 60); porHora[h] = (porHora[h] || 0) + 1; });
+  const pico = Object.keys(porHora).sort((a, b) => porHora[b] - porHora[a])[0];
+  const prom = Math.round(r.con.reduce((t, s) => t + s.hora, 0) / r.con.length);
+  const fiables = r.con.filter((s) => s.horaN >= 3).length;
+  return `<h2>🕐 ¿A qué hora vienen? <small>${r.con.length} socios${ase === 'TODAS' ? '' : ' de ' + esc(ase)}</small></h2><div class="hrs">
+    ${TURNOS.map((t, i) => `<div class="hb"><span>${t[0]} ${t[1]}</span><div class="b"><i style="width:${r.p[i]}%"></i></div><b>${r.p[i]}%</b></div>`).join('')}
+    <div class="sub" style="margin-top:6px">Hora pico: <b style="color:var(--tx)">${hm(pico * 60)}</b> · Promedio: <b style="color:var(--tx)">${hm(prom)}</b></div>
+    ${fiables < r.con.length / 2 ? `<div class="sub">Se va afinando solo: en ~2 semanas cada socio tendrá su hora habitual.</div>` : ''}</div>`;
+}
+let ASE_ABIERTAS = new Set();
+function seccionActivosAsesora(socios) {
+  const grupos = {};
+  socios.forEach((s) => { if (s.asesora && s.asesora !== 'SIN ASIGNAR') (grupos[s.asesora] = grupos[s.asesora] || []).push(s); });
+  const noms = Object.keys(grupos).sort((a, b) => grupos[b].length - grupos[a].length);
+  if (!noms.length) return '';
+  return `<h2>👥 Socios activos por asesora</h2>` + noms.map((a) => {
+    const g = grupos[a].slice().sort((x, y) => (x.sinVenir ?? 9999) - (y.sinVenir ?? 9999));
+    const r = repartoTurnos(g), riesgo = g.filter((s) => s.sinVenir == null || s.sinVenir > 10).length;
+    const may = r.may >= 0 ? ` · ${TURNOS[r.may][0]} la mayoría ${TURNOS[r.may][2]}` : '';
+    return `<details class="desp2" data-ase="${esc(a)}" ${ASE_ABIERTAS.has(a) || ase !== 'TODAS' ? 'open' : ''}><summary><b>${esc(a)}</b>
+      <small>${g.length} activos${may} · ${riesgo} en riesgo</small></summary>
+      ${r.con.length ? `<div class="trn">${TURNOS.map((t, i) => `<span>${t[0]} ${r.p[i]}%</span>`).join('')}</div>` : ''}
+      ${lista(g, (s) => filaSocio(s, true), 'Sin socios.', 10)}</details>`;
+  }).join('');
+}
+
+const filaSocio = (s, sinAse) => {
   const sv = s.sinVenir == null ? 'nunca vino' : s.sinVenir === 0 ? 'vino hoy' : `${s.sinVenir} días sin venir`;
   const cls = s.sinVenir == null || s.sinVenir > 10 ? 'frio' : 'ok';
   const vence = s.diasVence != null && s.diasVence <= 7 ? `<span class="tag urg">vence ${s.diasVence === 0 ? 'hoy' : 'en ' + s.diasVence + 'd'}</span>` : `<span class="tag">vence ${fm(s.vence)}</span>`;
   return `<div class="row"><div class="main"><div class="t">${esc(s.nombre)}</div>
-    <div class="d"><span class="tag ${cls}">${sv}</span>${vence}${ase === 'TODAS' ? ' · ' + esc(s.asesora) : ''}</div></div>${wa(s.tel)}</div>`;
+    <div class="d"><span class="tag ${cls}">${sv}</span>${tagHora(s)}${vence}${ase === 'TODAS' && sinAse !== true ? ' · ' + esc(s.asesora) : ''}</div></div>${wa(s.tel)}</div>`;
 };
 const filaFP = (a) => `<div class="row"><div class="hora">${esc(a.hora || '—')}</div><div class="main">
   <div class="t">${esc(a.persona)}${a.hecha ? '<span class="tag ok">asistió</span>' : ''}</div>
@@ -435,6 +485,7 @@ function pintar() {
       <div class="kpi"><div class="n">${soles(D.ingresosHoy ? Object.keys(D.ingresosHoy).filter((n) => ase === 'TODAS' || n === norm(ase)).reduce((t, n) => t + D.ingresosHoy[n].t, 0) : ins.reduce((t, x) => t + x.pago, 0))}</div><div class="l">venta de hoy</div></div>
     </div>`;
     if (nunca) h += `<div class="sub" style="margin-bottom:10px">${nunca} socios activos nunca registraron asistencia.</div>`;
+    h += seccionHoras(socios) + seccionActivosAsesora(socios);
     h += seccionIngresos() + seccionReferidos() + seccionLlamadas();
     h += `<h2>Inscritos hoy <small>${ins.length}</small></h2>` + lista(ins, (x) =>
       `<div class="row"><div class="main"><div class="t">${esc(x.nombre)}</div><div class="d">${esc(x.plan)} · ${soles(x.pago)} · ${esc(x.asesora)}</div></div>${wa(x.tel)}</div>`, 'Todavía nadie hoy.');
@@ -494,6 +545,7 @@ function pintar() {
   const ld = $('#llDia'); if (ld) ld.onchange = () => { LL_DIA = ld.value; if (LL_DIA) LL_MES = LL_DIA.slice(0, 7); pintar(); };
   const lx = $('#llDiaX'); if (lx) lx.onclick = () => { LL_DIA = ''; pintar(); };
   const lb = $('#llBox'); if (lb) lb.ontoggle = () => { LL_ABIERTO = lb.open; };
+  document.querySelectorAll('.desp2[data-ase]').forEach((d) => d.ontoggle = () => { if (ase !== 'TODAS') return; d.open ? ASE_ABIERTAS.add(d.dataset.ase) : ASE_ABIERTAS.delete(d.dataset.ase); });
 }
 
 document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
