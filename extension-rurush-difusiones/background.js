@@ -876,8 +876,11 @@ async function cuadroTick(prueba) {
     if (!/RURUSH FITNESS CLUB/.test(html)) throw new Error('RURUSH Hoy no devolvió el cuadro');
     const b64 = await cuadroPng(html);
     tab = await waTab();
-    const ping = await ask(tab.id, { type: 'ping' });
-    if (!ping || !ping.loggedIn) { await log('warn', '📊 Cuadro: WhatsApp Web no está abierto con sesión; reintento en 5 min.'); return; }
+    // tras actualizar la extensión, la pestaña de WhatsApp queda con el script viejo: se recarga una vez
+    let ping = await ask(tab.id, { type: 'ping' });
+    if (!ping) { await chrome.tabs.reload(tab.id); await sleep(5000); }
+    if (!ping || !ping.loggedIn) ping = await waitFor(tab.id, { type: 'ping' }, (r) => r.loggedIn, 90000);
+    if (!ping) { await log('warn', '📊 Cuadro: WhatsApp Web no está abierto con sesión; reintento en 5 min.'); return; }
     const t = await turno(tab.id, 'tomar', 5 * 60e3);
     if (!t || !t.ok) { await log('info', `📊 Cuadro: WhatsApp ocupado por ${(t && t.quien) || 'otro envío'}; reintento en 5 min.`); return; }
     tomado = true;
