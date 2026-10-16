@@ -216,48 +216,47 @@ function dv_cuadroTexto(noche) {
 }
 /* La PC crea su propia clave y la pide de alta; a Omar le llega un correo con un link para autorizarla
    y escribir su número de WhatsApp. Hasta que no la autorice, la PC no ve nada. */
+function cuadro_tokens_() {
+  const props = PropertiesService.getScriptProperties();
+  const l = JSON.parse(props.getProperty('CUADRO_TOKENS') || '[]');
+  const viejo = props.getProperty('CUADRO_TOKEN');           // versión anterior: una sola clave
+  if (viejo && l.indexOf(viejo) < 0) l.push(viejo);
+  return l;
+}
+function cuadro_tokenOk_(t) { return !!t && cuadro_tokens_().indexOf(t) >= 0; }
+// Cada equipo (PC, extensión) tiene su clave. Cada pedido de alta manda su propio link (no anula los otros).
 function cuadro_alta_(tok) {
   tok = String(tok || '');
   if (!/^[a-f0-9]{32}$/.test(tok)) return 'Clave no válida.';
-  const props = PropertiesService.getScriptProperties();
-  if (props.getProperty('CUADRO_TOKEN') === tok) return props.getProperty('CUADRO_NUMERO') ? 'OK' : 'FALTA_NUMERO';
-  const cache = CacheService.getScriptCache();
-  if (props.getProperty('CUADRO_PEND') === tok && cache.get('cuadro_alta')) return 'ESPERANDO';
-  if (cache.get('cuadro_alta')) return 'ESPERANDO';
-  cache.put('cuadro_alta', '1', 3600);            // máx. 1 correo por hora
+  if (cuadro_tokenOk_(tok)) return 'OK';
+  const props = PropertiesService.getScriptProperties(), cache = CacheService.getScriptCache();
+  if (cache.get('cuadro_alta_' + tok)) return 'ESPERANDO';     // máx. 1 correo por hora por equipo
+  cache.put('cuadro_alta_' + tok, '1', 3600);
+  const pend = JSON.parse(props.getProperty('CUADRO_PENDIENTES') || '{}');
   const code = Utilities.getUuid().replace(/-/g, '');
-  props.setProperty('CUADRO_PEND', tok);
-  props.setProperty('CUADRO_OKCODE', code);
+  pend[code] = tok;
+  const claves = Object.keys(pend); if (claves.length > 10) delete pend[claves[0]];
+  props.setProperty('CUADRO_PENDIENTES', JSON.stringify(pend));
   const url = ScriptApp.getService().getUrl() + '?cuadrook=' + code;
-  MailApp.sendEmail({ to: DV_CORREO, subject: '📲 Autoriza tu PC para el cuadro de ventas por WhatsApp', name: 'RURUSH Hoy',
-    htmlBody: '<p>Tu PC pidió permiso para mandarte el cuadro de ventas a tu WhatsApp (7:45 am y 8:00 pm).</p>' +
-      '<p><a href="' + url + '" style="background:#e53935;color:#fff;padding:12px 18px;border-radius:10px;text-decoration:none;font-weight:700">✅ Autorizar y poner mi número</a></p>' +
+  MailApp.sendEmail({ to: DV_CORREO, subject: '📲 Autoriza el envío del cuadro de ventas por WhatsApp', name: 'RURUSH Hoy',
+    htmlBody: '<p>Un equipo (tu PC o la extensión Rurush Difusiones) pidió permiso para enviar el cuadro de ventas por WhatsApp.</p>' +
+      '<p><a href="' + url + '" style="background:#e53935;color:#fff;padding:12px 18px;border-radius:10px;text-decoration:none;font-weight:700">✅ Autorizar</a></p>' +
       '<p style="color:#888">Si no fuiste tú, ignora este correo.</p>' });
   return 'ESPERANDO';
 }
 function cuadro_okPagina_(code, numero) {
   const props = PropertiesService.getScriptProperties();
-  const okCode = props.getProperty('CUADRO_OKCODE');
   const page = (t) => HtmlService.createHtmlOutput('<meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<div style="font:18px -apple-system,Roboto,sans-serif;padding:24px;max-width:420px;margin:auto">' + t + '</div>').setTitle('RURUSH · Cuadro');
-  if (!okCode || code !== okCode) return page('Link vencido o no válido.');
+  const pend = JSON.parse(props.getProperty('CUADRO_PENDIENTES') || '{}');
+  const tok = pend[code] || (code && props.getProperty('CUADRO_OKCODE') === code ? props.getProperty('CUADRO_PEND') : null);
+  if (!tok) return page('Link vencido o ya usado. Si ya lo habías autorizado, no tienes que hacer nada.');
   const n = String(numero || '').replace(/\D/g, '');
-  // si ya hay números (pestaña 📲 CUADRO WHATSAPP o el de antes), se autoriza sin pedir nada
-  if (n.length < 9 && (cuadro_destinos_().length || props.getProperty('CUADRO_NUMERO'))) {
-    props.setProperty('CUADRO_TOKEN', props.getProperty('CUADRO_PEND') || '');
-    props.deleteProperty('CUADRO_OKCODE');
-    return page('<h2>✅ Listo</h2><p>Quedó autorizado. El cuadro sale lun-vie a las 7:45 am y 8:00 pm a los números de la pestaña 📲 CUADRO WHATSAPP.</p>');
-  }
-  if (n.length < 9) {
-    return page('<h2>📲 Cuadro de ventas a tu WhatsApp</h2><p>Escribe tu número de WhatsApp (a ese chat llega la foto):</p>' +
-      '<form method="get" action="' + ScriptApp.getService().getUrl() + '" target="_top"><input type="hidden" name="cuadrook" value="' + code + '">' +
-      '<input name="numero" inputmode="tel" placeholder="9XX XXX XXX" style="font-size:20px;padding:10px;width:100%;box-sizing:border-box">' +
-      '<button style="margin-top:12px;font-size:18px;padding:12px;width:100%;background:#e53935;color:#fff;border:0;border-radius:10px">Autorizar</button></form>');
-  }
-  props.setProperty('CUADRO_NUMERO', n.length === 9 ? '51' + n : n);
-  props.setProperty('CUADRO_TOKEN', props.getProperty('CUADRO_PEND') || '');
-  props.deleteProperty('CUADRO_OKCODE');
-  return page('<h2>✅ Listo</h2><p>Tu PC quedó autorizada. El cuadro te llega a tu WhatsApp lun-vie a las 7:45 am y 8:00 pm.</p>');
+  if (n.length >= 9) props.setProperty('CUADRO_NUMERO', n.length === 9 ? '51' + n : n);
+  const l = cuadro_tokens_(); if (l.indexOf(tok) < 0) l.push(tok);
+  props.setProperty('CUADRO_TOKENS', JSON.stringify(l.slice(-10)));
+  delete pend[code]; props.setProperty('CUADRO_PENDIENTES', JSON.stringify(pend));
+  return page('<h2>✅ Listo</h2><p>Quedó autorizado. El cuadro sale lun-vie a las 7:00 am y 9:00 pm a los números de la pestaña 📲 CUADRO WHATSAPP.</p>');
 }
 
 /* A quién se manda el cuadro: pestaña "📲 CUADRO WHATSAPP" de la Hoja de Reportes (columna A, desde la fila 2).
