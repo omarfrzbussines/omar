@@ -252,7 +252,7 @@ function pintarCobros() {
 function pintarChips() {
   const set = new Set();
   (D.socios || []).forEach((s) => set.add(s.asesora));
-  ['LAURA', 'MÓNICA', 'DANNA'].forEach((a) => set.add(a));
+  ['LAURA', 'MÓNICA', 'DANNA', 'CIELO'].forEach((a) => set.add(a));
   const lista = ['TODAS', ...[...set].filter((a) => a && a !== 'SIN ASIGNAR').sort()];
   $('#chips').innerHTML = lista.map((a) => `<button class="chip ${a === ase ? 'on' : ''}" data-a="${esc(a)}">${esc(a === 'TODAS' ? 'Todas' : a)}</button>`).join('');
   document.querySelectorAll('.chip').forEach((b) => b.onclick = () => { ase = b.dataset.a; pintar(); });
