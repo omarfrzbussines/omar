@@ -23,3 +23,13 @@ Lo envía la extensión **Rurush Difusiones** desde el WhatsApp Web donde está 
 - La primera vez llega a tu correo "Autoriza…": tocas Autorizar y listo.
 - Probar ahora: ícono de la extensión → **📊 Probar cuadro de ventas ahora**.
 - `cuadro_whatsapp.ps1` (envío desde la PC) queda solo como respaldo manual: `CUADRO_PROBAR.bat`.
+
+## 🖥️ PCs lejanas: extensiones que se actualizan solas
+En cada PC (una sola vez): abrir **PowerShell** y pegar:
+```
+irm https://raw.githubusercontent.com/omarfrzbussines/omar/main/tools/actualizador_remoto.ps1 | iex
+```
+- Pregunta qué extensiones usa esa PC (Difusiones, FP, Entrevistas) y su carpeta.
+- Crea la tarea **RURUSH Extensiones**: cada 10 min mira GitHub y copia la versión nueva; la extensión se recarga sola.
+- No necesita Git ni cuentas de Google. Registro: `%LOCALAPPDATA%\RurushActualizador\log.txt`.
+- Quitar: `Unregister-ScheduledTask "RURUSH Extensiones"`.
