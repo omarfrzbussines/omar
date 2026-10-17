@@ -75,6 +75,45 @@ function dash_actualizar() {
   if (!h.getRange("B2").getValue()) h.getRange("B2").setValue(Utilities.formatDate(new Date(), "America/Lima", "yyyy-MM"));
   PropertiesService.getScriptProperties().setProperty("DASH_ULT", String(Date.now()));
   h.getRange("G2").setValue("Actualizado: " + Utilities.formatDate(new Date(), "America/Lima", "dd/MM HH:mm") + " · se actualiza cada hora");
+  try { rep_llamadasExtra_(filas); } catch (e) { console.warn("Reporte llamadas: " + e.message); }
+}
+
+/* ---------- 📋 HOJA DE REPORTES: llamadas de las asesoras nuevas ----------
+   Las llamadas de MONICA/DANNA/LAURA las escribe el robot externo (rurush-sheets-bot, "SYNC LLAMADAS").
+   Ese robot tiene los nombres fijos y no conoce a las nuevas: aquí, cada hora, se llenan SOLO sus filas
+   en la sección LLAMADAS de la pestaña del mes (HECHAS = todas las llamadas del día, AGEN = agendados). */
+const REP_ID = "1DHEBkhtGgOvSkUZDsdokVOVozHhujUF77sFUWgv9Ves";
+const REP_EXTRA = ["CIELO"];
+const REP_MESES = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
+
+function rep_llamadasExtra_(filas) {
+  const hoy = Utilities.formatDate(new Date(), "America/Lima", "yyyy-MM-dd");
+  const mes = hoy.slice(0, 7);
+  // { ASESORA: { dia: [llamadas, agendados] } } del mes en curso
+  const cuenta = {};
+  filas.forEach(function (f) {
+    if (f[0] !== mes || REP_EXTRA.indexOf(f[1]) < 0) return;
+    const dia = Number(String(f[11]).slice(8, 10));
+    const c = (cuenta[f[1]] = cuenta[f[1]] || {}), d = (c[dia] = c[dia] || [0, 0]);
+    d[0] += f[6];
+    if (f[5] === "AGENDADO") d[1] += f[6];
+  });
+  const sh = SpreadsheetApp.openById(REP_ID).getSheetByName(REP_MESES[Number(mes.slice(5, 7)) - 1] + " " + mes.slice(0, 4));
+  if (!sh) return;
+  const v = sh.getRange(1, 24, Math.min(sh.getLastRow(), 400), 2).getDisplayValues();   // X:Y
+  let desde = -1;
+  for (let i = 0; i < v.length; i++) if (String(v[i][0]).trim().toUpperCase() === "LLAMADAS") { desde = i; break; }
+  if (desde < 0) return;
+  const hasta = Number(hoy.slice(8, 10));
+  REP_EXTRA.forEach(function (a) {
+    let r = -1;
+    for (let i = desde + 1; i < v.length; i++) if (String(v[i][1]).trim().toUpperCase() === a) { r = i + 1; break; }
+    if (r < 0) return;
+    const c = cuenta[a] || {}, ll = [], ag = [];
+    for (let d = 1; d <= hasta; d++) { ll.push((c[d] || [0, 0])[0]); ag.push((c[d] || [0, 0])[1]); }
+    sh.getRange(r + 1, 26, 1, hasta).setValues([ll]);   // fila de HECHAS, desde Z (día 1)
+    sh.getRange(r + 3, 26, 1, hasta).setValues([ag]);   // fila de AGENDADOS
+  });
 }
 
 /** Borra y vuelve a armar la pestaña del dashboard (si se desordenó). */
@@ -86,7 +125,7 @@ function dash_rehacer() {
 }
 
 /** Instala el disparador de cada hora y arma el dashboard en un minuto (una sola vez). */
-const DASH_VER = "3";   // al cambiar el cálculo, súbelo: la app rehace los datos al minuto sin esperar la hora
+const DASH_VER = "4";   // al cambiar el cálculo, súbelo: la app rehace los datos al minuto sin esperar la hora
 function dash_instalarSiFalta() {
   const props = PropertiesService.getScriptProperties();
   // versión nueva del cálculo, o datos con más de 70 min (el disparador de cada hora falló): rehacer al minuto
