@@ -326,13 +326,25 @@ async function subirEstado({ b64, mime, nombre, texto }) {
     mas.click();
     await new Promise((r) => setTimeout(r, 1200));
     paso = 'Fotos y videos';
+    let item = null, input = null;
     if (!entregado && !vistaPrevia()) {
-      const item = porTexto(/^(fotos y videos|fotos y vídeos|photos & videos|photos and videos|fotos|foto)/i);
-      if (item) { item.click(); await new Promise((r) => setTimeout(r, 1500)); }
+      // el texto exacto «Fotos y videos» (no el menú entero) y de ahí su fila clicable
+      const hoja = [...document.querySelectorAll('span, div')].filter(visible)
+        .find((e) => /^(fotos y v[ií]deos|photos (&|and) videos)$/i.test((e.innerText || '').trim()) && e.children.length <= 2);
+      item = hoja ? (hoja.closest('li, [role="button"], [role="menuitem"], button') || hoja) : null;
+      if (item) {
+        input = item.querySelector('input[type="file"]');
+        if (!input) {
+          const r = item.getBoundingClientRect(), o = { bubbles: true, cancelable: true, view: window, clientX: r.left + 10, clientY: r.top + 10, button: 0 };
+          for (const t of ['pointerdown', 'mousedown', 'pointerup', 'mouseup']) item.dispatchEvent(new (t.startsWith('pointer') ? PointerEvent : MouseEvent)(t, o));
+          item.click();
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      }
     }
     if (!entregado && !vistaPrevia()) {
       // plan B: un <input type=file> que sí esté en la página
-      const input = [...document.querySelectorAll('input[type="file"]')].reverse().find((i) => !antes.has(i)) || inputFoto();
+      input = input || [...document.querySelectorAll('input[type="file"]')].reverse().find((i) => !antes.has(i)) || inputFoto();
       if (input) {
         const dt = new DataTransfer();
         dt.items.add(new File([Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0))], nombre || 'estado.jpg', { type: mime || 'image/jpeg' }));
@@ -343,7 +355,11 @@ async function subirEstado({ b64, mime, nombre, texto }) {
     window.removeEventListener('message', oir);
     paso = 'vista previa';
     let vista = await esperar(vistaPrevia, 15000);
-    if (!vista) return falla(entregado ? 'entregué la foto pero no se abrió la vista previa' : 'no encontré dónde subir la foto');
+    if (!vista) {
+      const ins = [...document.querySelectorAll('input[type="file"]')].map((i) => i.getAttribute('accept') || '*').join(', ');
+      return falla((entregado ? 'entregué la foto pero no se abrió la vista previa' : 'no se abrió la vista previa')
+        + ` [opción: ${item ? item.tagName + ' «' + (item.innerText || '').trim().slice(0, 20) + '»' : 'no la hallé'} · input: ${input ? 'sí' : 'no'} · inputs en página: ${ins || 'ninguno'}]`);
+    }
     await new Promise((r) => setTimeout(r, 1000));
     vista = vistaPrevia() || vista;
     if (texto && vista.comentario) {
