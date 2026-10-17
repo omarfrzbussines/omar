@@ -321,6 +321,7 @@ function getDashboard(forzar) {
     res.errores.push('Apps Fit: ' + e.message);
   }
 
+  const pdAse = pd_asesorasSiFalta_(); if (pdAse) res.errores.push(pdAse);
   try {
     const acts = actividades(ayer, manana).filter(esFP);
     res.fpHoy = acts.filter(function (a) { return a.fecha === hoy; });
