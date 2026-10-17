@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Rurush Difusiones",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "Envía las tandas de difusión desde el Sheet DIFUSIONES por WhatsApp Web, sin repetir números, y marca el Sheet. Modo automático diario por línea. Manda el cuadro de ventas lun-vie 7 am y 9 pm. Publica como estado de WhatsApp las historias programadas. Sin uso de Claude.",
   "permissions": [
     "alarms",
@@ -30,6 +30,16 @@
         "content.js"
       ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://web.whatsapp.com/*"
+      ],
+      "js": [
+        "main.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
     }
   ],
   "icons": {

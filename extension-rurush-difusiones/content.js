@@ -297,36 +297,53 @@ const MAS_ESTADO = ['[aria-label="Agregar estado"]', '[aria-label="Añadir estad
 const inputFoto = () => [...document.querySelectorAll('input[type="file"]')].reverse()
   .find((i) => /image|video|\*/.test(i.getAttribute('accept') || '*')) || null;
 
+// Qué se ve en pantalla (para entender un fallo sin estar frente a la PC).
+function pistas() {
+  const v = [...document.querySelectorAll('[aria-label], [data-icon], [role="menuitem"], li')].filter(visible)
+    .map((e) => e.getAttribute('aria-label') || (e.getAttribute('data-icon') ? 'icon:' + e.getAttribute('data-icon') : (e.innerText || '').trim().slice(0, 25)))
+    .filter(Boolean);
+  return [...new Set(v)].slice(-25).join(' | ');
+}
+
 async function subirEstado({ b64, mime, nombre, texto }) {
   let paso = 'abrir Estados';
   const volver = () => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true })); const c = buscar(NAV_CHATS); if (c) c.click(); };
+  const falla = (error) => { const p = pistas(); volver(); return { ok: false, error: error + ' · veo: ' + p }; };
   try {
     const nav = buscar(NAV_ESTADOS);
-    if (!nav) return { ok: false, error: 'no encontré el botón Estados (¿WhatsApp Web sin estados?)' };
+    if (!nav) return falla('no encontré el botón Estados');
     nav.click();
+    await new Promise((r) => setTimeout(r, 1500));
     paso = 'botón ＋ de estado';
     const mas = await esperar(() => buscar(MAS_ESTADO, document.querySelector('#app') || document), 8000);
-    if (!mas) { volver(); return { ok: false, error: 'no encontré el ＋ para agregar estado' }; }
+    if (!mas) return falla('no encontré el ＋ para agregar estado');
+    // el archivo queda esperando en la página: cuando WhatsApp pida «elegir archivo», se le entrega este
+    window.postMessage({ rurush: 'archivoEstado', b64, mime, nombre }, '*');
+    let entregado = false;
+    const oir = (e) => { if (e.source === window && e.data && e.data.rurush === 'archivoEntregado') entregado = true; };
+    window.addEventListener('message', oir);
     const antes = new Set(document.querySelectorAll('input[type="file"]'));
     mas.click();
     await new Promise((r) => setTimeout(r, 1200));
     paso = 'Fotos y videos';
-    let input = [...document.querySelectorAll('input[type="file"]')].reverse().find((i) => !antes.has(i)) || null;
-    if (!input) {
-      const item = porTexto(/^(fotos y videos|fotos y vídeos|photos & videos|photos and videos|foto)/i);
-      if (item) { item.click(); await new Promise((r) => setTimeout(r, 800)); }
-      input = inputFoto();
+    if (!entregado && !vistaPrevia()) {
+      const item = porTexto(/^(fotos y videos|fotos y vídeos|photos & videos|photos and videos|fotos|foto)/i);
+      if (item) { item.click(); await new Promise((r) => setTimeout(r, 1500)); }
     }
-    if (!input) { volver(); return { ok: false, error: 'no encontré dónde subir la foto' }; }
-    paso = 'cargar la imagen';
-    const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
-    const dt = new DataTransfer();
-    dt.items.add(new File([bytes], nombre || 'estado.jpg', { type: mime || 'image/jpeg' }));
-    input.files = dt.files;
-    input.dispatchEvent(new Event('change', { bubbles: true }));
+    if (!entregado && !vistaPrevia()) {
+      // plan B: un <input type=file> que sí esté en la página
+      const input = [...document.querySelectorAll('input[type="file"]')].reverse().find((i) => !antes.has(i)) || inputFoto();
+      if (input) {
+        const dt = new DataTransfer();
+        dt.items.add(new File([Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0))], nombre || 'estado.jpg', { type: mime || 'image/jpeg' }));
+        input.files = dt.files;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }
+    window.removeEventListener('message', oir);
     paso = 'vista previa';
     let vista = await esperar(vistaPrevia, 15000);
-    if (!vista) { volver(); return { ok: false, error: 'no se abrió la vista previa del estado' }; }
+    if (!vista) return falla(entregado ? 'entregué la foto pero no se abrió la vista previa' : 'no encontré dónde subir la foto');
     await new Promise((r) => setTimeout(r, 1000));
     vista = vistaPrevia() || vista;
     if (texto && vista.comentario) {
@@ -338,13 +355,12 @@ async function subirEstado({ b64, mime, nombre, texto }) {
     paso = 'enviar';
     vista.boton.click();
     const cerro = await esperar(() => !vistaPrevia(), 30000);
-    if (!cerro) { volver(); return { ok: false, error: 'el estado no salió (la vista previa no se cerró)' }; }
+    if (!cerro) return falla('el estado no salió (la vista previa no se cerró)');
     await new Promise((r) => setTimeout(r, 2000));
     const c = buscar(NAV_CHATS); if (c) c.click();
     return { ok: true };
   } catch (e) {
-    volver();
-    return { ok: false, error: paso + ': ' + String(e && e.message || e) };
+    return falla(paso + ': ' + String(e && e.message || e));
   }
 }
 
