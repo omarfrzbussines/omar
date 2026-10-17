@@ -273,6 +273,81 @@ async function enviarImagen({ b64, mime, nombre, texto }) {
   return { ok: true, metodo };
 }
 
+// ── 📲 Estado: pestaña Estados → «＋» → Fotos y videos → vista previa → Enviar.
+//    El archivo se entrega al <input type=file> de WhatsApp (sin abrir el selector de Windows).
+const visible = (e) => !!(e && (e.offsetParent || e.getClientRects().length));
+const clicable = (e) => (e && (e.closest('button, [role="button"], a, li, [tabindex]') || e));
+function buscar(selectores, raiz = document) {
+  for (const sel of selectores) {
+    const e = [...raiz.querySelectorAll(sel)].find(visible);
+    if (e) return clicable(e);
+  }
+  return null;
+}
+function porTexto(re) {
+  const e = [...document.querySelectorAll('li, button, [role="button"], [role="menuitem"], div[aria-label], span')]
+    .filter(visible).find((x) => re.test((x.getAttribute('aria-label') || x.innerText || '').trim()));
+  return e ? clicable(e) : null;
+}
+const NAV_ESTADOS = ['[aria-label="Estados"]', '[aria-label="Estado"]', '[aria-label="Status"]', '[aria-label="Updates in Status"]',
+  '[data-icon="status-outline"]', '[data-icon="status-refreshed"]', '[data-icon="status"]', '[data-icon="status-filled"]', '[data-icon="wds-ic-status"]'];
+const NAV_CHATS = ['[aria-label="Chats"]', '[data-icon="chats-outline"]', '[data-icon="chats-filled"]', '[data-icon="chat"]'];
+const MAS_ESTADO = ['[aria-label="Agregar estado"]', '[aria-label="Añadir estado"]', '[aria-label="Add status"]', '[aria-label="Add Status"]',
+  '[aria-label="Mi estado"]', '[aria-label="My status"]', '[data-icon="status-add"]', '[data-icon="add-status"]', '[data-icon="plus-rounded"]', '[data-icon="plus"]', '[data-icon="wds-ic-add"]'];
+const inputFoto = () => [...document.querySelectorAll('input[type="file"]')].reverse()
+  .find((i) => /image|video|\*/.test(i.getAttribute('accept') || '*')) || null;
+
+async function subirEstado({ b64, mime, nombre, texto }) {
+  let paso = 'abrir Estados';
+  const volver = () => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true })); const c = buscar(NAV_CHATS); if (c) c.click(); };
+  try {
+    const nav = buscar(NAV_ESTADOS);
+    if (!nav) return { ok: false, error: 'no encontré el botón Estados (¿WhatsApp Web sin estados?)' };
+    nav.click();
+    paso = 'botón ＋ de estado';
+    const mas = await esperar(() => buscar(MAS_ESTADO, document.querySelector('#app') || document), 8000);
+    if (!mas) { volver(); return { ok: false, error: 'no encontré el ＋ para agregar estado' }; }
+    const antes = new Set(document.querySelectorAll('input[type="file"]'));
+    mas.click();
+    await new Promise((r) => setTimeout(r, 1200));
+    paso = 'Fotos y videos';
+    let input = [...document.querySelectorAll('input[type="file"]')].reverse().find((i) => !antes.has(i)) || null;
+    if (!input) {
+      const item = porTexto(/^(fotos y videos|fotos y vídeos|photos & videos|photos and videos|foto)/i);
+      if (item) { item.click(); await new Promise((r) => setTimeout(r, 800)); }
+      input = inputFoto();
+    }
+    if (!input) { volver(); return { ok: false, error: 'no encontré dónde subir la foto' }; }
+    paso = 'cargar la imagen';
+    const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+    const dt = new DataTransfer();
+    dt.items.add(new File([bytes], nombre || 'estado.jpg', { type: mime || 'image/jpeg' }));
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    paso = 'vista previa';
+    let vista = await esperar(vistaPrevia, 15000);
+    if (!vista) { volver(); return { ok: false, error: 'no se abrió la vista previa del estado' }; }
+    await new Promise((r) => setTimeout(r, 1000));
+    vista = vistaPrevia() || vista;
+    if (texto && vista.comentario) {
+      const t = new DataTransfer(); t.setData('text/plain', texto);
+      vista.comentario.focus();
+      vista.comentario.dispatchEvent(new ClipboardEvent('paste', { clipboardData: t, bubbles: true, cancelable: true }));
+      await new Promise((r) => setTimeout(r, 600));
+    }
+    paso = 'enviar';
+    vista.boton.click();
+    const cerro = await esperar(() => !vistaPrevia(), 30000);
+    if (!cerro) { volver(); return { ok: false, error: 'el estado no salió (la vista previa no se cerró)' }; }
+    await new Promise((r) => setTimeout(r, 2000));
+    const c = buscar(NAV_CHATS); if (c) c.click();
+    return { ok: true };
+  } catch (e) {
+    volver();
+    return { ok: false, error: paso + ': ' + String(e && e.message || e) };
+  }
+}
+
 // Turno compartido entre Rurush FP y Rurush Difusiones: las dos usan la misma pestaña de
 // WhatsApp Web, así que quien envía toma el turno y la otra espera. Vive en el localStorage
 // de web.whatsapp.com (lo ven las dos extensiones) y vence solo si nadie lo renueva.
@@ -321,6 +396,9 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     reply(clearDraft());
   } else if (msg.type === 'send') {
     clickSend().then(reply);
+    return true;
+  } else if (msg.type === 'subirEstado') {
+    subirEstado(msg).then(reply, (e) => reply({ ok: false, error: String(e && e.message || e) }));
     return true;
   } else if (msg.type === 'enviarImagen') {
     enviarImagen(msg).then(reply, (e) => reply({ ok: false, error: String(e && e.message || e) }));

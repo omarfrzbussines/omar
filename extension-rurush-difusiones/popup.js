@@ -139,3 +139,11 @@ $('cuadro').addEventListener('click', async () => {
   $('cuadro').textContent = '📊 Probar cuadro de ventas ahora';
   $('cuadro').disabled = false;
 });
+
+$('estados').addEventListener('click', async () => {
+  $('estados').disabled = true;
+  $('estados').textContent = 'Publicando… (~1 min)';
+  const r = await send({ type: 'estadosAhora' });
+  $('estados').textContent = (r && r.ok ? r.data : (r && r.error)) || '📲 Publicar estados que ya tocan';
+  setTimeout(() => { $('estados').textContent = '📲 Publicar estados que ya tocan'; $('estados').disabled = false; }, 6000);
+});

@@ -40,9 +40,30 @@ function cicloAutomatico() {
   try {
     sincronizarCarpeta(true);
     publicarPendientes(true);
+    try { compartirParaWhatsApp_(); } catch (e) { console.warn('WhatsApp: ' + e.message); }
   } finally {
     lock.releaseLock();
   }
+}
+
+/* ---------- 📲 Estados de WhatsApp ----------
+   La extensión Rurush Difusiones publica estas mismas historias como estado de WhatsApp (columna H
+   WHATSAPP; "NO" = no publicar). Para que pueda bajar la imagen, el archivo queda visible con el
+   link desde 24 h antes de su hora (igual que ya pasa al publicarla en Instagram). */
+function compartirParaWhatsApp_() {
+  const hoja = hoja_(), n = hoja.getLastRow() - 1;
+  if (n < 1) return;
+  const wa = hoja.getRange(2, 8, n, 1).getDisplayValues();
+  const ahora = Date.now();
+  filas_(hoja).forEach((f, i) => {
+    if (!f.id || /^\s*NO\s*$/i.test(wa[i][0])) return;
+    const c = cuando_(f.fecha, f.hora);
+    if (!c || c.getTime() - ahora > 24 * 3600e3 || ahora - c.getTime() > MAX_ATRASO_H * 3600e3) return;
+    try {
+      const a = DriveApp.getFileById(f.id);
+      if (a.getSharingAccess() !== DriveApp.Access.ANYONE_WITH_LINK) a.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch (e) { console.warn('No pude compartir ' + f.archivo + ': ' + e.message); }
+  });
 }
 
 /* ---------- Carpeta → hoja ---------- */

@@ -33,6 +33,7 @@ function doGet(e) {
   if (p.cuadrook) return cuadro_okPagina_(p.cuadrook, p.numero);
   if (p.cuadro) {
     if (!cuadro_tokenOk_(p.cuadro)) return ContentService.createTextOutput('Link no válido.');
+    if (p.estados || p.estadoOk || p.estadoError) return es_doGet_(p);
     if (p.info) return hoy_json_({ ok: true, numero: props.getProperty('CUADRO_NUMERO') || '', destinos: cuadro_destinos_() });
     // ?ver=1: se ve en Safari (Atajo del iPhone saca captura); sin ver: HTML para la PC
     if (p.ver) return HtmlService.createHtmlOutput(dv_cuadroTexto(p.noche === '1')).setTitle('RURUSH · Cuadro')

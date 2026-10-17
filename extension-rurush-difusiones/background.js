@@ -802,7 +802,7 @@ async function autoRecarga() {
 }
 async function ocupadoParaRecargar() {
   const run = await getRun();
-  return procesando || revisando || cuadroOcupado || (run && run.estado === 'corriendo');
+  return procesando || revisando || cuadroOcupado || estadosOcupado || (run && run.estado === 'corriendo');
 }
 
 // ───────────────────────── 📊 cuadro de ventas ─────────────────────────
@@ -881,6 +881,9 @@ async function cuadroTick(prueba) {
     if (!ping) { await chrome.tabs.reload(tab.id); await sleep(5000); }
     if (!ping || !ping.loggedIn) ping = await waitFor(tab.id, { type: 'ping' }, (r) => r.loggedIn, 90000);
     if (!ping) { await log('warn', '📊 Cuadro: WhatsApp Web no está abierto con sesión; reintento en 5 min.'); return; }
+    // con la extensión en varias líneas (por los estados), el cuadro sale solo desde la de Mónica
+    const lineaCuadro = await estadosLinea(tab);
+    if (lineaCuadro && !/^\d+$/.test(lineaCuadro) && !/monica/.test(normTexto(lineaCuadro))) return;
     const t = await turno(tab.id, 'tomar', 5 * 60e3);
     if (!t || !t.ok) { await log('info', `📊 Cuadro: WhatsApp ocupado por ${(t && t.quien) || 'otro envío'}; reintento en 5 min.`); return; }
     tomado = true;
@@ -910,12 +913,97 @@ async function cuadroTick(prueba) {
   }
 }
 
+// ───────────────────────── 📲 estados de WhatsApp ─────────────────────────
+// Cada 5 min pregunta a RURUSH Hoy qué historias de la hoja HISTORIAS (las mismas de Instagram) ya
+// tocan para ESTA línea y las sube como estado. Cada línea se marca aparte en la columna WHATSAPP.
+// Usa la misma clave autorizada del cuadro. Respeta el turno con FP y no interrumpe a quien usa WhatsApp.
+let estadosOcupado = false;
+async function estadosLinea(tab) {
+  const ping = await waitFor(tab.id, { type: 'ping' }, (r) => r.loggedIn && r.wid, 30000);
+  if (!ping) return null;
+  try {
+    const info = await api({ a: 'info' });
+    const n = (Object.entries(info.lineas || {}).find(([, tel]) => normPhone(tel) === ping.wid) || [])[0];
+    if (n) return n;
+  } catch (e) { /* sin API de difusiones: se usa el número */ }
+  return ping.wid;
+}
+async function bajarArchivo(it) {
+  const urls = it.video
+    ? [`https://drive.usercontent.google.com/download?id=${it.id}&export=download&confirm=t`]
+    : [`https://lh3.googleusercontent.com/d/${it.id}=w1080-rj`, `https://drive.usercontent.google.com/download?id=${it.id}&export=download&confirm=t`];
+  for (const u of urls) {
+    try {
+      const r = await fetch(u, { credentials: 'omit', cache: 'no-store' });
+      const tipo = r.headers.get('content-type') || '';
+      if (!r.ok || !/^(image|video)\//.test(tipo)) continue;
+      const buf = new Uint8Array(await r.arrayBuffer());
+      let bin = '';
+      for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+      return { b64: btoa(bin), mime: tipo.split(';')[0] };
+    } catch (e) { /* siguiente */ }
+  }
+  throw new Error('no pude bajar el archivo de Drive (¿está compartido con el link?)');
+}
+async function estadosTick(manual) {
+  if (estadosOcupado || cuadroOcupado || procesando || revisando) return manual ? 'La extensión está ocupada; prueba en un rato.' : '';
+  const run = await getRun();
+  if (run && run.estado === 'corriendo') return manual ? 'Hay una difusión corriendo.' : '';
+  const { waActivity = 0 } = await chrome.storage.local.get('waActivity');
+  if (!manual && Date.now() - waActivity < 60e3) return '';             // alguien está usando WhatsApp
+  estadosOcupado = true;
+  let tomado = false;
+  try {
+    const clave = await cuadroClave();
+    if ((await cuadroGet({ cuadroalta: clave })).trim() !== 'OK') return 'Falta autorizar la extensión (correo de Omar).';
+    const tabs = await chrome.tabs.query({ url: 'https://web.whatsapp.com/*' });
+    if (!tabs.length) return 'WhatsApp Web no está abierto.';
+    const tab = tabs[0];
+    let ping = await ask(tab.id, { type: 'ping' });
+    if (!ping) { await chrome.tabs.reload(tab.id); await sleep(5000); }
+    const linea = await estadosLinea(tab);
+    if (!linea) return 'WhatsApp Web no tiene sesión abierta.';
+    const j = JSON.parse(await cuadroGet({ cuadro: clave, estados: linea }));
+    if (!j.ok) throw new Error(j.error || 'RURUSH Hoy no respondió');
+    if (!j.items.length) return manual ? `No hay estados por publicar ahora en ${linea}.` : '';
+    const t = await turno(tab.id, 'tomar', 5 * 60e3);
+    if (!t || !t.ok) return `WhatsApp ocupado por ${(t && t.quien) || 'otro envío'}; reintento en 5 min.`;
+    tomado = true;
+    let ok = 0;
+    for (const it of j.items) {
+      await turno(tab.id, 'tomar', 5 * 60e3);
+      let r;
+      try {
+        const a = await bajarArchivo(it);
+        r = await ask(tab.id, { type: 'subirEstado', b64: a.b64, mime: a.mime, nombre: it.archivo || 'estado.jpg' }, 90000);
+      } catch (e) { r = { ok: false, error: e.message || String(e) }; }
+      if (r && r.ok) {
+        ok++;
+        await cuadroGet({ cuadro: clave, estadoOk: it.fila, id: it.id, linea });
+        await log('info', `📲 Estado publicado en ${linea}: ${it.archivo}`);
+      } else {
+        const err = (r && r.error) || 'sin respuesta de WhatsApp Web';
+        await cuadroGet({ cuadro: clave, estadoError: it.fila, id: it.id, linea, error: err }).catch(() => {});
+        await log('warn', `📲 Estado ${it.archivo} no salió en ${linea}: ${err}`);
+      }
+      await sleep(4000);
+    }
+    return `📲 ${ok}/${j.items.length} estado(s) publicados en ${linea}.`;
+  } catch (e) {
+    await log('error', '📲 Estados: ' + (e.message || e));
+    return 'Error: ' + (e.message || e);
+  } finally {
+    if (tomado) await soltarTurno();
+    estadosOcupado = false;
+  }
+}
+
 // ───────────────────────── disparadores ─────────────────────────
 chrome.alarms.onAlarm.addListener((a) => {
   if (a.name === 'next') procesar();
   if (a.name === 'auto') autoCheck();
   if (a.name === 'recarga') { autoRecarga(); recargarWASiLibre(); }
-  if (a.name === 'cuadro') cuadroTick(false);
+  if (a.name === 'cuadro') cuadroTick(false).then(() => estadosTick(false));
 });
 
 chrome.runtime.onStartup.addListener(async () => {
@@ -950,6 +1038,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     case 'detener': responder(detener()); return true;
     case 'revisar': responder(revisarRespuestas('manual')); return true;
     case 'cuadroProbar': responder(cuadroTick(true)); return true;
+    case 'estadosAhora': responder(estadosTick(true)); return true;
     case 'waActivity': chrome.storage.local.set({ waActivity: Date.now() }); return false;
     default: return false;
   }
