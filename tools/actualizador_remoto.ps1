@@ -95,9 +95,16 @@ if ([Environment]::OSVersion.Version.Build -ge 19044 -and (Test-Path $conhost)) 
   $accion = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $ps -WorkingDirectory $DIR
 }
 $cada10 = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 10) -RepetitionDuration (New-TimeSpan -Days 3650)
-$alEntrar = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+$yo = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name   # DOMINIO\usuario real (a veces difiere de la carpeta)
 $ajustes = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
-Register-ScheduledTask -TaskName "RURUSH Extensiones" -Action $accion -Trigger @($cada10, $alEntrar) -Settings $ajustes -Description "Copia las extensiones RURUSH nuevas desde GitHub (sin Claude)" -Force | Out-Null
+$desc = "Copia las extensiones RURUSH nuevas desde GitHub (sin Claude)"
+try {
+  $alEntrar = New-ScheduledTaskTrigger -AtLogOn -User $yo
+  Register-ScheduledTask -TaskName "RURUSH Extensiones" -Action $accion -Trigger @($cada10, $alEntrar) -Settings $ajustes -Description $desc -Force | Out-Null
+} catch {
+  # algunas PCs no aceptan el disparador "al iniciar sesion": basta con el de cada 10 min
+  Register-ScheduledTask -TaskName "RURUSH Extensiones" -Action $accion -Trigger $cada10 -Settings $ajustes -Description $desc -Force | Out-Null
+}
 
 Write-Host ""
 Write-Host "Bajando la ultima version ahora..." -ForegroundColor Cyan
