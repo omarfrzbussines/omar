@@ -928,22 +928,28 @@ async function estadosLinea(tab) {
   } catch (e) { /* sin API de difusiones: se usa el número */ }
   return ping.wid;
 }
+const MIME_EXT = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', mp4: 'video/mp4', mov: 'video/quicktime', '3gp': 'video/3gpp', webm: 'video/webm' };
 async function bajarArchivo(it) {
+  const id = it.copia || it.id;      // copia pública temporal (el original es privado)
   const urls = it.video
-    ? [`https://drive.usercontent.google.com/download?id=${it.id}&export=download&confirm=t`]
-    : [`https://lh3.googleusercontent.com/d/${it.id}=w1080-rj`, `https://drive.usercontent.google.com/download?id=${it.id}&export=download&confirm=t`];
+    ? [`https://drive.usercontent.google.com/download?id=${id}&export=download&confirm=t`, `https://drive.google.com/uc?export=download&id=${id}`]
+    : [`https://lh3.googleusercontent.com/d/${id}=w1080-rj`, `https://drive.usercontent.google.com/download?id=${id}&export=download&confirm=t`];
+  const ext = (String(it.archivo || '').match(/\.([a-z0-9]+)$/i) || [])[1] || '';
+  let ultimo = '';
   for (const u of urls) {
     try {
       const r = await fetch(u, { credentials: 'omit', cache: 'no-store' });
-      const tipo = r.headers.get('content-type') || '';
-      if (!r.ok || !/^(image|video)\//.test(tipo)) continue;
+      const tipo = (r.headers.get('content-type') || '').split(';')[0];
+      if (!r.ok || /text\/html|text\/plain|json/.test(tipo)) { ultimo = `HTTP ${r.status} ${tipo}`; continue; }
       const buf = new Uint8Array(await r.arrayBuffer());
+      if (buf.length < 1000) { ultimo = 'archivo vacío'; continue; }
       let bin = '';
       for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
-      return { b64: btoa(bin), mime: tipo.split(';')[0] };
-    } catch (e) { /* siguiente */ }
+      const mime = /^(image|video)\//.test(tipo) ? tipo : (MIME_EXT[ext.toLowerCase()] || (it.video ? 'video/mp4' : 'image/jpeg'));
+      return { b64: btoa(bin), mime };
+    } catch (e) { ultimo = String(e.message || e); }
   }
-  throw new Error('no pude bajar el archivo de Drive (¿está compartido con el link?)');
+  throw new Error('no pude bajar el archivo de Drive (' + ultimo + ')');
 }
 async function estadosTick(manual) {
   if (estadosOcupado || cuadroOcupado || procesando || revisando) return manual ? 'La extensión está ocupada; prueba en un rato.' : '';

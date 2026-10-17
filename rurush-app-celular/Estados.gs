@@ -6,7 +6,7 @@
    Usa la misma clave de la extensión que el cuadro de ventas (cuadro_tokenOk_). */
 
 const ES_HOJA_ID = '110BGSWedy1z4FL7NFI-IHmPAzC0JJA-gtBORgpEPrk0';
-const ES_RANGO = 'HISTORIAS!A1:I';
+const ES_RANGO = 'HISTORIAS!A1:J';
 const ES_MAX_ATRASO_H = 12;          // igual que Instagram: no sacar historias viejas
 
 function es_cuando_(fecha, hora) {
@@ -28,7 +28,7 @@ function es_leer_() {
     Sheets.Spreadsheets.Values.update({ values: [['WHATSAPP', 'WA DETALLE']] }, ES_HOJA_ID, 'HISTORIAS!H1:I1', { valueInputOption: 'RAW' });
   }
   return v.slice(1).map(function (f, i) {
-    return { fila: i + 2, archivo: f[0] || '', fecha: f[1] || '', hora: f[2] || '', id: f[5] || '', wa: f[7] || '', det: f[8] || '' };
+    return { fila: i + 2, archivo: f[0] || '', fecha: f[1] || '', hora: f[2] || '', id: f[5] || '', wa: f[7] || '', det: f[8] || '', copia: f[9] || '' };
   });
 }
 
@@ -38,11 +38,12 @@ function es_pendientes_(linea) {
   if (!linea) throw new Error('falta la línea');
   const ahora = Date.now();
   return es_leer_().filter(function (f) {
-    if (!f.id || /^\s*NO\s*$/i.test(f.wa) || es_hecha_(f.wa, linea)) return false;
+    // la copia pública (columna J) la deja lista RURUSH Historias IG cada 10 min
+    if (!f.id || !f.copia || /^\s*NO\s*$/i.test(f.wa) || es_hecha_(f.wa, linea)) return false;
     const c = es_cuando_(f.fecha, f.hora);
     return c && c <= ahora && ahora - c <= ES_MAX_ATRASO_H * 3600e3;
   }).map(function (f) {
-    return { fila: f.fila, id: f.id, archivo: f.archivo, video: /\.(mp4|mov|3gp|webm)$/i.test(f.archivo), cuando: es_cuando_(f.fecha, f.hora) };
+    return { fila: f.fila, id: f.id, copia: f.copia, archivo: f.archivo, video: /\.(mp4|mov|3gp|webm)$/i.test(f.archivo), cuando: es_cuando_(f.fecha, f.hora) };
   });
 }
 
