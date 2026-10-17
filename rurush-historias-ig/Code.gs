@@ -14,6 +14,7 @@ const MAX_ATRASO_H = 12;   // si el reloj llega más tarde que esto, no la publi
 
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('📲 Historias IG')
+    .addItem('👁️ Vista previa del mes', 'verVistaPrevia')
     .addItem('Revisar carpeta ahora', 'sincronizarCarpeta')
     .addItem('Publicar YA la fila seleccionada', 'publicarSeleccionada')
     .addItem('Publicar las que ya tocan', 'publicarPendientes')
