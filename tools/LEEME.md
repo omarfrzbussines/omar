@@ -29,7 +29,7 @@ En cada PC (una sola vez): abrir **PowerShell** y pegar:
 ```
 irm https://raw.githubusercontent.com/omarfrzbussines/omar/main/tools/actualizador_remoto.ps1 | iex
 ```
-- Pregunta qué extensiones usa esa PC (Difusiones, FP, Entrevistas) y su carpeta.
+- Pregunta qué extensiones usa esa PC (Difusiones, FP, Panel, Entrevistas) y su carpeta.
 - Crea la tarea **RURUSH Extensiones**: cada 10 min mira GitHub y copia la versión nueva; la extensión se recarga sola.
 - No necesita Git ni cuentas de Google. Registro: `%LOCALAPPDATA%\RurushActualizador\log.txt`.
 - Quitar: `Unregister-ScheduledTask "RURUSH Extensiones"`.

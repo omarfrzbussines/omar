@@ -17,6 +17,7 @@ $LOG = Join-Path $DIR "log.txt"
 $EXTS = [ordered]@{
   "extension-rurush-difusiones"  = "Rurush Difusiones (difusiones, cuadro de ventas, estados)"
   "extension-rurush-fp"          = "Rurush FP (recordatorios y confirmacion de Free Pass)"
+  "extension-rurush-panel"       = "RURUSH Panel Operativo (ficha del socio y plantillas para las asesoras)"
   "extension-rurush-entrevistas" = "Rurush Entrevistas"
 }
 
