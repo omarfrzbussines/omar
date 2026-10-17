@@ -62,7 +62,7 @@ function es_marcar_(fila, id, linea, ok, error) {
       det = det.split(' · ').filter(function (x) { return x && x.indexOf(linea + ':') !== 0; }).join(' · ');
     } else {
       det = det.split(' · ').filter(function (x) { return x && x.indexOf(linea + ':') !== 0; })
-        .concat([linea + ': ' + String(error || 'error').slice(0, 120) + ' (' + hora + ')']).join(' · ');
+        .concat([linea + ': ' + String(error || 'error').replace(/ · /g, ' - ').slice(0, 160) + ' (' + hora + ')']).join(' · ');
     }
     Sheets.Spreadsheets.Values.update({ values: [[wa, det]] }, ES_HOJA_ID, 'HISTORIAS!H' + f.fila + ':I' + f.fila, { valueInputOption: 'RAW' });
     return { ok: true };
