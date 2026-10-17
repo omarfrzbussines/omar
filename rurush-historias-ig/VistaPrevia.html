@@ -43,6 +43,7 @@
 
 <script>
   var MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  window._gen = 0;
   var hoy = new Date(); var anio = hoy.getFullYear(); var mes = hoy.getMonth() + 1;
 
   function mover(d) { mes += d; if (mes < 1) { mes = 12; anio--; } if (mes > 12) { mes = 1; anio++; } cargar(); }
@@ -87,7 +88,7 @@
         html += '<div class="dia' + (fuera ? ' fuera' : '') + (clave === d.hoy ? ' hoy' : '') + '"><div class="num">' + f.getDate() + '</div><div class="hs">';
         (fuera ? [] : (porDia[clave] || [])).forEach(function (h) {
           var ic = icono(h.estado);
-          var cuerpo = h.img ? '<img src="' + h.img + '" loading="lazy">' : '<div class="sin">' + esc(h.archivo) + '</div>';
+          var cuerpo = '<img id="m_' + h.fila + '" alt="">';
           html += '<a class="h ' + ic[1] + '" title="' + esc(h.archivo) + '" onclick="ver(' + "'" + h.id + "'" + ')" data-id="' + h.id + '">' + cuerpo +
                   '<div class="pie">' + esc(h.hora || '--:--') + ' ' + ic[0] + '</div></a>';
         });
@@ -97,12 +98,24 @@
     }
     document.getElementById('cal').innerHTML = html;
     window._hist = d.historias;
+    var gen = ++window._gen;
+    d.historias.forEach(function (h) {   // cada miniatura llega por su cuenta, en paralelo
+      google.script.run.withSuccessHandler(function (url) {
+        if (gen !== window._gen) return;
+        h.img = url;
+        var el = document.getElementById('m_' + h.fila);
+        if (!el) return;
+        if (url) el.src = url; else el.outerHTML = '<div class="sin">' + esc(h.archivo) + '</div>';
+      }).vistaMini(h.id);
+    });
   }
 
   function ver(id) {
     var h = (window._hist || []).filter(function (x) { return x.id === id; })[0];
     if (!h) return;
-    document.getElementById('gImg').src = h.img || '';
+    var g = document.getElementById('gImg');
+    g.src = h.img || '';
+    google.script.run.withSuccessHandler(function (url) { if (url) g.src = url; }).vistaGrande(h.id);
     document.getElementById('gTxt').innerHTML = esc(h.fecha + ' ' + h.hora + ' · ' + h.archivo + ' · ' + (h.estado || 'por salir')) +
       ' · <a href="https://drive.google.com/file/d/' + h.id + '/view" target="_blank" onclick="event.stopPropagation()">abrir original</a>';
     document.getElementById('grande').style.display = 'flex';
