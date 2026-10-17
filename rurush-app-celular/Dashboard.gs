@@ -9,9 +9,9 @@
 const DV_ID = '1DHEBkhtGgOvSkUZDsdokVOVozHhujUF77sFUWgv9Ves';
 const DV_PLAZO = 21;
 const DV_CORREO = 'omarfrz@gmail.com';   // a quién llega el cuadro diario
-const DV_METAS = { MONICA: 18000, DANNA: 11000, LAURA: 11000 };   // metas del mes (cámbialas aquí)
-const DV_ASESORAS = ['DANNA', 'MONICA', 'LAURA'];
-const DV_NOMBRE = { DANNA: 'DANNA', MONICA: 'MÓNICA', LAURA: 'LAURA' };
+const DV_METAS = { MONICA: 18000, DANNA: 11000, LAURA: 11000, CIELO: 6000 };   // metas del mes (cámbialas aquí)
+const DV_ASESORAS = ['DANNA', 'MONICA', 'LAURA', 'CIELO'];
+const DV_NOMBRE = { DANNA: 'DANNA', MONICA: 'MÓNICA', LAURA: 'LAURA', CIELO: 'CIELO' };
 const DV_DIAS = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
 
 /* ---------- fechas (todo en 'yyyy-MM-dd', hora Lima) ---------- */
