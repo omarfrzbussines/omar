@@ -806,7 +806,7 @@ async function ocupadoParaRecargar() {
 }
 
 // ───────────────────────── 📊 cuadro de ventas ─────────────────────────
-// Lun-vie 7:00 am (lo que necesitan HOY) y 9:00 pm (cierre del día): baja el cuadro de RURUSH Hoy,
+// Lun-vie 7:00 am (lo que necesitan HOY) y 9:00 pm (cierre del día); sábado solo 7:00 am: baja el cuadro de RURUSH Hoy,
 // lo convierte en imagen y lo manda a los números de la pestaña «📲 CUADRO WHATSAPP» (Hoja de Reportes).
 // La extensión pide su alta una vez: a Omar le llega un correo para autorizarla. Respeta el turno con FP.
 const CUADRO_EXEC = 'https://script.google.com/macros/s/AKfycbxQ43YCw8-Jrgqncz1QiW0lIA4mmNW5_-QGYhKGS68aomEJUaZ5P2t01WqESRlCXfbZ/exec';
@@ -832,9 +832,10 @@ async function cuadroClave() {
 }
 function cuadroTurnoActual() {
   const now = limaNow();
-  if (now.dow === 0 || now.dow === 6) return null;
+  if (now.dow === 0) return null;                          // domingo no
   const min = now.hour * 60 + now.min;
-  const s = CUADRO_HORAS.find((x) => min >= x.h * 60 + x.m && min < x.h * 60 + x.m + CUADRO_VENTANA_MIN);
+  const s = CUADRO_HORAS.find((x) => (now.dow !== 6 || !x.noche) &&   // sábado: solo la de la mañana
+ min >= x.h * 60 + x.m && min < x.h * 60 + x.m + CUADRO_VENTANA_MIN);
   return s ? { id: now.date + (s.noche ? '-noche' : '-manana'), noche: s.noche } : null;
 }
 async function cuadroPng(html) {

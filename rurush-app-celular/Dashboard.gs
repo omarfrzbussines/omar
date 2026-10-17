@@ -130,7 +130,7 @@ function dv_html(d) {
   const COL = { gano: ['#16a34a', '#ffffff'], algo: ['#facc15', '#3b2f00'], nada: ['#dc2626', '#ffffff'], hoy: ['#ffffff', '#24231f'], fut: ['#ebeae6', '#9a9994'] };
   const pctEq = d.meta ? d.acum / d.meta : 0;
 
-  const HOY = d.noche ? 'MAÑANA' : 'HOY';
+  const HOY = d.noche ? 'MAÑANA' : dv_habil(d.hoy) ? 'HOY' : 'EL LUNES';   // sábado en la mañana: resumen de la semana
   let h = '<div style="max-width:540px;margin:0 auto;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0b0b0b;background:#fcfcfb;padding:16px">' +
     '<table width="100%" style="border-collapse:collapse"><tr><td><div style="font-size:11px;letter-spacing:2px;color:#8a8984;font-weight:700">RURUSH FITNESS CLUB</div>' +
     '<div style="font-size:22px;font-weight:800">' + (d.noche ? '🌙 Cierre · ' + dia(d.ayer) : 'Ventas · ' + dia(d.hoy)) + '</div></td>' +
