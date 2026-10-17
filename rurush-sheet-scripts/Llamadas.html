@@ -512,7 +512,8 @@ if (ASESORA === 'OMAR') {
   b.style.cssText = 'background:#5a3a00;color:#ffd27a;padding:6px 10px;font-size:13px;display:flex;gap:8px;align-items:center;flex-wrap:wrap';
   b.innerHTML = '<span>🧪 OMAR · se guarda de verdad (asesor OMAR)</span>' +
     '<select id="como" style="background:#2a1d00;color:#ffd27a;border:1px solid #8a6400;border-radius:6px;padding:3px">' +
-    '<option value="">Ver como: yo</option><option>MONICA</option><option>DANNA</option><option>LAURA</option></select>' +
+    '<option value="">Ver como: yo</option><option>MONICA</option><option>DANNA</option><option>LAURA</option><option>CIELO</option></select>' +
+    '<button id="links" style="background:#8a6400;color:#fff;border:0;border-radius:6px;padding:4px 8px">🔗 Links</button>' +
     '<button id="errores" style="background:#8a6400;color:#fff;border:0;border-radius:6px;padding:4px 8px">🛠 Errores</button>' +
     '<button id="dashYa" style="background:#8a6400;color:#fff;border:0;border-radius:6px;padding:4px 8px">📊 Rehacer dashboard</button>';
   document.body.prepend(b);
@@ -524,6 +525,24 @@ if (ASESORA === 'OMAR') {
       .app_dashAhora(LLAVE);
   };
   $('#como').onchange = () => { COMO = $('#como').value; mostrando = false; cola = []; idx = 0; $('#main').innerHTML = '<div class="vacio">Cargando la cola' + (COMO ? ' de ' + esc(COMO) : '') + '…</div>'; traer(true); };
+  $('#links').onclick = () => {
+    $('#main').innerHTML = '<div class="vacio">Cargando links…</div>';
+    google.script.run
+      .withSuccessHandler((l) => {
+        $('#main').innerHTML = '<h2>🔗 Links de las asesoras</h2>' + l.map((x, i) =>
+          `<div class="card" style="margin-bottom:8px"><div class="num"><b>${esc(x.asesora)}</b> · ${x.celular ? '📱 activado ' + esc(x.celular) : '⚪ falta activar su celular (pide tu PIN)'}</div>
+          <div class="tip" style="word-break:break-all;margin:6px 0">${esc(x.link)}</div>
+          <button class="guardar" data-i="${i}">📋 Copiar link</button></div>`).join('') +
+          '<button class="saltar" id="volver">← Volver a la cola</button>';
+        document.querySelectorAll('[data-i]').forEach((b) => b.onclick = () => {
+          const t = l[b.dataset.i].link;
+          (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('📋 Copiado')).catch(() => prompt('Copia el link:', t));
+        });
+        $('#volver').onclick = () => { mostrando = false; pintar(); };
+      })
+      .withFailureHandler((e) => toast(e.message || String(e), true))
+      .app_links(LLAVE);
+  };
   $('#errores').onclick = () => {
     $('#main').innerHTML = '<div class="vacio">Cargando errores…</div>';
     google.script.run

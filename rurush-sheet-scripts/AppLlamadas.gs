@@ -9,7 +9,7 @@
  * (doGet de LlamadasAPI la redirige aquí). Los links salen de app_crearLlaves().
  */
 
-const APP_ASESORAS = ["MONICA", "DANNA", "LAURA"];
+const APP_ASESORAS = ["MONICA", "DANNA", "LAURA", "CIELO"];
 // Link de prueba de Omar: ve una cola real pero NO guarda nada ni reserva personas a las asesoras.
 const APP_PRUEBA = "OMAR";
 // Bases que se pueden llamar desde el celular (en este orden aparecen en el selector).
@@ -101,6 +101,22 @@ function app_verLinks() {
     Logger.log(a + " → " + url + "?k=" + k);
   });
   app_props().setProperty("APP_LLAVES", JSON.stringify(llaves));
+}
+/** Desde el celular de Omar (botón 🔗 Links): el link de cada asesora (crea el que falte) y si ya activó su celular. */
+function app_links(llave) {
+  if (app_asesora(llave) !== APP_PRUEBA) throw new Error("Solo para Omar.");
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const llaves = JSON.parse(app_props().getProperty("APP_LLAVES") || "{}"), cel = app_celulares();
+    const out = APP_ASESORAS.map(function (a) {
+      let k = Object.keys(llaves).filter(function (x) { return llaves[x] === a; })[0];
+      if (!k) { k = Utilities.getUuid().replace(/-/g, "").slice(0, 20); llaves[k] = a; }
+      return { asesora: a, link: "https://omarfrzbussines.github.io/omar/rurush-llamadas/?k=" + k, celular: cel[a] ? cel[a].desde + " · " + cel[a].modelo : "" };
+    });
+    app_props().setProperty("APP_LLAVES", JSON.stringify(llaves));
+    return out;
+  } finally { lock.releaseLock(); }
 }
 /** Ejecutar desde el editor para ver qué celular tiene cada asesora. */
 function app_verCelulares() {
