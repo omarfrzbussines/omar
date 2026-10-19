@@ -290,3 +290,11 @@ $("archivo").addEventListener("change", async (ev) => {
   ev.target.value = "";
   $("probar").click();
 });
+
+/* ---------- guardar contactos solos (prendido por defecto) ---------- */
+chrome.storage.local.get("autoPdApagado").then(({ autoPdApagado }) => { $("autoPd").checked = !autoPdApagado; });
+$("autoPd").onchange = async () => {
+  if ($("autoPd").checked) await chrome.storage.local.remove("autoPdApagado");
+  else await chrome.storage.local.set({ autoPdApagado: true });
+  $("autoPd-estado").innerHTML = `<span class="ok">✅ ${$("autoPd").checked ? "Prendido" : "Apagado"}.</span>`;
+};
