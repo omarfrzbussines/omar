@@ -74,6 +74,8 @@ function firstName(full) {
   if (!n || /\d/.test(primera) || /^[@_.]/.test(primera) || /[_.]\w/.test(primera)) return '';
   return n[0].toUpperCase() + n.slice(1).toLowerCase();
 }
+// FP que agenda el bot (asunto "FP BOT …"): el nombre de Pipedrive viene del perfil de WhatsApp → saludar sin nombre.
+const nombreDe = (fp) => (/\bBOT\b/i.test(fp.subject || '') ? '' : firstName(fp.personName));
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 const ultimos9 = (x) => String(x || '').replace(/\D/g, '').slice(-9);
@@ -611,7 +613,7 @@ function analizar(fp, msgs, hoy) {
 
 // ───────────────────────── mensaje ─────────────────────────
 function mensaje(fp, confirmo) {
-  const n = firstName(fp.personName);
+  const n = nombreDe(fp);
   const h = aLas(fp.hour, fp.min);
   const hola = n ? pick([`¡Hola ${n}! 👋`, `${n}, ¡hola! 😊`, `¡Hola ${n}! 🙌`]) : pick(['¡Hola! 👋', '¡Hola! 😊']);
   let cuerpo, cierre;
@@ -711,14 +713,14 @@ function opciones(fp, now) {
 const hola = (n, opts) => (n ? pick(opts.map((o) => o.replace('N', n))) : '¡Hola! 😊');
 
 function msgManana(fp) {
-  const n = firstName(fp.personName);
+  const n = nombreDe(fp);
   return `${hola(n, ['¡Hola N! 😊', 'N, ¡buenos días! ☀️', '¡Buen día N! 😊'])} `
     + `${pick([`Hoy ${aLas(fp.hour, fp.min)} es tu clase de prueba GRATIS 💪`, `Te esperamos hoy ${aLas(fp.hour, fp.min)} para tu clase gratis 💪`])}\n`
     + `${pick(['¿Nos confirmas tu asistencia?', '¿Me confirmas que vienes?'])}\n\n✅ Confirmo\n🔄 Reagendar`;
 }
 
 function msgRefuerzo(fp, now) {
-  const n = firstName(fp.personName);
+  const n = nombreDe(fp);
   const dia = fp.date === sumarDias(now.date, 1) ? `Mañana ${DIAS[diaSemana(fp.date)]}` : `El ${DIAS[diaSemana(fp.date)]}`;
   return `${hola(n, ['¡Hola N! 😊', 'N, ¡hola! 👋', '¡Hola N! 🙌'])} `
     + `${pick([`${dia} ${aLas(fp.hour, fp.min)} es tu clase de prueba GRATIS 💪`, `Te recuerdo: ${dia.toLowerCase()} ${aLas(fp.hour, fp.min)} tienes tu clase gratis 🔥`])} `
@@ -726,7 +728,7 @@ function msgRefuerzo(fp, now) {
 }
 
 function msgReagendo(fp, now) {
-  const n = firstName(fp.personName);
+  const n = nombreDe(fp);
   const [a, b] = opciones(fp, now);
   return `${hola(n, ['Hola N 😊', '¡Hola N! 👋', 'N, ¡hola! 😊'])} `
     + `${pick(['Vimos que no pudiste llegar a tu clase gratis 🔥', 'Tu clase de prueba GRATIS sigue en pie 🔥', 'Aún tienes tu clase de prueba GRATIS 🔥'])}\n`
@@ -734,7 +736,7 @@ function msgReagendo(fp, now) {
 }
 
 function msgBienestar(fp) {
-  const n = firstName(fp.personName);
+  const n = nombreDe(fp);
   return pick([
     `Hola${n ? ' ' + n : ''} 💙 Espero que estés mejor. Cuando puedas, te esperamos en Rurush 💪`,
     `${n ? n + ', e' : 'E'}spero que todo esté bien 💙 Tu clase gratis te espera cuando puedas 💪`,
@@ -742,19 +744,19 @@ function msgBienestar(fp) {
 }
 
 function msgSabado(fp) {
-  const n = firstName(fp.personName);
+  const n = nombreDe(fp);
   return `¡Hola${n ? ' ' + n : ''}! 😊 No te quedes sin tu clase GRATIS 🔥 Retomémosla este lunes: rutina + nutrición + evaluación InBody hechos para ti 💪 ¿La prefieres en la mañana, en la tarde o en la noche?`;
 }
 
 function msgDomingoLunes(fp) {
-  const n = firstName(fp.personName);
+  const n = nombreDe(fp);
   return `¡Hola${n ? ' ' + n : ''}! 😊\n\n¡Te esperamos mañana Lunes! 💪 Tu clase gratuita ya está reservada.\n\n`
     + `🕒 Hora: ${fmtHora(fp.hour, fp.min)}\n📍 ${DIR}\n📍 Ubicación GPS: ${GPS}\n\n`
     + `Tu coach ya tiene preparada tu evaluación y plan de entrenamiento ✨\n\n¿Nos confirmas tu asistencia?\n\n✅ Confirmo\n🔄 Reagendar`;
 }
 
 function msgDomingoNoShow(fp) {
-  const n = firstName(fp.personName);
+  const n = nombreDe(fp);
   const h = abre(1)[0] <= fp.hour && fp.hour <= abre(1)[1] - 1 ? aLas(fp.hour, fp.min) : 'a las 6 pm';
   return `¡Hola${n ? ' ' + n : ''}! 😊 Vimos que no pudiste llegar a tu clase gratis 🔥\n\n`
     + `¿La retomamos mañana lunes ${h}? ¿O prefieres otro horario? 💪\n\n📍 ${DIR}\n📍 GPS: ${GPS}`;
@@ -768,7 +770,7 @@ function nombreDia(fp, now) {
   return d[0].toUpperCase() + d.slice(1) + ' ' + fp.date.slice(8) + '/' + fp.date.slice(5, 7);
 }
 function msgConfirmacion(fp, now) {
-  const n = firstName(fp.personName);
+  const n = nombreDe(fp);
   return `¡Hola${n ? ' ' + n : ''}! 💪 Soy ${fp.asesora || 'tu asesora'} de RURUSH Fitness Club 🔥\n`
     + `Te confirmo tu Free Pass:\n📅 ${nombreDia(fp, now)} ${aLas(fp.hour, fp.min)}\n📍 ${DIR}\n`
     + `🎒 Trae ropa deportiva, toalla y agua 💧\nCualquier cambio, escríbeme por aquí. ¡Te esperamos! 🙌`;
@@ -1255,11 +1257,11 @@ function opcionesNutricion(vuelve) {
   return out;
 }
 function msgNutriRecordatorio(fp) {
-  const n = firstName(fp.personName);
+  const n = nombreDe(fp);
   return `Hola${n ? ' ' + n : ''}! 🥗 Te recordamos tu evaluación nutricional con Diego mañana ${DIAS[diaSemana(fp.date)]} ${aLas(fp.hour, fp.min)} en Rurush (${DIR}). ¡Te esperamos!`;
 }
 function msgNutriPausa(fp, vuelve) {
-  const n = firstName(fp.personName);
+  const n = nombreDe(fp);
   const [a, b] = opcionesNutricion(vuelve);
   return `Hola${n ? ' ' + n : ''}! 🥗 Vi que tienes una pausa activa — sin problema, reagendaremos tu evaluación con Diego para cuando regreses 💪 Te propongo:\n`
     + `• ${a} — ¿mañana (8-11am) o tarde (5-8pm)?\n• ${b} — ¿mañana (8-11am) o tarde (5-8pm)?\n¿Cuál te queda mejor? 😊`;
