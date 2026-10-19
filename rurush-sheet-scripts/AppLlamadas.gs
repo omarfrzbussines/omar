@@ -195,6 +195,9 @@ function app_getCola_(llave, base, excluir, api, como) {
   const t0 = Date.now();
   const quien = app_asesora(llave);
   try { dash_instalarSiFalta(); } catch (e) { console.error("dashboard: " + e); }   // 📊 una sola vez
+  try { desc_instalarSiFalta(); } catch (e) { console.error("descartados: " + e); }
+  let desc = {};
+  try { desc = desc_mapa(); } catch (e) { console.error("descartados: " + e); }
   // El link de prueba puede ver la cola de una asesora ("ver como"), sin reservarle a nadie.
   const asesora = quien === APP_PRUEBA && APP_ASESORAS.indexOf(como) >= 0 ? como : quien;
   if (APP_BASES.indexOf(base) < 0) throw new Error("Base no habilitada: " + base);
@@ -217,7 +220,7 @@ function app_getCola_(llave, base, excluir, api, como) {
     for (let i = datos.length - 1; i >= 0; i--) {
       const fila = datos[i], nFila = ini + i;
       const tel = ll_limpiarTel(fila[est.numero]);
-      if (!tel || yaTengo[nFila]) continue;
+      if (!tel || yaTengo[nFila] || tel in desc) continue;   // 🚫 descartado en cualquier base (Descartados.gs)
       const libre = ll_rondaLibre(est, fila);
       if (libre < 0) continue;
       // filtro barato con la última llamada hecha, antes de armar el historial
@@ -260,7 +263,7 @@ function app_getCola_(llave, base, excluir, api, como) {
   const programada = {};
   luego.todas.forEach(function (p) { programada[p.base + ":" + p.fila] = true; });
   const primero = [];
-  luego.ahora.forEach(function (p) { try { const x = app_luegoItem_(p, api); if (x) primero.push(x); } catch (e) { console.error("luego item: " + e); } });
+  luego.ahora.forEach(function (p) { try { const x = app_luegoItem_(p, api); if (x && !(ll_limpiarTel(x.numero) in desc)) primero.push(x); } catch (e) { console.error("luego item: " + e); } });
   const cola = primero.concat(nuevos.concat(seguimiento).filter(function (x) { return !programada[base + ":" + x.fila]; })).slice(0, APP_TAM_COLA);
   // ¿ya es socio? (BASE DE SOCIOS). Si falla, la cola sale igual, sin el aviso.
   let socios = {};
@@ -273,7 +276,8 @@ function app_getCola_(llave, base, excluir, api, como) {
   return {
     asesora: asesora, cola: cola, hoy: app_contadorHoy(asesora), estados: APP_ESTADOS.concat([APP_LUEGO]), horas: LL_HORAS,
     programadas: luego.despues,
-    pendientes: null, leidas: leidas, ms: Date.now() - t0, api: api
+    pendientes: null, leidas: leidas, ms: Date.now() - t0, api: api,
+    descartados: quien === APP_PRUEBA ? Object.keys(desc).length : null
   };
 }
 
