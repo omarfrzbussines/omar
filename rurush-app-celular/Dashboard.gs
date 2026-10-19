@@ -8,6 +8,8 @@
 
 const DV_ID = '1DHEBkhtGgOvSkUZDsdokVOVozHhujUF77sFUWgv9Ves';
 const DV_PLAZO = 21;
+const DV_PLAZO_MES = { '2026-10': 28 };   // meses con otro plazo (octubre 2026: hasta el miércoles 28)
+const dv_diaPlazo = (mesIso) => DV_PLAZO_MES[mesIso] || DV_PLAZO;
 const DV_CORREO = 'omarfrz@gmail.com';   // a quién llega el cuadro diario
 const DV_METAS = { MONICA: 18000, DANNA: 11000, LAURA: 11000, CIELO: 6000 };   // metas del mes (cámbialas aquí)
 const DV_ASESORAS = ['DANNA', 'MONICA', 'LAURA', 'CIELO'];
@@ -58,7 +60,7 @@ function dv_datos(hoyIso) {
 
   // Plazo: el 21; si ya pasó, fin de mes.
   const ini = hoy.slice(0, 8) + '01';
-  let plazo = hoy.slice(0, 8) + ('0' + DV_PLAZO).slice(-2);
+  let plazo = hoy.slice(0, 8) + ('0' + dv_diaPlazo(hoy.slice(0, 7))).slice(-2);
   if (hoy > plazo) plazo = dv_iso(new Date(Date.UTC(y, m, 0, 12)));
   const diasTot = dv_habiles(ini, plazo);
   const diasPas = hoy > ini ? dv_habiles(ini, dv_mas(hoy, -1)) : 0;

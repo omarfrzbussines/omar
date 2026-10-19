@@ -132,7 +132,7 @@ function sm_datos() {
     });
   });
   const ini = mesIso + '-01';
-  let plazo = mesIso + '-' + ('0' + DV_PLAZO).slice(-2);
+  let plazo = mesIso + '-' + ('0' + dv_diaPlazo(mesIso)).slice(-2);
   if (dom > plazo) plazo = dv_iso(new Date(Date.UTC(y, m, 0, 12)));
   const diasTot = dv_habiles(ini, plazo);
   res.esperado = diasTot ? Math.min(1, dv_habiles(ini, dom < plazo ? dom : plazo) / diasTot) : 1;
