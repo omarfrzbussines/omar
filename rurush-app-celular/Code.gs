@@ -28,6 +28,8 @@ function doGet(e) {
     hoy_enviarLink_();
     return ContentService.createTextOutput('Listo: el link de RURUSH Hoy y el PIN llegaron al correo de Omar.');
   }
+  // 🎟️ app Free Pass de hoy (PC de las asesoras, llave + PIN propios: FreePass.gs)
+  if (p.fp) return fp_pagina_(p.fp);
   // 📲 cuadro de ventas para la PC (solo lectura, clave propia de la PC, autorizada por Omar desde su correo)
   if (p.cuadroalta) return ContentService.createTextOutput(cuadro_alta_(p.cuadroalta));
   if (p.cuadrook) return cuadro_okPagina_(p.cuadrook, p.numero);
