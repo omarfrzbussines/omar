@@ -1518,6 +1518,20 @@ async function programar(soloFaltantes = false) {
     if (hora) crear(`mod:${key}`, { when: proximaLima(hora[0], hora[1]), periodInMinutes: mod.cadaMin || 1440 });
     else if (mod.cadaMin) crear(`mod:${key}`, { delayInMinutes: 1, periodInMinutes: mod.cadaMin });
   }
+  // Si la extensión se actualizó o recargó justo después de la hora de un módulo diario (p. ej. a las 8:03 pm),
+  // la alarma nueva queda para mañana y la de hoy se pierde: se corre ahora (lo ya enviado no se repite).
+  if (!soloFaltantes) {
+    const ahora = Date.now();
+    const { diarias = {} } = await chrome.storage.local.get('diarias');
+    const hoy = limaNow().date;
+    for (const [key, mod] of Object.entries(MODULOS)) {
+      const hora = key === 'manana' ? [cfg.mananaHora, 0] : mod.hora;
+      if (!hora || mod.cadaMin || diarias[key] === hoy) continue;
+      const t0 = proximaLima(hora[0], hora[1]) - 86400e3;
+      const dow = new Date(t0 + LIMA_OFFSET_H * 3600e3).getUTCDay();
+      if (ahora - t0 > 0 && ahora - t0 < 2 * 3600e3 && mod.dias.includes(dow)) chrome.alarms.create(`retry:${key}:${t0}`, { delayInMinutes: 1 });
+    }
+  }
 }
 
 // Videos que vienen cargados con la extensión (videos-precargados.json: huella → opción de Video).
@@ -1561,10 +1575,16 @@ chrome.alarms.onAlarm.addListener((a) => {
   if (tipo === 'mod' && MODULOS[key]) {
     // la alarma diaria se dispara todos los días: aquí se filtra por día de la semana (Lima)
     const dow = new Date(a.scheduledTime + LIMA_OFFSET_H * 3600e3).getUTCDay();
-    if (MODULOS[key].dias.includes(dow)) encolar(key, 'alarm', a.scheduledTime);
+    if (MODULOS[key].dias.includes(dow)) { encolar(key, 'alarm', a.scheduledTime); marcarDiaria(key); }
   }
-  if (tipo === 'retry' && MODULOS[key]) encolar(key, 'retry', Number(prog) || undefined);
+  if (tipo === 'retry' && MODULOS[key]) { encolar(key, 'retry', Number(prog) || undefined); marcarDiaria(key); }
 });
+// día (Lima) en que corrió cada módulo diario, para no repetir la recuperación de programar()
+async function marcarDiaria(key) {
+  const { diarias = {} } = await chrome.storage.local.get('diarias');
+  diarias[key] = limaNow().date;
+  await chrome.storage.local.set({ diarias });
+}
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg.type === 'runNow') { encolar(msg.mod || 'm1', 'manual').then(() => reply({ ok: true })); return true; }
