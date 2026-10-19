@@ -1548,6 +1548,93 @@
 
   /* ---------- 2. Pipedrive ---------- */
 
+  /* ---------- guardar contactos solos (como Timelines) ----------
+     Si el chat abierto no tiene ficha, se crea sola con el nombre de WhatsApp y el número.
+     Solo si la persona ya escribió (para no crear fichas de chats que se abren por mirar),
+     nunca en grupos ni sin número/@usuario, y se apaga en Opciones. Lo creado se recuerda
+     en esta PC: el buscador de Pipedrive tarda en indexar y, sin eso, al volver a abrir el
+     chat se crearía una segunda ficha. */
+  const entrante = () => !!document.querySelector("#main .message-in, #main [data-id^='false_']");
+
+  // Se usa la ficha que acaba de devolver Pipedrive en vez de volver a
+  // buscarla: su buscador tarda unos segundos en indexar lo recién creado,
+  // y mientras tanto el panel parecía no haber guardado nada.
+  function quedarseCon(cont, p) {
+    personaPd = {
+      id: p.id,
+      nombre: p.name || p.nombre || "",
+      telefonos: (p.phone || p.telefonos || []).map((x) => x.value || x),
+      valores: p.valores || {},
+      proxima: p.proxima || null
+    };
+    nota("rr-crm", `#${personaPd.id}`);
+    pintarChips(cont);
+    nombrarLead();
+    pintarProxima();
+    pintarAgendar();
+    pintarDatos();
+  }
+
+  async function recordarCreado(clave, id) {
+    if (!clave || !id) return;
+    const { pdCreados = {} } = await chrome.storage.local.get("pdCreados");
+    pdCreados[clave] = { id, at: Date.now() };
+    // solo lo de los últimos 2 días: después Pipedrive ya lo encuentra solo
+    for (const k of Object.keys(pdCreados)) if (Date.now() - pdCreados[k].at > 2 * 864e5) delete pdCreados[k];
+    await chrome.storage.local.set({ pdCreados });
+  }
+
+  // true = ya quedó resuelto (creado o recuperado); false = se muestra el formulario de siempre
+  async function guardarSolo(cont, gen, usuarioWa) {
+    const { autoPdApagado, pdCreados = {} } = await chrome.storage.local.get(["autoPdApagado", "pdCreados"]);
+    let t = String(telDeEstaPersona() || "").replace(/\D/g, "");
+    if (t.length < 9) {                       // el número a veces solo lo tiene WhatsApp por dentro
+      const dentro = await chatDesdeWhatsApp();
+      if (gen !== generacion) return true;
+      if (dentro && dentro.telefono) { t = dentro.telefono; telManual = t; }
+    }
+    const tel = t.length >= 9 ? conPais(t) : "";
+    const clave = tel || usuarioWa;
+    if (!clave) return false;
+
+    // creado hace poco desde esta PC: se abre esa ficha en vez de crear otra
+    const ya = pdCreados[clave];
+    if (ya) {
+      const det = await pedir("pdDetalle", { personId: ya.id });
+      if (gen !== generacion) return true;
+      if (det.ok) { quedarseCon(cont, { id: ya.id, nombre: det.data.nombre, valores: det.data.valores, proxima: det.data.proxima }); return true; }
+      return false;
+    }
+
+    if (autoPdApagado) return false;
+    // ¿ya escribió? Primero se le pregunta a WhatsApp; si no responde, se mira la pantalla
+    // (los mensajes pueden tardar un poco en aparecer al abrir el chat)
+    let escribio = null;
+    for (let i = 0; i < 6; i++) {
+      const dentro = await chatDesdeWhatsApp();
+      if (gen !== generacion) return true;
+      escribio = dentro && typeof dentro.escribio === "boolean" ? dentro.escribio : null;
+      if (escribio || entrante()) { escribio = true; break; }
+      await new Promise((r) => setTimeout(r, 500));
+      if (gen !== generacion) return true;
+    }
+    if (!escribio) return false;
+
+    const nom = (ficha?.nombre || (ctxChat.nombre ? ctxChat.titulo : "") || "").trim() ||
+                (usuarioWa || ("Lead " + tel.slice(-9)));
+    cont.innerHTML = tarjeta("Gestión", '<p class="rr-aviso">Guardando contacto en Pipedrive…</p>');
+    const res = await pedir("crearPd", { nombre: nom, telefono: tel });
+    if (!res.ok) { toast("❌ No se pudo guardar solo: " + res.error, 6000); return false; }
+    await recordarCreado(clave, res.data.id);
+    if (usuarioWa && res.data?.id) {
+      pedir("nota", { personId: res.data.id, contenido: `Usuario de WhatsApp: ${usuarioWa}` }).catch(() => {});
+    }
+    if (gen !== generacion) return true;
+    quedarseCon(cont, res.data);
+    toast(`✅ Guardado solo en Pipedrive: ${nom}`, 5000);
+    return true;
+  }
+
   async function pintarCrm(gen, enVuelo = null) {
     const cont = panel.querySelector("#rr-crm");
     if (!ctxChat || ctxChat.esGrupo) { cont.innerHTML = ""; return; }
@@ -1570,6 +1657,7 @@
     const encontrados = r.data || [];
     const usuarioWa = ctxChat.usuario || "";
 
+    if (!encontrados.length && await guardarSolo(cont, gen, usuarioWa)) return;
     if (!encontrados.length) {
       nota("rr-crm", "sin ficha");
       abrirSeccion(panel, "rr-crm");        // sin ficha no se puede agendar: que se vea
@@ -1665,21 +1753,9 @@
           return;
         }
 
-        // Se usa la ficha que acaba de devolver Pipedrive en vez de volver a
-        // buscarla: su buscador tarda unos segundos en indexar lo recién creado,
-        // y mientras tanto el panel parecía no haber guardado nada.
-        personaPd = {
-          id: res.data.id,
-          nombre: res.data.name,
-          telefonos: (res.data.phone || []).map((p) => p.value || p),
-          valores: {}
-        };
+        recordarCreado(tel || usuarioWa, res.data.id);
+        quedarseCon(cont, res.data);
         toast("✅ Contacto guardado en Pipedrive");
-        nota("rr-crm", `#${personaPd.id}`);
-        pintarChips(cont);
-        nombrarLead();
-        pintarAgendar();
-        pintarDatos();
       };
       return;
     }

@@ -43,8 +43,15 @@
         if (/^\d{9,15}$/.test(String(user || ""))) telefono = String(user);
       }
 
+      // ¿la persona ya escribió? (para guardar el contacto solo, sin depender del DOM)
+      let escribio = null;
+      try {
+        const msgs = chat.msgs && (chat.msgs.getModelsArray ? chat.msgs.getModelsArray() : chat.msgs.models);
+        if (msgs) escribio = msgs.some((m) => m && m.id && m.id.fromMe === false);
+      } catch (e) { /* sin dato: se mira la pantalla */ }
+
       return {
-        listo: true, hay: true, esGrupo, telefono,
+        listo: true, hay: true, esGrupo, telefono, escribio,
         titulo: String(chat.formattedTitle || (chat.contact && (chat.contact.name ||
                 chat.contact.pushname)) || "")
       };
