@@ -1635,6 +1635,32 @@
     return true;
   }
 
+  // Versión sin pantalla de guardarSolo, para cuando el panel está cerrado: no abre
+  // "Info. del contacto" ni toca nada; si WhatsApp no da el número, no hace nada.
+  async function guardarSoloCerrado(titulo) {
+    const { autoPdApagado, pdCreados = {} } = await chrome.storage.local.get(["autoPdApagado", "pdCreados"]);
+    if (autoPdApagado) return;
+    await new Promise((r) => setTimeout(r, 1500));          // que carguen los mensajes
+    const c = chatActual();
+    if (!c || c.esGrupo || c.titulo !== titulo) return;     // ya cambió de chat
+    const dentro = await chatDesdeWhatsApp();
+    if (!dentro || dentro.esGrupo) return;
+    const t = String(c.telefono || dentro.telefono || "").replace(/\D/g, "");
+    if (t.length < 9) return;
+    const tel = conPais(t);
+    if (pdCreados[tel]) return;
+    if (!(dentro.escribio === true || entrante())) return;
+    const r = await pedir("buscarPd", { telefono: tel, nombre: "" });
+    if (!r.ok || (r.data || []).length) return;
+    const actual = chatActual();
+    if (!actual || actual.titulo !== titulo) return;
+    const nom = (c.nombre ? c.titulo : "").trim() || "Lead " + tel.slice(-9);
+    const res = await pedir("crearPd", { nombre: nom, telefono: tel });
+    if (!res.ok) return;
+    await recordarCreado(tel, res.data.id);
+    toast(`✅ Guardado solo en Pipedrive: ${nom}`, 5000);
+  }
+
   async function pintarCrm(gen, enVuelo = null) {
     const cont = panel.querySelector("#rr-crm");
     if (!ctxChat || ctxChat.esGrupo) { cont.innerHTML = ""; return; }
@@ -2047,9 +2073,21 @@
 
   // Detecta el cambio de chat. El número escrito a mano queda fuera de la firma a
   // propósito: si entrara, el panel se repintaría mientras se teclea.
-  let firmaPrev = null;
+  let firmaPrev = null, firmaCerrado = null, cerradoOcupado = false;
   setInterval(() => {
-    if (!panel.classList.contains("abierto")) return;
+    if (!panel.classList.contains("abierto")) {
+      // Con el panel cerrado no se repinta nada, pero el contacto nuevo se guarda igual
+      // apenas se abre el chat (como Timelines).
+      const c = chatActual();
+      const firma = c ? c.titulo : "";
+      if (firma && firma !== firmaCerrado && !cerradoOcupado) {
+        firmaCerrado = firma;
+        cerradoOcupado = true;
+        guardarSoloCerrado(firma).catch(() => {}).finally(() => { cerradoOcupado = false; });
+      }
+      return;
+    }
+    firmaCerrado = null;
     const c = chatActual();
     const firma = c ? `${c.titulo}|${c.telefono}` : "";
     if (firma === firmaPrev) return;
