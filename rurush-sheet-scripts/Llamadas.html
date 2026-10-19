@@ -175,7 +175,7 @@ function traer(reset) {
         cola = cola.concat(r.cola.filter((x) => !ya[x.base + ':' + x.fila]));
       }
       guardarLocal();
-      $('#sub').textContent = `Hola ${ASESORA} · cargó en ${((Date.now() - t0) / 1000).toFixed(1)} s${r.api === false ? ' · lectura lenta (falta servicio Sheets)' : ''}`;
+      $('#sub').textContent = `Hola ${ASESORA} · cargó en ${((Date.now() - t0) / 1000).toFixed(1)} s${r.api === false ? ' · lectura lenta (falta servicio Sheets)' : ''}${r.descartados != null ? ` · 🚫 ${r.descartados} descartados ocultos` : ''}`;
       if (!cobros && !cargandoCobros) setTimeout(traerCobros, 500);   // deja lista la pestaña Cobros
       pintarMarcador();
       if (VISTA === 'llamadas' && (!mostrando || !actual())) { mostrando = true; pintar(); }

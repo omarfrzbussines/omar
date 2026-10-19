@@ -138,11 +138,13 @@ function ll_traerCola(base, asesora, limite) {
   datos.forEach(function (f, i) { f[est.numero] = tels[i][0]; });
   const yo = String(asesora || "").trim().toUpperCase();
   const salida = [];
+  let desc = {};
+  try { desc = desc_mapa(); } catch (e) { console.error("descartados: " + e); }
 
   for (let r = 0; r < datos.length && salida.length < limite; r++) {
     const fila = datos[r];
     const tel = ll_limpiarTel(fila[est.numero]);
-    if (!tel) continue;
+    if (!tel || tel in desc) continue;   // 🚫 descartado en cualquier base (Descartados.gs)
     const hechas = ll_historial(est, fila);
     const libre = ll_rondaLibre(est, fila);
     if (libre < 0) continue;
@@ -265,6 +267,7 @@ function ll_registrar(d) {
     if (estado === "AGENDADO" && typeof procesarFilaFP === "function" && BASES_FP.indexOf(hoja.getName()) >= 0) {
       try { procesarFilaFP(hoja, d.fila); } catch (err) { console.error("procesarFilaFP: " + err); }
     }
+    if (String(d.estado).trim().toUpperCase() === "DESCARTADO") { try { desc_anotar(d.telefono); } catch (e) { console.error("descartados: " + e); } }
     return { fila: d.fila, ronda: libre + 1, fecha: hoy };
   } finally {
     lock.releaseLock();
