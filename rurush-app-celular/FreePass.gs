@@ -166,6 +166,7 @@ function fp_personas_(ids) {
       guardar['fpP' + lote[n]] = JSON.stringify(out[lote[n]]);
     });
     try { cache.putAll(guardar, 300); } catch (e) {}
+    if (faltan.length > 50) Utilities.sleep(400);   // muchas fichas (métricas del mes): no saturar Pipedrive
   }
   return out;
 }
@@ -258,7 +259,7 @@ function fp_datos(llave, pc) {
   };
   const lista = fps.map(item);
   return {
-    quien: DV_NOMBRE[quien] || quien, hoy: hoy, coaches: coaches, planes: FP_PLANES,
+    quien: DV_NOMBRE[quien] || quien, esOmar: quien === 'OMAR', hoy: hoy, coaches: coaches, planes: FP_PLANES,
     hoyL: lista.filter(function (x) { return x.fecha === hoy; }),
     ayer: lista.filter(function (x) { return x.fecha === ayer && (!x.vino || (x.vino === 'SI' && (!x.coach || !x.cierre))); }),
     manana: lista.filter(function (x) { return x.fecha === man; }),
@@ -339,4 +340,63 @@ function fp_agendar(llave, pc, d) {
   const a = fp_pd_('post', '/activities', body);
   fp_anotar_(quien, d.tipo === 'nutri' ? 'NUTRI' : 'FP', { id: a.id, personId: p.id, nombre: p.name, fecha: d.fecha, hora: d.hora, asunto: body.subject }, 'AGENDADO', body.subject);
   return { ok: true, nombre: p.name, asunto: body.subject };
+}
+
+/* ---------- 📊 métricas (solo el link de OMAR) ----------
+   Agendados = free pass con fecha en el rango (hasta hoy). Vino = actividad hecha.
+   Inscrito = vino y su ficha tiene CIERRE = Sí. Coach = COACH FP de la ficha. Plan y correcciones: 📒 registro. */
+const FP_SEMAFORO = { verde: 35, rojo: 25 };   // % de cierre (inscritos / vinieron)
+
+function fp_metricas(llave, pc, desde, hasta) {
+  if (fp_quien_(llave, pc) !== 'OMAR') throw new Error('Solo Omar ve las métricas.');
+  const hoy = fechaLima(0);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(desde || '') || !/^\d{4}-\d{2}-\d{2}$/.test(hasta || '')) throw new Error('Elige las fechas.');
+  if (hasta > hoy) hasta = hoy;
+  if (desde > hasta) throw new Error('La fecha inicial es posterior a la final.');
+  if (Date.parse(hasta) - Date.parse(desde) > 92 * 864e5) throw new Error('Máximo 3 meses por consulta.');
+
+  const fps = fp_acts_('meeting', desde, hasta).filter(function (a) { return /^\s*FP\b/i.test(a.asunto) && !/RETOMA/i.test(a.asunto); });
+  const nut = fp_acts_('deadline', desde, hasta).filter(function (a) { return /NUTRICI/i.test(a.asunto); });
+  const ids = fps.filter(function (a) { return a.hecha; }).map(function (a) { return a.personId; }).filter(Boolean)
+    .filter(function (x, i, z) { return z.indexOf(x) === i; });
+  const per = fp_personas_(ids);
+  const nomCoach = {}; fp_coaches_().forEach(function (c) { nomCoach[c.id] = c.label; });
+
+  // registro completo: último PLAN por actividad y correcciones del rango
+  const sh = fp_registro_(), planDe = {}, correcciones = [];
+  if (sh.getLastRow() > 1) {
+    sh.getRange(2, 1, sh.getLastRow() - 1, FP_REG_COLS.length).getDisplayValues().forEach(function (f) {
+      if (f[10] === 'PLAN') planDe[f[3]] = f[11];
+      const dia = f[0].slice(0, 10);
+      if (f[12] && f[12] !== f[11] && dia >= desde && dia <= hasta)
+        correcciones.push({ cuando: f[0].slice(0, 16), quien: f[1], nombre: f[5], campo: f[10], antes: f[12], ahora: f[11] });
+    });
+  }
+
+  const nuevo = () => ({ agend: 0, vino: 0, inscr: 0 });
+  const tot = nuevo(), porAse = {}, porCoach = {}, porVia = {}, planes = {};
+  fps.forEach(function (a) {
+    const ase = asesoraDeAsunto(a.asunto) || 'SIN ASESORA', via = fp_via_(a.asunto) || 'SIN CANAL';
+    const fil = [tot, porAse[ase] = porAse[ase] || nuevo(), porVia[via] = porVia[via] || nuevo()];
+    fil.forEach(function (x) { x.agend++; });
+    if (!a.hecha) return;
+    const p = per[a.personId] || {};
+    const coach = nomCoach[p.coach] || (p.coach ? 'Coach ' + p.coach : 'Sin coach');
+    fil.push(porCoach[coach] = porCoach[coach] || nuevo());   // al coach solo le cuentan las clases que sí se dieron
+    fil.forEach(function (x) { x.vino++; });
+    if (p.cierre === FP_CIERRE.SI) {
+      fil.forEach(function (x) { x.inscr++; });
+      const pl = planDe[String(a.id)] || 'Sin plan marcado';
+      planes[pl] = (planes[pl] || 0) + 1;
+    }
+  });
+  const tabla = (o) => Object.keys(o).map(function (k) { return Object.assign({ nombre: DV_NOMBRE[k] || k }, o[k]); })
+    .sort(function (x, y) { return y.inscr - x.inscr || y.vino - x.vino || y.agend - x.agend; });
+  return {
+    desde: desde, hasta: hasta, semaforo: FP_SEMAFORO, total: tot,
+    asesoras: tabla(porAse), coaches: tabla(porCoach), canales: tabla(porVia),
+    planes: Object.keys(planes).map(function (k) { return { plan: k, n: planes[k] }; }).sort(function (x, y) { return y.n - x.n; }),
+    nutri: { agend: nut.length, vino: nut.filter(function (a) { return a.hecha; }).length },
+    correcciones: correcciones.reverse().slice(0, 50)
+  };
 }

@@ -49,6 +49,16 @@
   .login { max-width:380px; margin:12vh auto; background:#fff; border-radius:16px; padding:28px; text-align:center; border-top:5px solid var(--rojo) }
   .login img { height:60px; margin-bottom:10px } .login input { width:100%; padding:12px; font-size:22px; letter-spacing:8px; text-align:center; border:1px solid #dcdad4; border-radius:10px; margin-top:14px }
   .cargando { padding:60px; text-align:center; color:var(--gris) }
+  .embudo { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:18px 0 }
+  .emb { background:#fff; border-radius:14px; padding:16px 18px; border:1px solid var(--linea); border-top:4px solid var(--negro) }
+  .emb b { font-size:30px; display:block } .emb small { font-size:12px; color:var(--gris); font-weight:700 } .emb em { font-style:normal; color:var(--rojo); font-weight:800; font-size:14px }
+  .barra { height:8px; background:#eee; border-radius:9px; margin-top:10px; overflow:hidden } .barra i { display:block; height:100%; background:var(--rojo) }
+  .rejilla { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px }
+  table.t { width:100%; border-collapse:collapse; font-size:13px } .t th { text-align:right; font-size:10px; letter-spacing:1px; color:#888; padding:6px 8px; border-bottom:2px solid var(--negro) }
+  .t th:first-child, .t td:first-child { text-align:left } .t td { text-align:right; padding:8px; border-bottom:1px solid var(--linea); font-variant-numeric:tabular-nums } .t td:first-child { font-weight:700 }
+  .sem { display:inline-block; width:10px; height:10px; border-radius:50%; margin-left:6px } .sem.v { background:var(--verde) } .sem.a { background:#E8A317 } .sem.r { background:var(--rojo) }
+  .rango { display:flex; gap:8px; align-items:center; flex-wrap:wrap } .rango input { padding:7px 10px; border:1px solid #dcdad4; border-radius:9px; font-family:inherit }
+  .corr { font-size:13px; padding:8px 0; border-bottom:1px solid var(--linea) } .corr small { color:var(--gris) }
 </style></head>
 <body>
 <div id="raiz"><div class="cargando">Cargando…</div></div>
@@ -57,7 +67,7 @@
 const LLAVE = <?= llave ?>;   // Apps Script ya lo escribe como texto JS (con comillas)
 const LOGO = 'https://raw.githubusercontent.com/omarfrzbussines/omar/main/marca/logo_rurush.png';
 let PC = ''; try { PC = localStorage.getItem('fp_pc') || ''; if (!PC) { PC = Array.from(crypto.getRandomValues(new Uint8Array(12))).map((b) => b.toString(36).padStart(2, '0')).join('').slice(0, 24); localStorage.setItem('fp_pc', PC); } } catch (e) {}
-let D = null, vista = 'hoy', filtro = 'todos', cupos = null;
+let D = null, M = null, mErr = '', rango = 'mes', vista = 'hoy', filtro = 'todos', cupos = null;
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const DIAS = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO'];
@@ -101,25 +111,67 @@ function pintar() {
   const porMarcar = (x) => !x.vino || (x.vino === 'SI' && (!x.coach || !x.cierre));
   const vis = filtro === 'pend' ? lista.filter(porMarcar) : filtro === 'ok' ? lista.filter((x) => !porMarcar(x)) : lista;
   const h = D.hoyL;
-  const titulo = { hoy: 'Free Pass de hoy', ayer: 'Pendientes de ayer', manana: 'Free Pass de mañana', nutri: 'Nutrición', agendar: 'Agendar' }[vista];
+  const titulo = { hoy: 'Free Pass de hoy', ayer: 'Pendientes de ayer', manana: 'Free Pass de mañana', nutri: 'Nutrición', agendar: 'Agendar', metricas: 'Métricas' }[vista];
   const nav = (id, ico, t, n) => `<a class="${vista === id ? 'on' : ''}" data-v="${id}">${ico} ${t}${n != null ? `<span>${n}</span>` : ''}</a>`;
   $('#raiz').innerHTML = `<div class="app"><div class="side"><img src="${LOGO}">
       <div class="who">Sesión<b>${esc(D.quien)}</b>🔒 PC autorizada</div>
-      <div class="nav">${nav('hoy', '🎟️', 'Free Pass hoy', h.length)}${nav('ayer', '⏳', 'Pendientes de ayer', D.ayer.length)}${nav('manana', '📅', 'Mañana', D.manana.length)}${nav('nutri', '🥗', 'Nutrición', D.nutri.length)}${nav('agendar', '➕', 'Agendar')}</div>
+      <div class="nav">${nav('hoy', '🎟️', 'Free Pass hoy', h.length)}${nav('ayer', '⏳', 'Pendientes de ayer', D.ayer.length)}${nav('manana', '📅', 'Mañana', D.manana.length)}${nav('nutri', '🥗', 'Nutrición', D.nutri.length)}${nav('agendar', '➕', 'Agendar')}${D.esOmar ? nav('metricas', '📊', 'Métricas') : ''}</div>
       <div class="pie">Solo se ve lo de hoy · sin buscador ni descargas · todo queda registrado</div></div>
-    <div class="main"><div class="top"><div><h1>${titulo}</h1><div class="sub">${fechaLarga(vista === 'ayer' ? ayerDe(D.hoy) : vista === 'manana' ? manDe(D.hoy) : D.hoy)} · RURUSH FITNESS CLUB</div></div>
+    <div class="main">${vista === 'metricas' ? pantallaMetricas() : `<div class="top"><div><h1>${titulo}</h1><div class="sub">${fechaLarga(vista === 'ayer' ? ayerDe(D.hoy) : vista === 'manana' ? manDe(D.hoy) : D.hoy)} · RURUSH FITNESS CLUB</div></div>
       <div class="kpis"><div class="k"><b>${h.length}</b><small>agendados hoy</small></div><div class="k"><b>${h.filter((x) => x.vino === 'SI').length}</b><small>vinieron</small></div>
       <div class="k"><b>${h.filter((x) => x.cierre === 'SI').length}</b><small>inscritos</small></div><div class="k"><b>${h.filter(porMarcar).length}</b><small>por marcar</small></div></div></div>
       ${['hoy', 'ayer', 'manana'].includes(vista) ? `<div class="tabs"><div data-f="todos" class="${filtro === 'todos' ? 'on' : ''}">Todos (${lista.length})</div><div data-f="pend" class="${filtro === 'pend' ? 'on' : ''}">Por marcar (${lista.filter(porMarcar).length})</div><div data-f="ok" class="${filtro === 'ok' ? 'on' : ''}">Marcados (${lista.filter((x) => !porMarcar(x)).length})</div></div>
         <div class="dos"><div>${vis.length ? vis.map(tarjeta).join('') : '<div class="vacio">No hay free pass aquí 🎉</div>'}
         <p class="aviso">🔒 Cada marca queda en el registro con hora y asesora. Si se corrige después, se guarda la corrección y Omar recibe aviso.</p></div>
-        <div>${panelNutri()}</div></div>` : vista === 'nutri' ? `<div class="dos" style="margin-top:20px"><div>${panelNutri(true)}</div><div>${formAgendar('nutri')}</div></div>` : `<div style="margin-top:20px;max-width:520px">${formAgendar('fp')}</div>`}
+        <div>${panelNutri()}</div></div>` : vista === 'nutri' ? `<div class="dos" style="margin-top:20px"><div>${panelNutri(true)}</div><div>${formAgendar('nutri')}</div></div>` : `<div style="margin-top:20px;max-width:520px">${formAgendar('fp')}</div>`}`}
     </div></div>`;
-  document.querySelectorAll('.nav a').forEach((a) => (a.onclick = () => { vista = a.dataset.v; filtro = 'todos'; pintar(); }));
+  document.querySelectorAll('.nav a').forEach((a) => (a.onclick = () => { vista = a.dataset.v; filtro = 'todos'; if (vista === 'metricas') cargarMetricas(); else pintar(); }));
   document.querySelectorAll('.tabs div').forEach((t) => (t.onclick = () => { filtro = t.dataset.f; pintar(); }));
   document.querySelectorAll('[data-m]').forEach((b) => (b.onclick = () => marcar(b)));
   document.querySelectorAll('select[data-plan]').forEach((s) => (s.onchange = () => marcar(s, s.value)));
   const f = $('#fagenda'); if (f) armarForm(f);
+  document.querySelectorAll('[data-r]').forEach((b) => (b.onclick = () => { rango = b.dataset.r; cargarMetricas(); }));
+}
+
+/* ---------- 📊 métricas (solo Omar) ---------- */
+const isoMas = (f, n) => new Date(Date.parse(f + 'T12:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+function fechasRango(r) {
+  const h = D.hoy, d = new Date(h + 'T12:00:00Z');
+  if (r === 'hoy') return [h, h];
+  if (r === 'semana') return [isoMas(h, -((d.getUTCDay() + 6) % 7)), h];
+  if (r === 'mes') return [h.slice(0, 8) + '01', h];
+  if (r === 'mesant') { const fin = isoMas(h.slice(0, 8) + '01', -1); return [fin.slice(0, 8) + '01', fin]; }
+  return [($('#mDesde') || {}).value || h.slice(0, 8) + '01', ($('#mHasta') || {}).value || h];
+}
+const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
+function sem(p, n) { if (!n) return ''; const s = M.semaforo; return `<span class="sem ${p >= s.verde ? 'v' : p < s.rojo ? 'r' : 'a'}"></span>`; }
+function pantallaMetricas() {
+  const [de, ha] = M ? [M.desde, M.hasta] : fechasRango(rango);
+  const bt = (id, t) => `<button class="b ${rango === id ? 'sel' : ''}" data-r="${id}">${t}</button>`;
+  const cab = `<div class="top"><div><h1>Métricas Free Pass</h1><div class="sub">${fechaCorta(de)} ${MESES[+de.slice(5, 7) - 1]} → ${fechaCorta(ha)} ${MESES[+ha.slice(5, 7) - 1]} · solo tú ves esto</div></div>
+    <div class="rango">${bt('hoy', 'Hoy')}${bt('semana', 'Esta semana')}${bt('mes', 'Este mes')}${bt('mesant', 'Mes pasado')}
+    <input type="date" id="mDesde" value="${de}" max="${D.hoy}"> → <input type="date" id="mHasta" value="${ha}" max="${D.hoy}"><button class="b ${rango === 'otro' ? 'sel' : ''}" data-r="otro">Ver</button></div></div>`;
+  if (mErr) return cab + `<div class="vacio" style="margin-top:20px">❌ ${esc(mErr)}</div>`;
+  if (!M) return cab + '<div class="cargando">Calculando métricas… (un mes completo puede tardar unos segundos)</div>';
+  const t = M.total;
+  const fila = (x, conAgend) => { const pc = pct(x.inscr, x.vino); return `<tr><td>${esc(x.nombre)}</td>${conAgend ? `<td>${x.agend}</td>` : ''}<td>${x.vino}</td>${conAgend ? `<td>${pct(x.vino, x.agend)}%</td>` : ''}<td>${x.inscr}</td><td>${pc}%${sem(pc, x.vino)}</td></tr>`; };
+  const tablaA = (titulo, lista, conAgend, col) => `<div class="panel"><h3>${titulo}</h3><table class="t"><tr><th>${col}</th>${conAgend ? '<th>AGEND.</th>' : ''}<th>${conAgend ? 'VINO' : 'CLASES'}</th>${conAgend ? '<th>% ASIST.</th>' : ''}<th>INSCR.</th><th>% CIERRE</th></tr>
+    ${lista.length ? lista.map((x) => fila(x, conAgend)).join('') : '<tr><td colspan="6" class="aviso">Sin datos</td></tr>'}</table></div>`;
+  const nomVia = { APC: 'APC · chat', APL: 'APL · llamada', APV: 'APV · visita' };
+  const emb = (tit, n, p, ancho) => `<div class="emb"><small>${tit}</small><b>${n}${p != null ? ` <em>${p}%</em>` : ''}</b><div class="barra"><i style="width:${ancho}%"></i></div></div>`;
+  return cab + `<div class="embudo">${emb('AGENDADOS', t.agend, null, 100)}${emb('VINIERON', t.vino, pct(t.vino, t.agend), pct(t.vino, t.agend))}
+      ${emb('INSCRITOS', t.inscr, pct(t.inscr, t.vino), pct(t.inscr, t.agend))}${emb('NUTRICIÓN (asistió / agendada)', M.nutri.vino + '/' + M.nutri.agend, pct(M.nutri.vino, M.nutri.agend), pct(M.nutri.vino, M.nutri.agend))}</div>
+    <div class="rejilla">${tablaA('👩‍💼 Por asesora', M.asesoras, true, 'ASESORA')}${tablaA('🏋️ Por coach (clases que sí se dieron)', M.coaches, false, 'COACH')}</div>
+    <div class="rejilla">${tablaA('📣 Por canal', M.canales.map((x) => Object.assign({}, x, { nombre: nomVia[x.nombre] || x.nombre })), true, 'CANAL')}
+      <div class="panel"><h3>💳 Planes de los inscritos</h3>${M.planes.length ? `<table class="t">${M.planes.map((p) => `<tr><td>${esc(p.plan)}</td><td>${p.n}</td><td>${pct(p.n, t.inscr)}%</td></tr>`).join('')}</table>` : '<p class="aviso">Aún no hay inscritos en este rango.</p>'}</div></div>
+    <div class="panel"><h3>🚨 Correcciones (${M.correcciones.length})</h3>${M.correcciones.length ? M.correcciones.map((c) => `<div class="corr"><small>${esc(c.cuando)}</small> · <b>${esc(c.quien)}</b> cambió <b>${esc(c.campo)}</b>: ${esc(c.antes)} → <b>${esc(c.ahora)}</b> · ${esc(c.nombre)}</div>`).join('') : '<p class="aviso">Nadie corrigió marcas en este rango ✅</p>'}</div>
+    <p class="aviso">Semáforo de cierre: 🟢 ${M.semaforo.verde}% o más · 🟡 entre ${M.semaforo.rojo}% y ${M.semaforo.verde}% · 🔴 menos de ${M.semaforo.rojo}%. Inscrito = vino y su ficha tiene CIERRE = Sí.</p>`;
+}
+async function cargarMetricas() {
+  const [de, ha] = fechasRango(rango);
+  M = null; mErr = ''; pintar();
+  try { M = await llamar('fp_metricas', de, ha); } catch (e) { mErr = e.message; }
+  if (vista === 'metricas') pintar();
 }
 const ayerDe = (f) => new Date(Date.parse(f + 'T12:00:00Z') - 864e5).toISOString().slice(0, 10);
 const manDe = (f) => new Date(Date.parse(f + 'T12:00:00Z') + 864e5).toISOString().slice(0, 10);
@@ -200,5 +252,5 @@ async function armarForm(f) {
 }
 
 inicio();
-setInterval(() => { if (D && !document.hidden && !document.querySelector('#fagenda')) cargar(true); }, 120000);
+setInterval(() => { if (D && !document.hidden && vista !== 'metricas' && !document.querySelector('#fagenda')) cargar(true); }, 120000);
 </script></body></html>
