@@ -49,7 +49,11 @@ function Actualizar {
   New-Item -ItemType Directory $tmp | Out-Null
   try {
     Invoke-WebRequest $ZIP -OutFile "$tmp\repo.zip" -UseBasicParsing
-    Expand-Archive "$tmp\repo.zip" -DestinationPath $tmp -Force
+    if (Get-Command Expand-Archive -ErrorAction SilentlyContinue) { Expand-Archive "$tmp\repo.zip" -DestinationPath $tmp -Force }
+    else {   # Windows 8 / PowerShell 4 no trae Expand-Archive
+      Add-Type -AssemblyName System.IO.Compression.FileSystem
+      [System.IO.Compression.ZipFile]::ExtractToDirectory("$tmp\repo.zip", $tmp)
+    }
     $raiz = Get-ChildItem $tmp -Directory | Select-Object -First 1
     foreach ($d in $falta) {
       $origen = Join-Path $raiz.FullName $d.ext
