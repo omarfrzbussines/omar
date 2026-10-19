@@ -32,7 +32,11 @@ function Version($archivo) {
   try { return (Get-Content $archivo -Raw -Encoding UTF8 | ConvertFrom-Json).version } catch { return "" }
 }
 function VersionRemota($ext) {
-  try { return (Invoke-RestMethod "$RAW/$ext/manifest.json?t=$([DateTime]::Now.Ticks)" -UseBasicParsing).version } catch { return "" }
+  try {
+    $m = Invoke-RestMethod "$RAW/$ext/manifest.json?t=$([DateTime]::Now.Ticks)" -UseBasicParsing
+    if ($m -is [string]) { $m = $m.TrimStart([char]0xFEFF) | ConvertFrom-Json }   # PowerShell 4 no convierte text/plain
+    return $m.version
+  } catch { return "" }
 }
 
 # ---------- actualizar (lo que corre cada 10 min) ----------
