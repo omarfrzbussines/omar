@@ -771,7 +771,7 @@ function nombreDia(fp, now) {
 }
 function msgConfirmacion(fp, now) {
   const n = nombreDe(fp);
-  return `¡Hola${n ? ' ' + n : ''}! 💪 Soy ${fp.asesora || 'tu asesora'} de RURUSH Fitness Club 🔥\n`
+  return `¡Hola${n ? ' ' + n : ''}! 💪 Soy ${/\bBOT\b/i.test(fp.subject || '') ? 'el equipo' : fp.asesora || 'tu asesora'} de RURUSH Fitness Club 🔥\n`
     + `Te confirmo tu Free Pass:\n📅 ${nombreDia(fp, now)} ${aLas(fp.hour, fp.min)}\n📍 ${DIR}\n`
     + `🎒 Trae ropa deportiva, toalla y agua 💧\nCualquier cambio, escríbeme por aquí. ¡Te esperamos! 🙌`;
 }
@@ -1618,6 +1618,6 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
 if (typeof module !== 'undefined') {
   module.exports = { analizar, mensaje, horasMencionadas, normPhone, fmtHora, utcToLima, limpiarSent, ultimos9,
     opciones, sumarDias, diaSemana, decidirNoShow, aLas, decidirManana, decidirRefuerzo, msgReagendo, msgManana,
-    msgRefuerzo, msgSabado, msgDomingoLunes, msgDomingoNoShow, MODULOS,
+    msgRefuerzo, msgSabado, msgDomingoLunes, msgConfirmacion, msgDomingoNoShow, MODULOS,
     parseCsv, opcionesNutricion, msgNutriRecordatorio, msgNutriPausa, nuEntender };
 }
