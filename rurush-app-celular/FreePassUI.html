@@ -20,18 +20,21 @@
   .k b { font-size:22px; display:block } .k small { font-size:11px; color:#bbb }
   .tabs { display:flex; gap:8px; margin:20px 0 14px } .tabs div { padding:8px 14px; border-radius:99px; background:#fff; font-size:13px; font-weight:700; border:1px solid #e3e1dc; cursor:pointer }
   .tabs .on { background:var(--negro); color:#fff; border-color:var(--negro) }
-  .card { background:#fff; border-radius:14px; padding:14px 18px; margin-bottom:10px; display:grid; grid-template-columns:80px 230px 1fr; gap:16px; align-items:center; border:1px solid var(--linea); border-left:5px solid var(--rojo) }
+  .card { background:#fff; border-radius:14px; padding:14px 18px; margin-bottom:10px; display:grid; grid-template-columns:76px minmax(150px,210px) 1fr; gap:14px; align-items:center; border:1px solid var(--linea); border-left:5px solid var(--rojo) }
   .card.ok { border-left-color:var(--verde) } .card.gris { border-left-color:#bbb }
   .hora { font-size:20px; font-weight:800 } .hora small { display:block; font-size:11px; color:#888; font-weight:600 }
   .nom { font-size:16px; font-weight:800 } .meta { font-size:12px; color:var(--gris); margin-top:3px }
   .tag { display:inline-block; background:#fdeaea; color:var(--rojo); font-weight:800; font-size:11px; padding:2px 8px; border-radius:6px; margin-right:4px }
-  .grupos { display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start }
+  .grupos { display:grid; grid-template-columns:auto auto; justify-content:start; gap:12px 22px; align-items:start }
+  .grp { white-space:nowrap }
   .grp label { display:block; font-size:10px; font-weight:800; letter-spacing:1px; color:#888; margin-bottom:4px }
   .b { display:inline-block; padding:7px 12px; border-radius:9px; border:1px solid #dcdad4; font-size:13px; font-weight:700; margin:0 4px 4px 0; background:#fff; cursor:pointer; font-family:inherit; color:var(--negro) }
   .b:hover { border-color:var(--negro) } .b:disabled { opacity:.5; cursor:wait }
   .b.si { background:var(--verde); color:#fff; border-color:var(--verde) } .b.no { background:var(--rojo); color:#fff; border-color:var(--rojo) }
   .b.sel { background:var(--negro); color:#fff; border-color:var(--negro) }
   select.b { padding:6px 8px }
+  select.elegir { min-width:160px; padding:8px 10px; appearance:auto } select.elegir option { background:#fff; color:var(--negro) }
+  select.elegir.falta { border:2px dashed var(--rojo); color:var(--rojo) }
   .marca { font-size:11px; color:var(--verde); font-weight:700; margin-top:2px }
   .vacio { background:#fff; border-radius:14px; padding:30px; text-align:center; color:var(--gris); border:1px dashed #d8d6d0 }
   .dos { display:grid; grid-template-columns:1fr 340px; gap:16px; align-items:start }
@@ -128,7 +131,7 @@ function pintar() {
   document.querySelectorAll('.nav a').forEach((a) => (a.onclick = () => { vista = a.dataset.v; filtro = 'todos'; if (vista === 'metricas') cargarMetricas(); else pintar(); }));
   document.querySelectorAll('.tabs div').forEach((t) => (t.onclick = () => { filtro = t.dataset.f; pintar(); }));
   document.querySelectorAll('[data-m]').forEach((b) => (b.onclick = () => marcar(b)));
-  document.querySelectorAll('select[data-plan]').forEach((s) => (s.onchange = () => marcar(s, s.value)));
+  document.querySelectorAll('select[data-sel]').forEach((s) => (s.onchange = () => marcar(s, s.value)));
   const f = $('#fagenda'); if (f) armarForm(f);
   document.querySelectorAll('[data-r]').forEach((b) => (b.onclick = () => { rango = b.dataset.r; cargarMetricas(); }));
 }
@@ -182,9 +185,10 @@ function tarjeta(x) {
   const completo = x.vino === 'NO' || (x.vino === 'SI' && x.coach && x.cierre);
   let cuerpo = `<div class="grp"><label>¿VINO?</label>${b('VINO', 'SI', '✅ Sí', x.vino === 'SI' ? 'si' : '')}${b('VINO', 'NO', '❌ No', x.vino === 'NO' ? 'no' : '')}</div>`;
   if (x.vino === 'SI') {
-    cuerpo += `<div class="grp"><label>COACH</label>${D.coaches.map((c) => b('COACH', c.id, esc(c.label), x.coach === c.id ? 'sel' : '')).join('')}</div>
+    cuerpo += `<div class="grp"><label>COACH</label><select class="b elegir ${x.coach ? 'sel' : 'falta'}" data-sel="1" data-m="COACH" data-id="${x.id}"><option value="">Elegir coach…</option>${D.coaches.map((c) => `<option value="${c.id}" ${x.coach === c.id ? 'selected' : ''}>${esc(c.label)}</option>`).join('')}</select></div>
       <div class="grp"><label>¿SE INSCRIBIÓ?</label>${b('CIERRE', 'SI', 'Sí', x.cierre === 'SI' ? 'si' : '')}${b('CIERRE', 'NO', 'No', x.cierre === 'NO' ? 'no' : '')}${b('CIERRE', 'SEG', 'Seguimiento', x.cierre === 'SEG' ? 'sel' : '')}
-      ${x.cierre === 'SI' ? `<select class="b" data-plan="1" data-m="PLAN" data-id="${x.id}"><option value="">Plan…</option>${D.planes.map((p) => `<option ${x.plan === p ? 'selected' : ''}>${p}</option>`).join('')}</select>` : ''}</div>`;
+      </div>
+      ${x.cierre === 'SI' ? `<div class="grp"><label>PLAN</label><select class="b elegir ${x.plan ? 'sel' : 'falta'}" data-sel="1" data-m="PLAN" data-id="${x.id}"><option value="">Elegir plan…</option>${D.planes.map((p) => `<option ${x.plan === p ? 'selected' : ''}>${p}</option>`).join('')}</select></div>` : ''}`;
   }
   return `<div class="card ${completo ? 'ok' : ''}"><div class="hora">${t.h}<small>${t.s}${vista !== 'hoy' ? ' · ' + fechaCorta(x.fecha) : ''}</small></div>
     <div><div class="nom">${esc(x.nombre)}</div><div class="meta">${x.via ? `<span class="tag">${esc(x.via)}</span>` : ''}${esc(x.asesora)}${x.tel ? ' · ' + esc(x.tel) : ''}</div>
