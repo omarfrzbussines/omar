@@ -125,6 +125,12 @@ function dv_html(d) {
       return { f: f, v: v, c: v >= need && need > 0 ? 'gano' : v > 0 ? 'algo' : 'nada' };
     });
   });
+  // lunes en la mañana: arriba la semana pasada (cómo cerró) y abajo la que empieza (cuánto falta vender)
+  const resumenLunes = d.ult[0] !== lunes && !d.noche;
+  const nueva = [0, 1, 2, 3, 4].map((i) => dv_mas(lunes, i));
+  const finSem = nueva[4] < d.plazo ? nueva[4] : d.plazo;
+  const diasSem = dv_habiles(d.hoy, finSem);
+  const rango = (a, b) => Number(a.slice(8)) + '–' + Number(b.slice(8)) + ' ' + ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'][Number(b.slice(5, 7)) - 1];
   const rank = d.lista.slice().sort((p, q) => q.pct - p.pct || q.semana - p.semana);
   const med = ['🥇', '🥈', '🥉'];
   const COL = { gano: ['#16a34a', '#ffffff'], algo: ['#facc15', '#3b2f00'], nada: ['#dc2626', '#ffffff'], hoy: ['#ffffff', '#24231f'], fut: ['#ebeae6', '#9a9994'] };
@@ -143,20 +149,31 @@ function dv_html(d) {
       '<td align="right" style="font-size:24px;font-weight:900">' + P(a.pct) + '</td></tr></table>' +
       barra(a.pct, d.esperado, a.pct >= d.esperado ? '#22c55e' : '#f87171') +
       '<table width="100%" style="border-collapse:collapse;color:#c9c8c2;font-size:12px;margin-top:3px"><tr><td>Meta del mes <b style="color:#ffffff">' + S(a.meta) + '</b></td>' +
-      '<td align="right">lleva <b style="color:#ffffff">' + S(a.acum) + '</b> · faltan ' + S(a.falta) + ' · semana <b style="color:#ffffff">' + S(a.semana) + '</b></td></tr></table></div>').join('') +
+      '<td align="right">lleva <b style="color:#ffffff">' + S(a.acum) + '</b> · faltan ' + S(a.falta) + ' · ' + (resumenLunes ? 'sem. pasada' : 'semana') + ' <b style="color:#ffffff">' + S(a.semana) + '</b></td></tr></table></div>').join('') +
     '<div style="font-size:11px;color:#a8a7a1;margin-top:8px"><span style="color:#f2b84b">┃</span> donde deberían ir ' + (d.noche ? 'mañana' : 'hoy') + ' (' + P(d.esperado) + ')' +
     (d.ult[0] !== lunes && !d.noche ? ' · semana pasada' : '') + '</div></div>';
 
+  const cajas = (dias) => '<table width="100%" style="border-collapse:separate;border-spacing:4px 0;margin-top:4px"><tr>' +
+    dias.map((x) => '<td align="center" style="width:20%;background:' + COL[x.c][0] + ';color:' + COL[x.c][1] + ';border-radius:8px;padding:4px 0' +
+      (x.c === 'hoy' ? ';border:2px solid #24231f' : '') + '">' +
+      '<div style="font-size:10px">' + dia(x.f) + '</div><div style="font-size:15px;font-weight:900">' +
+      (x.c === 'hoy' ? (d.noche ? 'MAÑ' : 'HOY') : x.c === 'fut' ? '·' : Math.round(x.v).toLocaleString('en-US')) + '</div></td>').join('') + '</tr></table>';
+  const rotulo = (t) => '<div style="font-size:10px;font-weight:800;letter-spacing:1px;color:#52514e;margin-top:7px">' + t + '</div>';
   rank.forEach((a) => {
     h += '<div style="background:#f3f2ef;border-radius:14px;padding:8px 12px;margin-top:8px">' +
       '<table width="100%" style="border-collapse:collapse"><tr><td style="font-size:16px;font-weight:800">' + a.nombre + '</td>' +
-      '<td align="right" style="font-size:12px;color:#52514e">🎯 ' + HOY + ' necesita <b style="font-size:18px;color:#0b0b0b">' + S(a.metaHoy) + '</b></td></tr></table>' +
-      '<table width="100%" style="border-collapse:separate;border-spacing:4px 0;margin-top:6px"><tr>' +
+      '<td align="right" style="font-size:12px;color:#52514e">🎯 ' + HOY + ' necesita <b style="font-size:18px;color:#0b0b0b">' + S(a.metaHoy) + '</b></td></tr></table>';
+    if (resumenLunes) {
+      h += rotulo('SEMANA PASADA ' + rango(d.ult[0], d.ult[4]) + ' · vendió ' + S(a.semana)) + cajas(a.dias) +
+        rotulo('ESTA SEMANA ' + rango(nueva[0], nueva[4]) + ' · necesita ' + S(a.metaHoy * diasSem) + (finSem < nueva[4] ? ' hasta el ' + Number(finSem.slice(8)) : '')) +
+        cajas(nueva.map((f) => ({ f: f, v: 0, c: f === d.hoy ? 'hoy' : 'fut' })));
+    }
+    h += (resumenLunes ? '' : '<table width="100%" style="border-collapse:separate;border-spacing:4px 0;margin-top:6px"><tr>' +
       a.dias.map((x) => '<td align="center" style="width:20%;background:' + COL[x.c][0] + ';color:' + COL[x.c][1] + ';border-radius:8px;padding:4px 0' +
         (x.c === 'hoy' ? ';border:2px solid #24231f' : '') + '">' +
         '<div style="font-size:10px">' + dia(x.f) + '</div><div style="font-size:15px;font-weight:900">' +
         (x.c === 'hoy' ? (d.noche ? 'MAÑ' : 'HOY') : x.c === 'fut' ? '·' : Math.round(x.v).toLocaleString('en-US')) + '</div></td>').join('') +
-      '</tr></table>' +
+      '</tr></table>') +
       (a.llam && !d.noche ? '<div style="font-size:11px;color:#52514e;margin-top:5px">📞 Ayer: <b>' + a.llam.n + '</b> llamadas · <b>' + a.llam.cont + '</b> contestaron · <b>' + a.llam.agend + '</b> FP agendados</div>' : '') +
       '</div>';
   });
