@@ -80,7 +80,7 @@ function fp_activar(llave, pc, pin) {
 
 function fp_pagina_(llave) {
   if (!fp_llaves_()[String(llave || '')]) return ContentService.createTextOutput('Link no válido.');
-  const t = HtmlService.createTemplateFromFile('FreePass');
+  const t = HtmlService.createTemplateFromFile('FreePassUI');
   t.llave = String(llave);
   return t.evaluate().setTitle('RURUSH · Free Pass de hoy')
     .setFaviconUrl('https://raw.githubusercontent.com/omarfrzbussines/omar/main/rurush-hoy/icono-192.png')
