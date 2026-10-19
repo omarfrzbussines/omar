@@ -325,6 +325,8 @@ function getDashboard(forzar) {
   }
 
   const pdAse = pd_asesorasSiFalta_(); if (pdAse) res.errores.push(pdAse);
+  // 🎟️ app Free Pass: la primera vez que Omar abre RURUSH Hoy se crean los links y PIN (llegan a su correo)
+  try { if (!PropertiesService.getScriptProperties().getProperty('FP_LLAVES')) fp_crearLlaves(); } catch (e) { res.errores.push('Free Pass: ' + e.message); }
   try {
     const acts = actividades(ayer, manana).filter(esFP);
     res.fpHoy = acts.filter(function (a) { return a.fecha === hoy; });
