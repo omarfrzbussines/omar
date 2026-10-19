@@ -54,7 +54,7 @@
 <div id="raiz"><div class="cargando">Cargando…</div></div>
 <div class="toast" id="toast"></div>
 <script>
-const LLAVE = <?= JSON.stringify(llave) ?>;
+const LLAVE = <?= llave ?>;   // Apps Script ya lo escribe como texto JS (con comillas)
 const LOGO = 'https://raw.githubusercontent.com/omarfrzbussines/omar/main/marca/logo_rurush.png';
 let PC = ''; try { PC = localStorage.getItem('fp_pc') || ''; if (!PC) { PC = Array.from(crypto.getRandomValues(new Uint8Array(12))).map((b) => b.toString(36).padStart(2, '0')).join('').slice(0, 24); localStorage.setItem('fp_pc', PC); } } catch (e) {}
 let D = null, vista = 'hoy', filtro = 'todos', cupos = null;

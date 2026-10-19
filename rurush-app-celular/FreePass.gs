@@ -23,39 +23,52 @@ const FP_REG_COLS = ['CUANDO', 'QUIEN', 'TIPO', 'ACTIVIDAD', 'PERSONA ID', 'NOMB
 
 /* ---------- acceso ---------- */
 
+// solo letras y números: si la llave llega con comillas u otro adorno, igual se reconoce
+function fp_l_(llave) { return String(llave || '').replace(/[^a-z0-9]/gi, ''); }
+// URL pública /exec (getUrl() da /dev si se corre desde el editor, y /dev solo lo abre el dueño)
+function fp_url_() { return ScriptApp.getService().getUrl().replace(/\/dev$/, '/exec'); }
 function fp_llaves_() { return JSON.parse(PropertiesService.getScriptProperties().getProperty('FP_LLAVES') || '{}'); }
 function fp_guardarLlaves_(o) { PropertiesService.getScriptProperties().setProperty('FP_LLAVES', JSON.stringify(o)); }
 
 /** Ejecutar UNA vez (o para rehacer las llaves: las viejas dejan de servir). */
 function fp_crearLlaves() {
-  const base = ScriptApp.getService().getUrl();
-  const out = {}, filas = [];
+  const out = {};
   DV_ASESORAS.concat(['OMAR']).forEach(function (a) {
     const llave = Utilities.getUuid().replace(/-/g, '').slice(0, 20);
     const pin = String(Math.floor(1000 + Math.random() * 9000));
     out[llave] = { ase: a, pin: pin, pcs: [] };
-    filas.push('<tr><td><b>' + (DV_NOMBRE[a] || a) + '</b></td><td>' + base + '?fp=' + llave + '</td><td><b>' + pin + '</b></td></tr>');
   });
   fp_guardarLlaves_(out);
+  fp_reenviarLinks();
+}
+
+/** Vuelve a mandar el correo con los MISMOS links y PIN (no cambia nada, las PCs activadas siguen). */
+function fp_reenviarLinks() {
+  const base = fp_url_(), todas = fp_llaves_(), filas = [];
+  Object.keys(todas).forEach(function (llave) {
+    const x = todas[llave], url = base + '?fp=' + llave;
+    filas.push('<tr><td><b>' + (DV_NOMBRE[x.ase] || x.ase) + '</b></td><td><a href="' + url + '">' + url + '</a></td><td><b>' + x.pin +
+      '</b></td><td>' + x.pcs.length + '/' + FP_MAX_PCS + '</td></tr>');
+  });
   MailApp.sendEmail({
     to: DV_CORREO, name: 'RURUSH Free Pass',
     subject: '🎟️ Links de la app Free Pass de hoy (uno por asesora)',
     htmlBody: '<p>Pásale a cada asesora SOLO su link y su PIN. La primera vez que lo abra en una PC le pedirá el PIN (máximo ' + FP_MAX_PCS +
       ' PCs por asesora). Para quitar una PC, vuelve a ejecutar fp_crearLlaves (cambian todos los links).</p><table border="1" cellpadding="6" style="border-collapse:collapse">' +
-      '<tr><th>Asesora</th><th>Link</th><th>PIN</th></tr>' + filas.join('') + '</table>'
+      '<tr><th>Asesora</th><th>Link</th><th>PIN</th><th>PCs</th></tr>' + filas.join('') + '</table>'
   });
   Logger.log('Listo: links y PIN enviados a ' + DV_CORREO);
 }
 
 function fp_quien_(llave, pc) {
-  const x = fp_llaves_()[String(llave || '')];
+  const x = fp_llaves_()[fp_l_(llave)];
   if (!x) throw new Error('Link no válido.');
   if (x.pcs.indexOf(String(pc || '')) < 0) throw new Error('PC_NO_AUTORIZADA');
   return x.ase;
 }
 
 function fp_estado(llave, pc) {
-  const x = fp_llaves_()[String(llave || '')];
+  const x = fp_llaves_()[fp_l_(llave)];
   if (!x) return { ok: false, error: 'Link no válido.' };
   return { ok: x.pcs.indexOf(String(pc || '')) >= 0, asesora: DV_NOMBRE[x.ase] || x.ase };
 }
@@ -64,7 +77,7 @@ function fp_activar(llave, pc, pin) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    const todas = fp_llaves_(), x = todas[String(llave || '')];
+    const todas = fp_llaves_(), x = todas[fp_l_(llave)];
     if (!x) return { ok: false, error: 'Link no válido.' };
     if (String(pin || '').trim() !== x.pin) return { ok: false, error: 'PIN incorrecto.' };
     pc = String(pc || '');
@@ -79,9 +92,10 @@ function fp_activar(llave, pc, pin) {
 }
 
 function fp_pagina_(llave) {
-  if (!fp_llaves_()[String(llave || '')]) return ContentService.createTextOutput('Link no válido.');
+  llave = fp_l_(llave);
+  if (!fp_llaves_()[llave]) return ContentService.createTextOutput('Link no válido.');
   const t = HtmlService.createTemplateFromFile('FreePassUI');
-  t.llave = String(llave);
+  t.llave = llave;
   return t.evaluate().setTitle('RURUSH · Free Pass de hoy')
     .setFaviconUrl('https://raw.githubusercontent.com/omarfrzbussines/omar/main/rurush-hoy/icono-192.png')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
