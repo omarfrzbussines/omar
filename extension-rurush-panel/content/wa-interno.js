@@ -62,9 +62,45 @@
     }
   }
 
+  /* Mensajes que llegan (para guardar el contacto en Pipedrive aunque nadie abra el chat).
+     Solo se activa si la extensión lo pide (interruptor en Opciones, apagado por defecto).
+     Cada 8 s mira el último mensaje de cada chat: si es de la persona y llegó después de
+     encender esto, avisa una vez por chat. Solo lee. */
+  let llegadaDesde = 0, reloj = null;
+  const visto = Object.create(null);
+  function revisarLlegadas() {
+    try {
+      if (typeof window.require !== "function") return;
+      const CC = window.require("WAWebChatCollection").ChatCollection;
+      const chats = CC.getModelsArray ? CC.getModelsArray() : (CC.models || []);
+      for (const chat of chats) {
+        const id = chat.id || {};
+        if (!/^(c\.us|lid|s\.whatsapp\.net)$/.test(String(id.server || ""))) continue;   // grupos, estados, canales
+        const arr = chat.msgs && (chat.msgs.getModelsArray ? chat.msgs.getModelsArray() : chat.msgs.models);
+        const ult = arr && arr[arr.length - 1];
+        if (!ult || !ult.id || ult.id.fromMe !== false) continue;
+        const t = Number(ult.t || 0) * 1000;
+        const clave = String(id._serialized || id.user || "");
+        if (!clave || t < llegadaDesde || visto[clave] >= t) continue;
+        visto[clave] = t;
+        const ct = chat.contact || {};
+        const pn = ct.phoneNumber || ct.__x_phoneNumber;
+        const tel = pn && (typeof pn === "string" ? pn : pn.user);
+        if (!/^\d{9,15}$/.test(String(tel || ""))) continue;
+        const nombre = String(ct.name || ct.pushname || chat.formattedTitle || "");
+        window.postMessage({ rr: "rr-llegada", telefono: String(tel), nombre }, "*");
+      }
+    } catch (e) { /* si WhatsApp cambia sus tripas, simplemente no avisa */ }
+  }
+
   window.addEventListener("message", (ev) => {
     if (ev.source !== window) return;
     const d = ev.data;
+    if (d && d.rr === "rr-llegada-on") {
+      if (d.on && !reloj) { llegadaDesde = Date.now() - 60000; reloj = setInterval(revisarLlegadas, 8000); }
+      if (!d.on && reloj) { clearInterval(reloj); reloj = null; }
+      return;
+    }
     if (!d || d.rr !== "rr-pide-chat") return;
     window.postMessage({ rr: "rr-chat", id: d.id, dato: datosDelChat() }, "*");
   });

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "RURUSH Fitness Club — Panel Operativo",
   "short_name": "RURUSH",
-  "version": "1.27.1",
+  "version": "1.28.0",
   "description": "Panel de ventas y retencion de RURUSH: ficha del socio, plantillas en WhatsApp Web, etiquetado en Pipedrive y dashboard del dia.",
   "permissions": [
     "storage",

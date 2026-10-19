@@ -1661,6 +1661,42 @@
     toast(`✅ Guardado solo en Pipedrive: ${nom}`, 5000);
   }
 
+  /* Guardar apenas llega un mensaje (interruptor "autoLlegada" en Opciones, APAGADO por
+     defecto: se prende solo en las líneas de leads). El aviso lo da wa-interno.js. */
+  const colaLlegadas = [];
+  let llegadasCorriendo = false;
+  async function procesarLlegadas() {
+    if (llegadasCorriendo) return;
+    llegadasCorriendo = true;
+    try {
+      while (colaLlegadas.length) {
+        const { telefono, nombre } = colaLlegadas.shift();
+        const { autoLlegada, pdCreados = {} } = await chrome.storage.local.get(["autoLlegada", "pdCreados"]);
+        if (!autoLlegada) { colaLlegadas.length = 0; break; }
+        const tel = conPais(telefono);
+        if (pdCreados[tel]) continue;
+        const r = await pedir("buscarPd", { telefono: tel, nombre: "" });
+        if (!r.ok || (r.data || []).length) continue;
+        const nom = (/^\+?[\d\s()-]*$/.test(nombre.trim()) ? "" : nombre.trim()) || "Lead " + tel.slice(-9);
+        const res = await pedir("crearPd", { nombre: nom, telefono: tel });
+        if (!res.ok) continue;
+        await recordarCreado(tel, res.data.id);
+        toast(`✅ Mensaje nuevo guardado en Pipedrive: ${nom}`, 4000);
+      }
+    } finally { llegadasCorriendo = false; }
+  }
+  window.addEventListener("message", (ev) => {
+    if (ev.source !== window || !ev.data || ev.data.rr !== "rr-llegada") return;
+    if (colaLlegadas.length < 50) colaLlegadas.push({ telefono: String(ev.data.telefono || ""), nombre: String(ev.data.nombre || "") });
+    procesarLlegadas();
+  });
+  const avisarLlegada = (on) => window.postMessage({ rr: "rr-llegada-on", on: !!on }, "*");
+  chrome.storage.local.get("autoLlegada").then(({ autoLlegada }) => {
+    avisarLlegada(autoLlegada);
+    setTimeout(() => avisarLlegada(autoLlegada), 15000);     // por si WhatsApp aún no cargaba
+  });
+  chrome.storage.onChanged.addListener((c) => { if (c.autoLlegada) avisarLlegada(c.autoLlegada.newValue); });
+
   async function pintarCrm(gen, enVuelo = null) {
     const cont = panel.querySelector("#rr-crm");
     if (!ctxChat || ctxChat.esGrupo) { cont.innerHTML = ""; return; }

@@ -298,3 +298,9 @@ $("autoPd").onchange = async () => {
   else await chrome.storage.local.set({ autoPdApagado: true });
   $("autoPd-estado").innerHTML = `<span class="ok">✅ ${$("autoPd").checked ? "Prendido" : "Apagado"}.</span>`;
 };
+chrome.storage.local.get("autoLlegada").then(({ autoLlegada }) => { $("autoLlegada").checked = !!autoLlegada; });
+$("autoLlegada").onchange = async () => {
+  if ($("autoLlegada").checked) await chrome.storage.local.set({ autoLlegada: true });
+  else await chrome.storage.local.remove("autoLlegada");
+  $("autoPd-estado").innerHTML = `<span class="ok">✅ Guardar al llegar: ${$("autoLlegada").checked ? "prendido" : "apagado"}.</span>`;
+};
