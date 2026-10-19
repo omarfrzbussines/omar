@@ -29,15 +29,18 @@ function Anotar($t) {
   if ($todo.Count -gt 300) { $todo | Select-Object -Last 200 | Set-Content $LOG -Encoding UTF8 }
 }
 function Version($archivo) {
-  try { return (Get-Content $archivo -Raw -Encoding UTF8 | ConvertFrom-Json).version } catch { return "" }
+  try { if ((Get-Content $archivo -Raw -Encoding UTF8) -match '"version"\s*:\s*"([^"]+)"') { return $matches[1] } } catch {}
+  return ""
 }
 function VersionRemota($ext) {
+  # texto plano + regex: igual en PowerShell 4 (Windows 8) y 5
   try {
-    $m = Invoke-RestMethod "$RAW/$ext/manifest.json?t=$([DateTime]::Now.Ticks)" -UseBasicParsing
-    if ($m -is [string]) { $m = $m.TrimStart([char]0xFEFF) | ConvertFrom-Json }   # PowerShell 4 no convierte text/plain
-    return $m.version
-  } catch { return "" }
+    $t = (New-Object Net.WebClient).DownloadString("$RAW/$ext/manifest.json?t=$([DateTime]::Now.Ticks)")
+    if ($t -match '"version"\s*:\s*"([^"]+)"') { return $matches[1] }
+  } catch { Anotar ("No pude leer la version de $ext en GitHub: " + $_.Exception.Message) }
+  return ""
 }
+
 
 # ---------- actualizar (lo que corre cada 10 min) ----------
 function Actualizar {
@@ -46,6 +49,7 @@ function Actualizar {
     $p = $_.Split("|"); [pscustomobject]@{ ext = $p[0].Trim(); dir = $p[1].Trim() } })
   $falta = @($destinos | Where-Object {
     $r = VersionRemota $_.ext
+    if (-not $Auto) { Write-Host ("  " + $_.ext + ": GitHub " + $r + " / esta PC " + (Version (Join-Path $_.dir "manifest.json"))) }
     $r -and ($r -ne (Version (Join-Path $_.dir "manifest.json")))
   })
   if (-not $falta.Count) { return }
