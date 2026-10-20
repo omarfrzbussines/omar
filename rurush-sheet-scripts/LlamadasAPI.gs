@@ -243,7 +243,7 @@ function ll_registrar(d) {
     const ahora = new Date();
     const hoy = Utilities.formatDate(ahora, "America/Lima", "dd/MM/yyyy");
     const estado = String(d.estado).trim().toUpperCase() === "OTRA CIUDAD" ? "Otra Ciudad" : String(d.estado).toUpperCase();
-    const set = function (c, v) { if (c >= 0) hoja.getRange(d.fila, c + 1).setValue(v); };
+    const set = function (c, v) { if (c >= 0) ll_escribir(hoja.getRange(d.fila, c + 1), v); };
 
     if (ro.asesor >= 0) ll_permitirEnLista(hoja.getRange(d.fila, ro.asesor + 1), String(d.asesora || "").toUpperCase());
     set(ro.asesor, String(d.asesora || "").toUpperCase());
@@ -300,10 +300,30 @@ function ll_fechaTexto(f) {
 // asesora nueva), se agrega el nombre a la lista de ESA celda; si no, setValue falla y no se guarda.
 function ll_permitirEnLista(rango, nombre) {
   const v = rango.getDataValidation();
-  if (!nombre || !v || v.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) return;
-  const crit = v.getCriteriaValues(), lista = crit[0] || [];
-  if (lista.some(function (x) { return String(x).trim().toUpperCase() === nombre; })) return;
-  rango.setDataValidation(v.copy().requireValueInList(lista.concat([nombre]), crit[1] !== false).build());
+  if (!nombre || !v) return;
+  const T = SpreadsheetApp.DataValidationCriteria, tipo = v.getCriteriaType(), crit = v.getCriteriaValues();
+  const esta = (l) => l.some(function (x) { return String(x).trim().toUpperCase() === nombre; });
+  if (tipo === T.VALUE_IN_LIST) {
+    const lista = crit[0] || [];
+    if (!esta(lista)) rango.setDataValidation(v.copy().requireValueInList(lista.concat([nombre]), crit[1] !== false).build());
+  } else if (tipo === T.VALUE_IN_RANGE) {
+    // la lista sale de otro rango (ej. ALVARO, ERICK, LAURA B…): esa lista no se toca; solo esta celda acepta
+    // el nombre nuevo (sigue el desplegable). Así CIELO pudo guardar sin que nadie edite la lista a mano.
+    let lista = [];
+    try { lista = [].concat.apply([], crit[0].getDisplayValues()); } catch (e) { /* rango ilegible: se permite igual */ }
+    if (!esta(lista)) rango.setDataValidation(v.copy().setAllowInvalid(true).build());
+  }
+}
+// Escribe una celda; si una regla de validación la rechaza, esa celda pasa a "mostrar advertencia"
+// (en vez de rechazar) y se vuelve a escribir. Mejor guardar la llamada que perderla.
+function ll_escribir(rango, valor) {
+  try { rango.setValue(valor); }
+  catch (e) {
+    const v = rango.getDataValidation();
+    if (!v || !/valid/i.test(String(e.message))) throw e;
+    rango.setDataValidation(v.copy().setAllowInvalid(true).build());
+    rango.setValue(valor);
+  }
 }
 
 // Una fila con el celular tal como se ve en el Sheet (no se rompe si NUMERO tiene formato de fecha).
