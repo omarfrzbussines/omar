@@ -533,6 +533,7 @@ async function procesarCola() {
         await subir(it);
         await colaDel(it.id);
         historial(it.id, { estado: 'ok', foto: it.subidas[0] && it.subidas[0].web });
+        FILAS = null;
       } catch (e) {
         ultimoError = e.message || String(e);
         it.error = ultimoError; await colaPut(it);
@@ -859,20 +860,67 @@ function pintarHist() {
     const t = `<div class="main"><div class="t">${esc(x.descripcion)}${tag}</div><div class="d">${fm(x.fecha).slice(0, 5)} · ${esc(x.categoria)} · ${esc(x.metodo)} · ${esc(x.persona)}${x.estado === 'err' && x.error ? '<br>' + esc(x.error) : ''}</div></div><div class="m">${soles(x.total)}</div>`;
     return x.foto ? `<a class="row" style="color:inherit;text-decoration:none" href="${esc(x.foto)}" target="_blank" rel="noopener">${t}</a>` : `<div class="row">${t}</div>`;
   };
-  const delMes = h.filter((x) => (x.fecha || '').slice(0, 7) === mes);
-  const porCat = {};
-  delMes.forEach((x) => { porCat[x.categoria] = (porCat[x.categoria] || 0) + (Number(x.total) || 0); });
-  const cats = Object.keys(porCat).sort((a, b) => porCat[b] - porCat[a]);
   const R = ls.get('raiz');
+  const [a, m] = MES_VER.split('-').map(Number);
   return `<div id="estado"></div>
+    <h2><span>📊 ${MESES[m - 1]} ${a} <small>todo el equipo</small></span>
+      <span><button class="btn" data-mes="-1" style="padding:4px 10px">‹</button> <button class="btn" data-mes="1" style="padding:4px 10px">›</button></span></h2>
+    <div id="totMes"><div class="list"><div class="vacio">Cargando el Excel…</div></div></div>
     <h2>Hoy en este celular <small>${deHoy.length} · ${soles(suma(deHoy))}</small></h2>
     <div class="list">${deHoy.length ? deHoy.map(fila).join('') : '<div class="vacio">Todavía nada hoy.</div>'}</div>
-    <h2>${MESES[new Date().getMonth()]} por categoría <small>${soles(suma(delMes))}</small></h2>
-    <div class="list">${cats.map((k) => `<div class="row"><div class="main"><div class="t">${esc(k)}</div></div><div class="m">${soles(porCat[k])}</div></div>`).join('') || '<div class="vacio">—</div>'}</div>
-    <div class="ayuda">Solo lo registrado en este celular. El total de todas está en el Excel.</div>
-    <h2>Anteriores</h2>
+    <h2>Anteriores en este celular</h2>
     <div class="list">${h.filter((x) => x.reg !== hoy).slice(0, 40).map(fila).join('') || '<div class="vacio">—</div>'}</div>
     ${R && R.web ? `<a class="btn" style="display:block;text-align:center;margin-top:16px;text-decoration:none" href="${esc(R.web)}" target="_blank" rel="noopener">📁 Abrir carpeta en OneDrive</a>` : ''}`;
+}
+
+/* ---------- total del mes (todo el equipo, leído del Excel) ---------- */
+
+let MES_VER = isoLocal(new Date()).slice(0, 7);
+let FILAS = null;   // { t: hora de lectura, v: filas, web: link del Excel }
+async function filasExcel(forzar) {
+  if (FILAS && !forzar && Date.now() - FILAS.t < 60000) return FILAS;
+  const R = await raiz();
+  const id = await excel();
+  const r = await gj('GET', `/drives/${R.driveId}/items/${id}/workbook/tables/${TABLA}/dataBodyRange?$select=values`);
+  let web = FILAS && FILAS.web;
+  if (!web) try { web = (await gj('GET', `/drives/${R.driveId}/items/${id}?$select=webUrl`)).webUrl; } catch (e) { /* sin link */ }
+  FILAS = { t: Date.now(), v: (r.values || []).filter((f) => String(f[0] || '').trim()), web };
+  return FILAS;
+}
+// Columna Mes ("2026-10 OCTUBRE"); si no, la Fecha (Excel la devuelve como número de serie).
+function mesDeFila(f) {
+  const m = String(f[2] || '').match(/^(\d{4}-\d{2})/);
+  if (m) return m[1];
+  if (typeof f[1] === 'number') return new Date(Math.round((f[1] - 25569) * 864e5)).toISOString().slice(0, 7);
+  return String(f[1] || '').slice(0, 7);
+}
+async function pintarTotalMes(forzar) {
+  if (!$('#totMes')) return;
+  let F;
+  try { F = await filasExcel(forzar); } catch (e) {
+    if ($('#totMes')) $('#totMes').innerHTML = `<div class="list"><div class="vacio">⚠️ No pude leer el Excel: ${esc(e.message)}</div></div>`;
+    return;
+  }
+  const del = F.v.filter((f) => mesDeFila(f) === MES_VER);
+  const n = (v) => typeof v === 'number' ? v : num(v);
+  const total = del.reduce((t, f) => t + n(f[15]), 0), igv = del.reduce((t, f) => t + n(f[14]), 0);
+  const agrupar = (col) => {
+    const g = {};
+    del.forEach((f) => { const k = String(f[col] || '—').trim() || '—'; g[k] = (g[k] || 0) + n(f[15]); });
+    return Object.keys(g).sort((x, y) => g[y] - g[x]).map((k) =>
+      `<div class="row"><div class="main"><div class="t">${esc(k)}</div></div><div class="m">${soles(g[k])}</div></div>`).join('');
+  };
+  if (!$('#totMes')) return;
+  $('#totMes').innerHTML = !del.length ? `<div class="list"><div class="vacio">Sin gastos registrados este mes.</div></div>` : `
+    <div class="calc" style="margin-top:0">
+      <div class="r tot" style="border:0;margin:0;padding:0"><span>Total gastado</span><b>${soles(total)}</b></div>
+      <div class="r"><span>Gastos registrados</span><b>${del.length}</b></div>
+      ${igv ? `<div class="r"><span>IGV (facturas)</span><b>${soles(igv)}</b></div>` : ''}
+    </div>
+    <h2 style="font-size:13px">Por categoría</h2><div class="list">${agrupar(5)}</div>
+    <h2 style="font-size:13px">Por persona</h2><div class="list">${agrupar(4)}</div>
+    <h2 style="font-size:13px">Pagado con</h2><div class="list">${agrupar(16)}</div>`;
+  if (F.web) $('#totMes').insertAdjacentHTML('beforeend', `<a class="btn" style="display:block;text-align:center;margin-top:10px;text-decoration:none" href="${esc(F.web)}" target="_blank" rel="noopener">📊 Abrir el Excel</a>`);
 }
 
 function pintarConf() {
@@ -997,6 +1045,7 @@ function pintarSub() {
 function pintar() {
   $('#main').innerHTML = tab === 'nueva' ? pintarNueva() : tab === 'hist' ? pintarHist() : pintarConf();
   if (tab === 'conf' && esAdmin()) pintarSolicitudes();
+  if (tab === 'hist') pintarTotalMes();
   clearInterval(pintar.t);
   if (tab === 'conf' && esAdmin()) pintar.t = setInterval(() => { if (tab === 'conf' && document.visibilityState === 'visible') pintarSolicitudes(); }, 8000);
   document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
@@ -1029,6 +1078,13 @@ document.addEventListener('click', async (ev) => {
   if (t.dataset.comp != null) { F.comprobante = t.dataset.comp; return pintar(); }
   if (t.dataset.metodo != null) { F.metodo = t.dataset.metodo; return pintar(); }
   if (t.id === 'guardar') { t.disabled = true; try { await guardar(); } catch (e) { t.disabled = false; toast('❌ ' + e.message, 5000); } return; }
+  if (t.dataset.mes) {
+    const [a, m] = MES_VER.split('-').map(Number);
+    const d = new Date(a, m - 1 + Number(t.dataset.mes), 1);
+    if (isoLocal(d).slice(0, 7) > isoLocal(new Date()).slice(0, 7)) return;
+    MES_VER = isoLocal(d).slice(0, 7);
+    return pintar();
+  }
   if (t.id === 'reintentar') { permitirLogin = true; try { await cargarConfig(); BASE_FOTOS = null; Object.keys(MES_CACHE).forEach((k) => delete MES_CACHE[k]); } catch (e) { /* sin internet */ } return procesarCola(); }
   if (t.id === 'cGuardar') return guardarAjustes();
   if (t.id === 'cCopiar') {
