@@ -187,7 +187,7 @@ function traer(reset) {
 const actual = () => cola[idx];
 
 // Tiempo mínimo en el marcador para poder marcar cada resultado (igual que en el servidor).
-const MIN_SEG = { 'APAGADO': 0, 'NO CONTESTO': 15, 'CORTO': 15, 'CONTESTO': 30, 'AGENDADO': 30, 'CLIENTE': 30, 'DESCARTADO': 30, 'Otra Ciudad': 30, 'LLAMAR LUEGO': 10 };
+const MIN_SEG = { 'APAGADO': 0, 'NO CONTESTO': 15, 'CORTO': 15, 'CONTESTO': 30, 'AGENDADO': 30, 'CLIENTE': 30, 'DESCARTADO': 10, 'Otra Ciudad': 30, 'LLAMAR LUEGO': 10 };
 let llamada = { fila: null, intentos: 0, fueraMs: 0, salio: null, toco: 0, wa: 0 };
 const segundos = () => Math.round(llamada.fueraMs / 1000);
 const mmss = (s) => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');

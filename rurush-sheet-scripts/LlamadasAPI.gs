@@ -203,7 +203,8 @@ function ll_contarBases(asesora) {
 // Tiempo mínimo fuera de la app (en el marcador) para poder marcar cada resultado.
 // Una llamada que no contestan timbra ~25-40 s; una conversación dura más.
 const LL_MIN_SEG = { "APAGADO": 0, "NO CONTESTO": 15, "CORTO": 15,
-                     "CONTESTO": 30, "AGENDADO": 30, "CLIENTE": 30, "DESCARTADO": 30, "OTRA CIUDAD": 30 };
+                     "CONTESTO": 30, "AGENDADO": 30, "CLIENTE": 30, "OTRA CIUDAD": 30,
+                     "DESCARTADO": 10 };   // número que no existe o equivocado: se nota en segundos, que no pierdan tiempo
 
 function ll_registrar(d) {
   if (!d.fila || !d.estado) throw new Error("Faltan datos de la llamada");
