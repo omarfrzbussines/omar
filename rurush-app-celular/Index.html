@@ -105,13 +105,20 @@ const soles = (n) => 'S/ ' + Math.round(n).toLocaleString('es-PE');
 const pct = (a, b) => b ? Math.round(a * 100 / b) : 0;
 const wa = (tel) => tel ? `<a class="wa" href="https://wa.me/51${tel}" target="_blank">💬</a>` : '';
 
+// ⚡ Se muestra al instante lo último que se vio en este celular y se actualiza por detrás.
+let ESTADO_D = '';   // ' · actualizando…' / ' · sin conexión' mientras se muestra lo guardado
 function cargar(forzar) {
-  $('#sub').textContent = 'Actualizando…';
+  ESTADO_D = ' · actualizando…';
+  if (D) pintar(); else $('#sub').textContent = 'Actualizando…';
   google.script.run
-    .withSuccessHandler((d) => { D = d; pintar(); })
-    .withFailureHandler((e) => { $('#main').innerHTML = `<div class="err">${esc(e.message || e)}</div>`; $('#sub').textContent = 'Error'; })
+    .withSuccessHandler((d) => { D = d; ESTADO_D = ''; try { localStorage.setItem('rr_dash', JSON.stringify(d)); } catch (e) {} pintar(); })
+    .withFailureHandler((e) => {
+      if (D) { ESTADO_D = ' · sin conexión'; pintar(); return; }   // se queda con lo guardado
+      $('#main').innerHTML = `<div class="err">${esc(e.message || e)}</div>`; $('#sub').textContent = 'Error';
+    })
     .getDashboard(!!forzar);
 }
+try { const g = JSON.parse(localStorage.getItem('rr_dash') || 'null'); if (g && g.fecha) D = g; } catch (e) {}
 
 let VD = null, vdCargando = false;
 function cargarVentasDia(forzar) {
@@ -462,7 +469,7 @@ function seccionAdsRango() {
 function pintar() {
   if (!D) return;
   pintarChips();
-  $('#sub').textContent = `${D.fecha.split('-').reverse().join('/')} · actualizado ${D.generado}`;
+  $('#sub').textContent = `${D.fecha.split('-').reverse().join('/')} · actualizado ${D.generado}${ESTADO_D}`;
   const socios = (D.socios || []).filter(deAse);
   let h = (D.errores || []).map((e) => `<div class="err">⚠️ ${esc(e)}</div>`).join('');
 

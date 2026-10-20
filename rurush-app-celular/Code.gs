@@ -195,32 +195,40 @@ function pd(path) {
 function actividades(desde, hasta) {
   const out = [];
   let start = 0;
-  const ini = new Date(Date.parse(desde + 'T12:00:00Z') - 86400e3).toISOString().slice(0, 10);
-  const fin = new Date(Date.parse(hasta + 'T12:00:00Z') + 2 * 86400e3).toISOString().slice(0, 10);
   for (;;) {
-    const j = pd('/activities?type=meeting&user_id=0&limit=500&start=' + start + '&start_date=' + ini + '&end_date=' + fin);
-    const personas = (j.related_objects && j.related_objects.person) || {};
-    (j.data || []).forEach(function (a) {
-      if (!a.due_date) return;
-      let fecha = a.due_date, hora = '';
-      if (a.due_time) {
-        const l = new Date(Date.parse(a.due_date + 'T' + a.due_time.slice(0, 5) + ':00Z') + LIMA * 3600e3);
-        fecha = l.toISOString().slice(0, 10);
-        hora = pad(l.getUTCHours()) + ':' + pad(l.getUTCMinutes());
-      }
-      if (fecha < desde || fecha > hasta) return;
-      const p = personas[a.person_id] || {};
-      const tel = ((p.phone || []).map(function (x) { return tel9(x.value); }).filter(String))[0] || '';
-      out.push({
-        id: a.id, asunto: a.subject || '', persona: a.person_name || p.name || '(sin nombre)',
-        hecha: !!a.done, fecha: fecha, hora: hora, tel: tel, asesora: asesoraDeAsunto(a.subject)
-      });
-    });
+    const j = pd(actividadesRuta_(desde, hasta, start));
+    actividadesDe_(j, desde, hasta, out);
     const pg = j.additional_data && j.additional_data.pagination;
     if (!pg || !pg.more_items_in_collection) break;
     start = pg.next_start;
   }
   return out.sort(function (x, y) { return (x.fecha + x.hora).localeCompare(y.fecha + y.hora); });
+}
+function actividadesRuta_(desde, hasta, start) {
+  const ini = new Date(Date.parse(desde + 'T12:00:00Z') - 86400e3).toISOString().slice(0, 10);
+  const fin = new Date(Date.parse(hasta + 'T12:00:00Z') + 2 * 86400e3).toISOString().slice(0, 10);
+  return '/activities?type=meeting&user_id=0&limit=500&start=' + (start || 0) + '&start_date=' + ini + '&end_date=' + fin;
+}
+// Agrega a "out" las actividades de una respuesta de Pipedrive que caen entre desde y hasta (fecha Lima).
+function actividadesDe_(j, desde, hasta, out) {
+  const personas = (j.related_objects && j.related_objects.person) || {};
+  (j.data || []).forEach(function (a) {
+    if (!a.due_date) return;
+    let fecha = a.due_date, hora = '';
+    if (a.due_time) {
+      const l = new Date(Date.parse(a.due_date + 'T' + a.due_time.slice(0, 5) + ':00Z') + LIMA * 3600e3);
+      fecha = l.toISOString().slice(0, 10);
+      hora = pad(l.getUTCHours()) + ':' + pad(l.getUTCMinutes());
+    }
+    if (fecha < desde || fecha > hasta) return;
+    const p = personas[a.person_id] || {};
+    const tel = ((p.phone || []).map(function (x) { return tel9(x.value); }).filter(String))[0] || '';
+    out.push({
+      id: a.id, asunto: a.subject || '', persona: a.person_name || p.name || '(sin nombre)',
+      hecha: !!a.done, fecha: fecha, hora: hora, tel: tel, asesora: asesoraDeAsunto(a.subject)
+    });
+  });
+  return out;
 }
 
 // Asunto "FP <ASESORA> <VÍA>" o "FP REACT <ASESORA>": de ahí sale la asesora.
@@ -282,21 +290,89 @@ function getIngresos(iso, mes) {
   catch (e) { throw new Error('No encontré la hoja DATOS_ORIGEN_' + MESES[Number(iso.slice(5, 7)) - 1] + '.'); }
 }
 
-function getDashboard(forzar) {
+/* ---------- caché grande (comprimido y en trozos) ----------
+   CacheService guarda máximo 100 KB por valor y la lista de socios pasa de eso: antes el put fallaba
+   en silencio y CADA apertura recalculaba todo. Ahora se comprime (gzip) y, si aún no entra, se parte. */
+function hoy_cachePut_(key, obj, seg) {
   const cache = CacheService.getScriptCache();
-  if (!forzar) {
-    const c = cache.get('dash');
-    if (c) return JSON.parse(c);
-  }
-  const hoy = fechaLima(0), ayer = fechaLima(-1), manana = fechaLima(1), en7 = fechaLima(7);
-  const res = { fecha: hoy, generado: Utilities.formatDate(new Date(), 'America/Lima', 'HH:mm'), errores: [] };
+  const b64 = Utilities.base64Encode(Utilities.gzip(Utilities.newBlob(JSON.stringify(obj), 'application/json')).getBytes());
+  const trozos = {}, T = 90000;
+  let n = 0;
+  for (let i = 0; i < b64.length; i += T, n++) trozos[key + '_' + n] = b64.slice(i, i + T);
+  trozos[key + '_n'] = String(n);
+  cache.putAll(trozos, seg);
+}
+function hoy_cacheGet_(key) {
+  const cache = CacheService.getScriptCache(), n = Number(cache.get(key + '_n') || 0);
+  if (!n) return null;
+  const ks = []; for (let i = 0; i < n; i++) ks.push(key + '_' + i);
+  const t = cache.getAll(ks);
+  if (!ks.every(function (k) { return k in t; })) return null;
+  const blob = Utilities.newBlob(Utilities.base64Decode(ks.map(function (k) { return t[k]; }).join('')), 'application/x-gzip');
+  return JSON.parse(Utilities.ungzip(blob).getDataAsString());
+}
 
+// Apps Fit (activos + inscritos de hoy) y Pipedrive (FP ayer–mañana) pedidos A LA VEZ.
+// Si algo raro pasa (token vencido, muchas páginas), se cae a las funciones de siempre, una por una.
+function hoy_traer_(hoy, ayer, manana) {
+  const out = { activos: null, inscritos: null, acts: null, errAF: '', errPD: '' };
+  const pdTk = token('PIPEDRIVE_TOKEN');
+  let bearer = '';
+  try { bearer = appsfitBearer(false); } catch (e) { out.errAF = e.message; }
+  const afUrl = (tipo, desde, hasta, page) => APPSFIT_BASE + '/api/managements/customers?page=' + page + '&type_date=' + tipo + '&date_from=' + desde + '&date_to=' + hasta + '&with_frostbite=0';
+  const reqs = [{ url: PIPEDRIVE_BASE + actividadesRuta_(ayer, manana, 0), headers: { 'x-api-token': pdTk }, muteHttpExceptions: true }];
+  if (bearer) reqs.push({ url: afUrl(1, hoy, '2099-12-31', 1), headers: { Authorization: 'Bearer ' + bearer }, muteHttpExceptions: true },
+                        { url: afUrl(2, hoy, hoy, 1), headers: { Authorization: 'Bearer ' + bearer }, muteHttpExceptions: true });
+  let rs = [];
+  try { rs = UrlFetchApp.fetchAll(reqs); } catch (e) { /* corte de red: abajo se reintenta una por una */ }
+
+  // Pipedrive
   try {
-    const crudos = appsfitClientes(1, hoy, '2099-12-31');
-    // 🕐 hora habitual de cada socio (Horas.gs): se anota la visita nueva y se lee su mediana
+    const j = rs[0] && rs[0].getResponseCode() === 200 ? JSON.parse(rs[0].getContentText()) : null;
+    const pg = j && j.additional_data && j.additional_data.pagination;
+    if (j && j.success !== false && !(pg && pg.more_items_in_collection))
+      out.acts = actividadesDe_(j, ayer, manana, []).sort(function (x, y) { return (x.fecha + x.hora).localeCompare(y.fecha + y.hora); });
+    else out.acts = actividades(ayer, manana);
+  } catch (e) { out.errPD = e.message; }
+
+  // Apps Fit
+  if (bearer) {
+    try {
+      const ok = (r) => r && r.getResponseCode() === 200;
+      if (!ok(rs[1]) || !ok(rs[2])) throw new Error('reintentar');
+      const lee = (r) => ((JSON.parse(r.getContentText()) || {}).Item) || {};
+      const a1 = lee(rs[1]), a2 = lee(rs[2]);
+      out.activos = (a1.cutomers || []).slice();
+      out.inscritos = (a2.cutomers || []).slice();
+      const pa = (a1.paging && a1.paging.pages) || 1, pi = (a2.paging && a2.paging.pages) || 1;
+      const mas = [];
+      for (let p = 2; p <= pa; p++) mas.push([out.activos, afUrl(1, hoy, '2099-12-31', p)]);
+      for (let p = 2; p <= pi; p++) mas.push([out.inscritos, afUrl(2, hoy, hoy, p)]);
+      if (mas.length) UrlFetchApp.fetchAll(mas.map(function (m) { return { url: m[1], headers: { Authorization: 'Bearer ' + bearer }, muteHttpExceptions: true }; }))
+        .forEach(function (r, i) { if (!ok(r)) throw new Error('reintentar'); Array.prototype.push.apply(mas[i][0], lee(r).cutomers || []); });
+    } catch (e) {
+      try { out.activos = appsfitClientes(1, hoy, '2099-12-31'); out.inscritos = appsfitClientes(2, hoy, hoy); }
+      catch (e2) { out.activos = null; out.errAF = e2.message; }
+    }
+  }
+  return out;
+}
+
+function getDashboard(forzar) {
+  if (!forzar) {
+    try { const c = hoy_cacheGet_('dash2'); if (c) return c; } catch (e) { /* caché dañado: se recalcula */ }
+  }
+  try { hoy_instalarSiFalta_(); } catch (e) { /* el precalentado es opcional */ }
+  const hoy = fechaLima(0), ayer = fechaLima(-1), manana = fechaLima(1);
+  const res = { fecha: hoy, generado: Utilities.formatDate(new Date(), 'America/Lima', 'HH:mm'), errores: [] };
+  const t = hoy_traer_(hoy, ayer, manana);
+
+  if (t.activos) {
+    // 🕐 hora habitual de cada socio (Horas.gs). Las visitas nuevas las anota el reloj de cada hora (hs_tick):
+    // antes se anotaban también aquí, escribiendo en la hoja cada vez que se abría la app.
     let horas = {};
-    try { hs_instalarSiFalta_(); hs_anotar_(crudos); horas = hs_mapa_(); } catch (e) { res.errores.push('Horas de visita: ' + e.message); }
-    const activos = crudos.map(function (c) {
+    try { hs_instalarSiFalta_(); horas = hs_mapa_(); } catch (e) { res.errores.push('Horas de visita: ' + e.message); }
+    res.socios = t.activos.map(function (c) {
       const ua = c.UltimaAsistencia ? String(c.UltimaAsistencia).slice(0, 10) : null;
       const hv = horas[hs_clave_(c)], uv = hs_visita_(c.UltimaAsistencia);
       const fin = String(c.FechaFin || '').slice(0, 10);
@@ -312,36 +388,65 @@ function getDashboard(forzar) {
         hora: hv ? hv.h : (uv ? uv.min : null),   // minutos desde 00:00
         horaN: hv ? hv.n : 0
       };
-    });
-    res.socios = activos;   // el filtro por asesora se hace en el celular
-
-    const inscritos = appsfitClientes(2, hoy, hoy);
-    res.inscritosHoy = inscritos.map(function (c) {
+    });   // el filtro por asesora se hace en el celular
+    res.inscritosHoy = (t.inscritos || []).map(function (c) {
       return { nombre: ((c.Nombres || '') + ' ' + (c.Apellidos || '')).trim(), asesora: asesora(c.Vendedor),
                pago: Number(c.Pago) || 0, plan: c.desTiempoPaquete || '', tel: tel9(c.Celular) };
     });
-  } catch (e) {
-    res.errores.push('Apps Fit: ' + e.message);
-  }
+  } else res.errores.push('Apps Fit: ' + (t.errAF || 'no respondió'));
 
   const pdAse = pd_asesorasSiFalta_(); if (pdAse) res.errores.push(pdAse);
   // 🎟️ app Free Pass: la primera vez que Omar abre RURUSH Hoy se crean los links y PIN (llegan a su correo)
   try { if (!PropertiesService.getScriptProperties().getProperty('FP_LLAVES')) fp_crearLlaves(); } catch (e) { res.errores.push('Free Pass: ' + e.message); }
-  try {
-    const acts = actividades(ayer, manana).filter(esFP);
+  if (t.acts) {
+    const acts = t.acts.filter(esFP);
     res.fpHoy = acts.filter(function (a) { return a.fecha === hoy; });
     res.noShowsAyer = acts.filter(function (a) { return a.fecha === ayer && !a.hecha && a.hora; });
     res.fpManana = acts.filter(function (a) { return a.fecha === manana; });
-  } catch (e) {
-    res.errores.push('Pipedrive: ' + e.message);
-  }
+  } else res.errores.push('Pipedrive: ' + (t.errPD || 'no respondió'));
 
   // Venta de hoy: la misma fuente que el cuadro diario (DATOS_ORIGEN), no el "Pago" de Apps Fit
   // (que queda en 0 cuando el pago no se registró allí).
   try { res.ingresosHoy = hoy_ingresos_(hoy, false, forzar); } catch (e) { res.errores.push('Ventas (DATOS_ORIGEN): ' + e.message); }
 
-  try { cache.put('dash', JSON.stringify(res), 300); } catch (e) { /* >100 KB: sin caché */ }
+  if (!res.errores.length || res.socios) { try { hoy_cachePut_('dash2', res, HOY_CACHE_SEG); } catch (e) { /* sin caché: la próxima recalcula */ } }
   return res;
+}
+
+/* ⚡ Precalentado: cada 10 min (6 am – 11 pm Lima) se deja el dashboard listo en caché, así al abrir
+   la app casi nunca hay que esperar a Apps Fit / Pipedrive. 🔄 en el celular sigue trayendo lo último. */
+const HOY_CACHE_SEG = 900;
+const HOY_PRE_VER = '1';
+function hoy_precalentar() {
+  const h = new Date(Date.now() + LIMA * 3600e3).getUTCHours();
+  if (h < 6 || h >= 23) return;
+  getDashboard(true);
+}
+function hoy_instalarSiFalta_() {
+  const p = PropertiesService.getScriptProperties();
+  if (p.getProperty('HOY_PRE_VER') === HOY_PRE_VER) return;
+  ScriptApp.getProjectTriggers()
+    .filter(function (t) { return t.getHandlerFunction() === 'hoy_precalentar'; })
+    .forEach(function (t) { ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('hoy_precalentar').timeBased().everyMinutes(10).create();
+  p.setProperty('HOY_PRE_VER', HOY_PRE_VER);
+}
+
+/** Ejecutar desde el editor: cuánto tarda cada parte y cuánto pesa (no escribe nada). */
+function hoy_medir() {
+  const L = [], ms = (t0) => (Date.now() - t0) + ' ms';
+  let t0 = Date.now(); const hoy = fechaLima(0);
+  appsfitBearer(false); L.push('Apps Fit token: ' + ms(t0));
+  t0 = Date.now(); const a = appsfitClientes(1, hoy, '2099-12-31'); L.push('Apps Fit activos (uno por uno): ' + a.length + ' socios · ' + ms(t0));
+  t0 = Date.now(); actividades(fechaLima(-1), fechaLima(1)); L.push('Pipedrive FP: ' + ms(t0));
+  t0 = Date.now(); hoy_ingresos_(hoy, false, true); L.push('Hoja DATOS_ORIGEN: ' + ms(t0));
+  t0 = Date.now(); hs_mapa_(); L.push('Horas (leer): ' + ms(t0));
+  t0 = Date.now(); hoy_traer_(hoy, fechaLima(-1), fechaLima(1)); L.push('Todo en paralelo (nuevo): ' + ms(t0));
+  t0 = Date.now(); const d = getDashboard(true); L.push('getDashboard completo: ' + ms(t0));
+  const kb = Math.round(JSON.stringify(d).length / 1024);
+  L.push('Peso: ' + kb + ' KB (' + (kb > 100 ? 'antes NO entraba en caché' : 'entraba en caché') + ')');
+  t0 = Date.now(); const c = hoy_cacheGet_('dash2'); L.push('Leer del caché nuevo: ' + ms(t0) + (c ? ' ✓' : ' ✗'));
+  Logger.log(L.join('\n'));
 }
 
 // Ejecutar a mano desde el editor para comprobar la conexión.
