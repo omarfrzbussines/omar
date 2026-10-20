@@ -13,8 +13,10 @@
 
 const FP_CAMPO = {
   COACH: '9e850eece75b5e1d9ed9b4e61e8643a57e1d4b70',
-  CIERRE: '33b8be2e235bd672060ee054b04372be13b53f52'
+  CIERRE: '33b8be2e235bd672060ee054b04372be13b53f52',
+  PRESENTO: '7de502a12cd072ed8904fc783228913fa16a0e29'   // PRESENTÓ PLAN (quién le presentó el plan)
 };
+const FP_YA_NO_ESTAN = ['GUSTAVO', 'ERIK', 'ALVARO', 'VALERIA'];   // opciones viejas de PRESENTÓ PLAN que ya no se ofrecen (igual que el panel)
 const FP_CIERRE = { SI: '136', NO: '137', SEG: '149' };
 const FP_PLANES = ['Mensual', 'Trimestral', 'Semestral', 'Anual', 'Otro'];
 const FP_NUTRI = { dias: [2, 3], cupos: ['08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30'] };
@@ -162,7 +164,8 @@ function fp_personas_(ids) {
       let d = {};
       try { d = JSON.parse(r.getContentText()).data || {}; } catch (e) {}
       const tel = ((d.phone || []).map(function (x) { return String(x.value || '').replace(/\D/g, ''); }).filter(String))[0] || '';
-      out[lote[n]] = { coach: d[FP_CAMPO.COACH] == null ? '' : String(d[FP_CAMPO.COACH]), cierre: d[FP_CAMPO.CIERRE] == null ? '' : String(d[FP_CAMPO.CIERRE]), tel: tel };
+      const v = (k) => (d[k] == null ? '' : String(d[k]));
+      out[lote[n]] = { coach: v(FP_CAMPO.COACH), cierre: v(FP_CAMPO.CIERRE), presento: v(FP_CAMPO.PRESENTO), tel: tel };
       guardar['fpP' + lote[n]] = JSON.stringify(out[lote[n]]);
     });
     try { cache.putAll(guardar, 300); } catch (e) {}
@@ -178,6 +181,17 @@ function fp_coaches_() {
   const f = (fp_pd_('get', '/personFields?limit=500') || []).filter(function (x) { return x.key === FP_CAMPO.COACH; })[0];
   const ops = ((f && f.options) || []).map(function (o) { return { id: String(o.id), label: String(o.label) }; });
   cache.put('fpCoaches', JSON.stringify(ops), 21600);
+  return ops;
+}
+
+// Opciones de PRESENTÓ PLAN (sin la gente que ya no está). 6 h en caché.
+function fp_presentadores_() {
+  const cache = CacheService.getScriptCache(), c = cache.get('fpPresento');
+  if (c) return JSON.parse(c);
+  const f = (fp_pd_('get', '/personFields?limit=500') || []).filter(function (x) { return x.key === FP_CAMPO.PRESENTO; })[0];
+  const ops = ((f && f.options) || []).map(function (o) { return { id: String(o.id), label: String(o.label) }; })
+    .filter(function (o) { return FP_YA_NO_ESTAN.indexOf(o.label.toUpperCase().trim()) < 0; });
+  cache.put('fpPresento', JSON.stringify(ops), 21600);
   return ops;
 }
 
@@ -212,14 +226,14 @@ function fp_ultimas_() {
   return out;
 }
 
-function fp_anotar_(quien, tipo, act, campo, valor) {
+function fp_anotar_(quien, tipo, act, campo, valor, sinAviso) {
   const sh = fp_registro_();
   const prev = fp_ultimas_()[act.id + '|' + campo];
   const cuando = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd HH:mm:ss');
   sh.appendRow([cuando, quien, tipo, String(act.id), String(act.personId || ''), act.nombre || '', act.fecha || '', act.hora || '',
     asesoraDeAsunto(act.asunto) || '', fp_via_(act.asunto), campo, valor, prev ? prev.valor : '']);
   // Corrección: avisar a Omar (una vez por actividad y campo cada 30 min)
-  if (prev && prev.valor !== valor) {
+  if (prev && prev.valor !== valor && !sinAviso) {
     const k = 'fpAviso' + act.id + campo, cache = CacheService.getScriptCache();
     if (!cache.get(k)) {
       cache.put(k, '1', 1800);
@@ -245,6 +259,7 @@ function fp_datos(llave, pc) {
   const per = fp_personas_(ids);
   const ult = fp_ultimas_();
   const coaches = fp_coaches_();
+  let presentadores = []; try { presentadores = fp_presentadores_(); } catch (e) { /* sin el campo, la app sigue igual */ }
   const nomCoach = {}; coaches.forEach(function (c) { nomCoach[c.id] = c.label; });
   const item = (a) => {
     const p = per[a.personId] || {};
@@ -252,14 +267,14 @@ function fp_datos(llave, pc) {
     return { id: a.id, personId: a.personId, nombre: a.nombre, fecha: a.fecha, hora: a.hora, asunto: a.asunto,
       asesora: asesoraDeAsunto(a.asunto), via: fp_via_(a.asunto), tel: fp_mascara_(p.tel),
       vino: a.hecha ? 'SI' : (m('VINO') && m('VINO').valor === 'NO' ? 'NO' : ''),
-      coach: p.coach || '', coachNombre: nomCoach[p.coach] || '',
+      coach: p.coach || '', coachNombre: nomCoach[p.coach] || '', presento: p.presento || '',
       cierre: p.cierre === FP_CIERRE.SI ? 'SI' : p.cierre === FP_CIERRE.NO ? 'NO' : p.cierre === FP_CIERRE.SEG ? 'SEG' : '',
       plan: m('PLAN') ? m('PLAN').valor : '',
       marca: m('VINO') ? m('VINO').quien + ' · ' + m('VINO').cuando.slice(11, 16) : '' };
   };
   const lista = fps.map(item);
   return {
-    quien: DV_NOMBRE[quien] || quien, esOmar: quien === 'OMAR', hoy: hoy, coaches: coaches, planes: FP_PLANES,
+    quien: DV_NOMBRE[quien] || quien, esOmar: quien === 'OMAR', hoy: hoy, coaches: coaches, presentadores: presentadores, planes: FP_PLANES,
     hoyL: lista.filter(function (x) { return x.fecha === hoy; }),
     ayer: lista.filter(function (x) { return x.fecha === ayer && (!x.vino || (x.vino === 'SI' && (!x.coach || !x.cierre))); }),
     manana: lista.filter(function (x) { return x.fecha === man; }),
@@ -268,7 +283,7 @@ function fp_datos(llave, pc) {
   };
 }
 
-// campo: VINO (SI/NO) · COACH (id de opción) · CIERRE (SI/NO/SEG) · PLAN (texto) · ASISTIO (nutrición SI/NO)
+// campo: VINO (SI/NO) · COACH (id de opción) · PRESENTO (id de opción) · CIERRE (SI/NO/SEG) · PLAN (texto) · ASISTIO (nutrición SI/NO)
 function fp_marcar(llave, pc, act, campo, valor) {
   const quien = DV_NOMBRE[fp_quien_(llave, pc)] || fp_quien_(llave, pc);
   const lock = LockService.getScriptLock();
@@ -284,6 +299,11 @@ function fp_marcar(llave, pc, act, campo, valor) {
       const c = fp_coaches_().filter(function (x) { return x.id === String(valor); })[0];
       if (!c || !act.personId) throw new Error('Coach no válido.');
       fp_pd_('put', '/persons/' + act.personId, { [FP_CAMPO.COACH]: c.id });
+      texto = c.label;
+    } else if (campo === 'PRESENTO') {
+      const c = fp_presentadores_().filter(function (x) { return x.id === String(valor); })[0];
+      if (!c || !act.personId) throw new Error('Opción no válida.');
+      fp_pd_('put', '/persons/' + act.personId, { [FP_CAMPO.PRESENTO]: c.id });
       texto = c.label;
     } else if (campo === 'CIERRE') {
       if (!FP_CIERRE[valor] || !act.personId) throw new Error('Valor no válido.');
@@ -399,4 +419,44 @@ function fp_metricas(llave, pc, desde, hasta) {
     nutri: { agend: nut.length, vino: nut.filter(function (a) { return a.hecha; }).length },
     correcciones: correcciones.reverse().slice(0, 50)
   };
+}
+
+/* ---------- 🥗 nutrición con la base de socios (proyecto de Nutrición, ?app=reservas) ----------
+   La búsqueda (celular, código AppsFit, DNI o nombre), las fichas, los cupos y las reglas viven en el proyecto
+   de Nutrición; aquí solo se le pregunta por su link /exec con su llave. Propiedades del script (a mano):
+   FP_NU_URL = link /exec del proyecto de Nutrición · FP_NU_LLAVE = su NU_LLAVE.
+   Si no están, la pantalla usa el agendar simple de antes (fp_cupos / fp_agendar). */
+function fp_nu_(accion, params, body) {
+  const p = PropertiesService.getScriptProperties(), url = p.getProperty('FP_NU_URL'), k = p.getProperty('FP_NU_LLAVE');
+  if (!url || !k) throw new Error('NU_SIN_CONEXION');
+  let q = url + '?accion=' + accion + '&k=' + encodeURIComponent(k);
+  Object.keys(params || {}).forEach(function (x) { q += '&' + x + '=' + encodeURIComponent(params[x] == null ? '' : params[x]); });
+  const o = { muteHttpExceptions: true, followRedirects: true };
+  if (body) { o.method = 'post'; o.contentType = 'application/json'; o.payload = JSON.stringify(body); }
+  const r = UrlFetchApp.fetch(q, o);
+  let j = null;
+  try { j = JSON.parse(r.getContentText()); } catch (e) { throw new Error('Nutrición no respondió. Intenta de nuevo.'); }
+  if (!j.ok) throw new Error(j.error === 'llave' ? 'La llave de Nutrición no coincide (avísale a Omar).' : (j.error || 'Error en Nutrición.'));
+  return j.r;
+}
+
+function fp_nuInicio(llave, pc) {
+  fp_quien_(llave, pc);
+  try { return Object.assign({ conectado: true }, fp_nu_('rv_inicio')); }
+  catch (e) { if (e.message === 'NU_SIN_CONEXION') return { conectado: false }; throw e; }
+}
+function fp_nuBuscar(llave, pc, q) { fp_quien_(llave, pc); return fp_nu_('rv_buscar', { q: q }); }
+function fp_nuLibres(llave, pc, fecha) { fp_quien_(llave, pc); return fp_nu_('rv_libres', { fecha: fecha }); }
+function fp_nuParecidos(llave, pc, nombre, dni) { fp_quien_(llave, pc); return fp_nu_('rv_parecidos', { nombre: nombre, dni: dni }); }
+
+// q = { pid?, nombre, tel, dni?, fecha, hora, mover? } — la asesora sale de su llave, no de la pantalla
+function fp_nuAgendar(llave, pc, q) {
+  const ase = fp_quien_(llave, pc), quien = DV_NOMBRE[ase] || ase;
+  q = Object.assign({}, q || {}, { asesora: quien });
+  const r = fp_nu_('rv_agendar', null, q);
+  try {
+    fp_anotar_(quien, 'NUTRI', { id: r.act || q.mover || '', personId: r.pid || q.pid || '', nombre: r.nombre || q.nombre || '', fecha: q.fecha, hora: q.hora,
+      asunto: 'EVALUACIÓN NUTRICIONAL' }, q.mover ? 'MOVIDA' : 'AGENDADO', r.msg || '', true);
+  } catch (e) { /* el registro no debe frenar la cita ya creada */ }
+  return r;
 }

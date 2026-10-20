@@ -55,6 +55,7 @@
 
   /* ---- distribución ---- */
   .cuerpo { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:18px; align-items:start }
+  .cuerpo.nutri { grid-template-columns:minmax(0,1fr) minmax(340px,500px) }
   .panel { background:var(--sup); border:1px solid var(--borde); border-radius:var(--r); box-shadow:var(--sombra) }
   .panel-h { display:flex; align-items:center; gap:8px; padding:14px 16px; border-bottom:1px solid var(--borde); font-weight:700; font-size:15px }
   .panel-h .ic { color:var(--sub) }
@@ -119,9 +120,9 @@
   .exp .ic { transition:transform .15s } .exp[aria-expanded="true"] .ic { transform:rotate(180deg) }
   .guardando { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:var(--sub) }
 
-  .detalle { display:grid; grid-template-columns:minmax(180px,240px) auto minmax(160px,220px) 1fr; gap:14px 22px; align-items:end; padding:4px 16px 16px 88px }
+  .detalle { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, max-content)); justify-content:start; gap:14px 22px; align-items:end; padding:4px 16px 16px 88px }
   .detalle label { display:block; font-size:12px; font-weight:650; color:var(--sub); margin-bottom:5px }
-  .detalle .cerrar { justify-self:end }
+  .detalle .cerrar { align-self:end } .detalle select.campo { min-width:170px }
   .detalle select.falta { border:1px dashed var(--ambar-borde); background:var(--ambar-suave); color:var(--ambar) }
   .ayuda { font-size:12.5px; color:var(--tenue); min-height:38px; display:flex; align-items:center }
 
@@ -156,6 +157,32 @@
   .login .pin { width:100%; padding:12px; font-size:22px; letter-spacing:8px; text-align:center; border:1px solid var(--borde-f); border-radius:var(--r-s); margin-top:16px }
   .login .btn { width:100%; margin-top:12px }
 
+  /* ---- agendar nutrición (base de socios) ---- */
+  .paso { padding:14px 16px; border-bottom:1px solid var(--borde) }
+  .paso h4 { font-size:13.5px; font-weight:700; margin-bottom:10px; display:flex; gap:8px; align-items:center }
+  .num { width:20px; height:20px; border-radius:50%; background:var(--negro); color:#fff; font-size:11.5px; display:grid; place-items:center; flex-shrink:0 }
+  .busca-n { display:flex; gap:8px } .busca-n .buscar { flex:1 }
+  .nlista { display:flex; flex-direction:column; gap:8px; margin-top:12px }
+  .ficha { display:flex; gap:10px; padding:11px 12px; border:1px solid var(--borde-f); border-radius:var(--r-s); cursor:pointer; background:var(--sup); text-align:left; width:100%; align-items:flex-start }
+  .ficha:hover { border-color:#a1a1aa } .ficha.on { border-color:var(--negro); box-shadow:0 0 0 1px var(--negro) }
+  .radio { width:18px; height:18px; border-radius:50%; border:2px solid var(--borde-f); flex-shrink:0; margin-top:2px; background:var(--sup) }
+  .ficha.on .radio { border:5px solid var(--negro) }
+  .ficha .nom { font-size:14.5px } .ficha .chips { margin-top:4px }
+  .ficha .prox { margin-top:6px; font-size:12.5px; color:var(--ambar); display:flex; gap:5px; align-items:center }
+  .nuevo-f { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px }
+  .nuevo-f .ancho { grid-column:1 / -1 }
+  .nuevo-f label, .paso label.lb { display:block; font-size:12.5px; font-weight:650; color:var(--sub); margin-bottom:5px }
+  .par { margin-top:8px; font-size:12.5px; color:var(--sub) } .par button { margin:4px 6px 0 0 }
+  .opcs { display:flex; flex-wrap:wrap; gap:6px }
+  .opc { min-height:42px; min-width:64px; padding:4px 12px; border:1px solid var(--borde-f); border-radius:var(--r-s); background:var(--sup); font-weight:650; font-size:13.5px; cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1.2 }
+  .opc small { font-weight:500; color:var(--tenue); font-size:11.5px } .opc:hover:not(:disabled) { border-color:#a1a1aa }
+  .opc.on { background:var(--negro); color:#fff; border-color:var(--negro) } .opc.on small { color:#d4d4d8 }
+  .opc:disabled { opacity:.4; cursor:not-allowed }
+  .pie-n { padding:14px 16px; display:flex; flex-direction:column; gap:10px }
+  .resumen { font-size:13.5px; color:var(--sub) } .resumen b { color:var(--texto) }
+  .wa { white-space:pre-wrap; background:var(--gris-suave); border-radius:var(--r-s); padding:12px; font-size:13.5px; margin:12px 0 }
+  .listo-n { display:flex; gap:12px; align-items:center } .listo-n .ic { width:34px; height:34px; color:var(--verde); background:var(--verde-suave); border-radius:50%; padding:7px }
+
   /* ---- métricas ---- */
   .rango { display:flex; gap:6px; align-items:center; flex-wrap:wrap }
   .rango input { min-height:36px; padding:0 10px; border:1px solid var(--borde-f); border-radius:var(--r-s); background:var(--sup) }
@@ -174,7 +201,7 @@
   .corr { font-size:13.5px; padding:9px 0; border-bottom:1px solid var(--borde) } .corr:last-child { border-bottom:0 } .corr small { color:var(--tenue) }
 
   /* ---- pantallas medianas y celular ---- */
-  @media (max-width:1180px) { .cuerpo { grid-template-columns:minmax(0,1fr) } }
+  @media (max-width:1180px) { .cuerpo, .cuerpo.nutri { grid-template-columns:minmax(0,1fr) } .cuerpo.nutri #nform { order:-1 } }
   /* la agenda se acomoda a SU ancho (no al de la pantalla) */
   @container agenda (max-width:799px) {
     .cols { display:none }
@@ -182,7 +209,6 @@
     .c-hora { grid-area:hora; align-self:start } .c-per { grid-area:persona } .c-asis { grid-area:asis } .c-acc { grid-area:acc; justify-self:end }
     .c-ase { grid-area:ase; display:flex; gap:8px; align-items:center } .c-ase .via { margin-top:0 } .c-res { grid-area:res; display:flex; gap:10px; align-items:center; flex-wrap:wrap }
     .c-res .sec2 { margin-top:0 }
-    .detalle { grid-template-columns:minmax(180px,240px) auto minmax(160px,220px) }
     .detalle .cerrar { grid-column:1 / -1; justify-self:start }
   }
   @container agenda (max-width:599px) {
@@ -296,6 +322,7 @@ async function cargar(silencioso) {
     D = await llamar('fp_datos'); errCarga = '';
     actualizado = new Date().toLocaleTimeString('es-PE', { hour: 'numeric', minute: '2-digit' });
     if (silencioso && $('#lista')) refrescar(); else pintar();
+    if (!NU && !NUcargando) cargarNU();   // deja lista la base de nutrición para que el formulario abra al instante
   } catch (e) {
     if (/PC_NO_AUTORIZADA/.test(e.message)) return inicio();
     if (!D) { errCarga = e.message; pintarErrorCarga(); } else toast(e.message, 'err');
@@ -314,13 +341,14 @@ function pintarErrorCarga() {
 /* ---------- listas y estados ---------- */
 const porMarcar = (x) => !x.vino || (x.vino === 'SI' && (!x.coach || !x.cierre));
 const nomCoach = (id) => ((D.coaches.find((c) => c.id === id) || {}).label || '');
+const nomPres = (id) => (((D.presentadores || []).find((c) => c.id === id) || {}).label || '');
 const listaVista = () => (vista === 'hoy' ? D.hoyL : vista === 'ayer' ? D.ayer : vista === 'manana' ? D.manana : []);
 const todas = () => [].concat(D.hoyL, D.ayer, D.manana);
 const ESTADOS = [
   ['pend', 'Asistencia pendiente', (x) => !x.vino], ['asis', 'Asistió', (x) => x.vino === 'SI'], ['noasis', 'No asistió', (x) => x.vino === 'NO'],
   ['insc', 'Inscrito', (x) => x.vino === 'SI' && x.cierre === 'SI'], ['seg', 'Seguimiento', (x) => x.vino === 'SI' && x.cierre === 'SEG'],
   ['noins', 'No se inscribió', (x) => x.vino === 'SI' && x.cierre === 'NO'], ['fres', 'Falta resultado', (x) => x.vino === 'SI' && !x.cierre],
-  ['fcoach', 'Falta coach', (x) => x.vino === 'SI' && !x.coach], ['fplan', 'Falta registrar plan', (x) => x.vino === 'SI' && x.cierre === 'SI' && !x.plan]
+  ['fcoach', 'Falta coach', (x) => x.vino === 'SI' && !x.coach], ['fpres', 'Falta quién presentó', (x) => x.vino === 'SI' && (D.presentadores || []).length > 0 && !x.presento], ['fplan', 'Falta registrar plan', (x) => x.vino === 'SI' && x.cierre === 'SI' && !x.plan]
 ];
 function filtrada() {
   let l = listaVista();
@@ -357,7 +385,7 @@ function pintar() {
             <div class="nut-acc"><button class="btn osc" data-act="nav" data-v="nutri">${ic('mas')} Agendar nutrición</button></div></aside></div>
         <p class="aviso">${ic('candado')} Cada marca queda en el registro con hora y asesora. Si se corrige después, se guarda la corrección y Omar recibe aviso.</p>`;
     } else if (vista === 'nutri') {
-      cont += `<div class="cuerpo" style="grid-template-columns:minmax(0,1fr) minmax(280px,380px)"><section class="panel"><div class="panel-h">${ic('nutri')} Citas de hoy · Diego</div><div class="panel-b" id="nutriLista"></div></section><div>${formAgendar('nutri')}</div></div>`;
+      cont += `<div class="cuerpo nutri"><section class="panel"><div class="panel-h">${ic('nutri')} Citas de hoy · Diego</div><div class="panel-b" id="nutriLista"></div></section><div id="nform"></div></div>`;
     } else cont += `<div style="max-width:560px">${formAgendar('fp')}</div>`;
   }
   $('#raiz').innerHTML = `<div class="app"><nav class="side" aria-label="Menú"><img class="logo" src="${LOGO}" alt="RURUSH Fitness Club">
@@ -367,6 +395,7 @@ function pintar() {
     <main class="main">${cont}</main></div>`;
   refrescar();
   const f = $('#fagenda'); if (f) armarForm(f);
+  if ($('#nform')) pintarNform();
 }
 function opcionesAse() {
   const ases = [...new Set(listaVista().map((x) => x.asesora).filter(Boolean))].sort();
@@ -403,7 +432,8 @@ function fila(x) {
   const t = h12(x.hora), ocupado = enCurso.has('f' + x.id), dis = ocupado ? 'disabled' : '';
   const estado = x.vino === 'SI' ? 'ok' : x.vino === 'NO' ? 'no' : 'pend';
   const abierto = abiertos.has(x.id) && x.vino === 'SI' && vista !== 'manana';
-  const falta = x.vino === 'SI' && (!x.coach || !x.cierre || (x.cierre === 'SI' && !x.plan));
+  const hayPres = (D.presentadores || []).length > 0;
+  const falta = x.vino === 'SI' && (!x.coach || !x.cierre || (hayPres && !x.presento) || (x.cierre === 'SI' && !x.plan));
   let asis, res, acc;
   if (vista === 'manana') {
     asis = `<span class="chip neutro">${ic('cal')} Programado</span><div class="nota">Se marca el día de la clase</div>`;
@@ -419,13 +449,16 @@ function fila(x) {
         : x.cierre === 'SEG' ? `<span class="chip seg">${ic('reloj')} Seguimiento</span>`
         : x.cierre === 'NO' ? `<span class="chip neutro">No se inscribió</span>` : `<span class="chip falta">${ic('alerta')} Falta resultado</span>`;
       const c = nomCoach(x.coach);
-      res = `<div class="chips">${r}</div><div class="sec2">${ic('pesa')} ${c ? 'Coach ' + esc(cap(c)) : '<span style="color:var(--ambar)">Falta coach</span>'}</div>`;
+      const pr = nomPres(x.presento);
+      res = `<div class="chips">${r}</div><div class="sec2">${ic('pesa')} ${c ? 'Coach ' + esc(cap(c)) : '<span style="color:var(--ambar)">Falta coach</span>'}</div>` +
+        (hayPres ? `<div class="sec2">${ic('personas')} ${pr ? 'Presentó ' + esc(cap(pr)) : '<span style="color:var(--ambar)">Falta quién presentó</span>'}</div>` : '');
     }
     acc = ocupado ? `<span class="guardando"><span class="spin"></span> Guardando…</span>`
       : `<button class="exp ${falta ? 'pend' : ''}" data-act="exp" data-id="${x.id}" data-k="exp-${x.id}" aria-expanded="${abierto}" aria-controls="det-${x.id}" ${x.vino === 'SI' ? '' : 'disabled title="Primero registra la asistencia"'}>${falta ? 'Completar' : 'Editar'} ${ic('abajo')}</button>`;
   }
   const det = abierto ? `<div class="detalle" id="det-${x.id}">
       <div><label for="co-${x.id}">Coach que atendió</label><select id="co-${x.id}" class="campo ${x.coach ? '' : 'falta'}" data-act="marcarSel" data-id="${x.id}" data-m="COACH" data-k="co-${x.id}" ${dis}><option value="">Elegir coach…</option>${D.coaches.map((c) => `<option value="${c.id}" ${x.coach === c.id ? 'selected' : ''}>${esc(c.label)}</option>`).join('')}</select></div>
+      ${hayPres ? `<div><label for="pr-${x.id}">Presentó el plan</label><select id="pr-${x.id}" class="campo ${x.presento ? '' : 'falta'}" data-act="marcarSel" data-id="${x.id}" data-m="PRESENTO" data-k="pr-${x.id}" ${dis}><option value="">Elegir…</option>${D.presentadores.map((c) => `<option value="${c.id}" ${x.presento === c.id ? 'selected' : ''}>${esc(cap(c.label))}</option>`).join('')}</select></div>` : ''}
       <div><label>¿Se inscribió?</label><div class="seg" role="group" aria-label="Resultado comercial">
         <button data-act="marcar" data-id="${x.id}" data-m="CIERRE" data-v="SI" data-k="ci-${x.id}-SI" aria-pressed="${x.cierre === 'SI'}" class="${x.cierre === 'SI' ? 'si' : ''}" ${dis}>Sí</button>
         <button data-act="marcar" data-id="${x.id}" data-m="CIERRE" data-v="NO" data-k="ci-${x.id}-NO" aria-pressed="${x.cierre === 'NO'}" class="${x.cierre === 'NO' ? 'neg' : ''}" ${dis}>No</button>
@@ -458,13 +491,14 @@ async function marcar(id, campo, valor, esNutri) {
   if (enCurso.has(k)) return;
   const x = esNutri ? D.nutri.find((y) => y.id === id) : todas().find((y) => y.id === id);
   if (!x) return;
-  const actual = { VINO: x.vino, COACH: x.coach, CIERRE: x.cierre, PLAN: x.plan, ASISTIO: x.asistio }[campo];
+  const actual = { VINO: x.vino, COACH: x.coach, PRESENTO: x.presento, CIERRE: x.cierre, PLAN: x.plan, ASISTIO: x.asistio }[campo];
   if (actual === valor) return;   // ya está así: no se manda de nuevo
   enCurso.add(k); refrescar();
   try {
     const r = await llamar('fp_marcar', { id: x.id, personId: x.personId, nombre: x.nombre, fecha: x.fecha, hora: x.hora, asunto: x.asunto }, campo, valor);
     if (campo === 'VINO') { x.vino = valor; x.marca = r.marca; if (valor === 'SI' && (!x.coach || !x.cierre)) abiertos.add(id); if (valor === 'NO') abiertos.delete(id); }
     if (campo === 'COACH') { x.coach = valor; x.coachNombre = nomCoach(valor); }
+    if (campo === 'PRESENTO') x.presento = valor;
     if (campo === 'CIERRE') x.cierre = valor;
     if (campo === 'PLAN') x.plan = valor;
     if (campo === 'ASISTIO') x.asistio = valor;
@@ -486,14 +520,33 @@ document.addEventListener('click', (ev) => {
   else if (a === 'refrescar') { b.disabled = true; cargar(true).then(() => { b.disabled = false; toast('Lista actualizada', 'ok'); }); }
   else if (a === 'reintentar') cargar();
   else if (a === 'rango') { rango = b.dataset.r; cargarMetricas(); }
+  else if (a === 'nuSel') elegirN(b.dataset.pid);
+  else if (a === 'nuDia') diaN(b.dataset.f);
+  else if (a === 'nuHora') { S.hora = b.dataset.h; pintarNform(); }
+  else if (a === 'nuAgendar') agendarN();
+  else if (a === 'nuOtra') { nuReset(); pintarNform(); }
+  else if (a === 'nuCopiar') copiarN();
+  else if (a === 'nuReintentar') { NUerr = ''; pintarNform(); cargarNU(true); }
+  else if (a === 'nuPar') { const x = S.par.find((y) => y.pid === b.dataset.pid); if (x) { S.extra = S.extra.filter((y) => y.pid !== x.pid).concat([{ pid: x.pid, nombre: x.nombre, tels: x.tels, estado: '', evaluaciones: null, prox: null }]); elegirN(x.pid); } }
 });
+document.addEventListener('submit', (ev) => { if (ev.target.id === 'nBuscarF') { ev.preventDefault(); buscarN(); } });
 document.addEventListener('change', (ev) => {
   const s = ev.target;
+  if (s.id === 'nTelSel') { S.tel = s.value; return; }
   if (s.dataset.act === 'marcarSel') marcar(Number(s.dataset.id), s.dataset.m, s.value, false);
   else if (s.id === 'fAse') { fAse = s.value; refrescar(); }
   else if (s.id === 'fEst') { fEst = s.value; refrescar(); }
 });
-document.addEventListener('input', (ev) => { if (ev.target.id === 'q') { q = ev.target.value; refrescar(); } });
+document.addEventListener('input', (ev) => {
+  const t = ev.target;
+  if (t.id === 'q') { q = t.value; refrescar(); }
+  else if (t.id === 'nq') { S.q = t.value; if (/^9\d{8}$/.test(t.value.replace(/\D/g, '')) && t.value.replace(/\D/g, '').length === 9) buscarN(); }   // celular completo: busca solo
+  else if (t.id === 'nNom') { S.nuevo.nombre = t.value; pieN(); }
+  else if (t.id === 'nTel') { S.nuevo.tel = t.value; pieN(); }
+  else if (t.id === 'nDni') S.nuevo.dni = t.value;
+  else if (t.id === 'nTel2') { S.tel = t.value.replace(/\D/g, ''); pieN(); }
+});
+document.addEventListener('focusout', (ev) => { if (ev.target.id === 'nNom' || ev.target.id === 'nDni') parecidosN(); });
 document.addEventListener('keydown', (ev) => {
   if (ev.key === '/' && $('#q') && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) { ev.preventDefault(); $('#q').focus(); }
   if (ev.key === 'Escape' && document.activeElement && document.activeElement.id === 'q' && q) { q = ''; ev.target.value = ''; refrescar(); }
@@ -538,6 +591,178 @@ async function cargarMetricas() {
   M = null; mErr = ''; pintar();
   try { M = await llamar('fp_metricas', de, ha); } catch (e) { mErr = e.message; }
   if (vista === 'metricas') pintar();
+}
+
+/* ---------- agendar nutrición con la base de socios (proyecto de Nutrición) ---------- */
+let NU = null, NUerr = '', NUcargando = false;
+const S = {};
+const DIR = 'Av. Larco 1164, Víctor Larco, al costado de Mass';
+function nuReset() { Object.assign(S, { q: '', buscando: false, res: null, sel: '', nuevo: { nombre: '', tel: '', dni: '' }, par: [], extra: [], tel: '', fecha: '', hora: '', libres: Object.assign({}, (NU && NU.libres) || {}), cargandoHoras: false, guardando: false, done: null }); }
+nuReset();
+async function cargarNU(forzar) {
+  if (NUcargando || (NU && !forzar)) return;
+  NUcargando = true;
+  try { NU = await llamar('fp_nuInicio'); NUerr = ''; if (NU.libres) S.libres = Object.assign({}, NU.libres); }
+  catch (e) { NUerr = e.message; }
+  NUcargando = false;
+  if (vista === 'nutri') pintarNform();
+}
+const fichasN = () => ((S.res && S.res.fichas) || []).concat(S.extra);
+const fichaN = () => fichasN().find((f) => f.pid === S.sel);
+const tel9 = (t) => /^9\d{8}$/.test(String(t || '').replace(/\D/g, '').slice(-9)) ? String(t).replace(/\D/g, '').slice(-9) : '';
+const ddmm = (iso) => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : '';
+
+function pintarNform() {
+  const el = $('#nform'); if (!el) return;
+  if (!NU && NUerr) { el.innerHTML = `<div class="panel vacio">${ic('alerta')}<b>No se pudo abrir la base de nutrición</b>${esc(NUerr)}<br><br><button class="btn sec" data-act="nuReintentar">${ic('act')} Reintentar</button></div>`; return; }
+  if (!NU) { el.innerHTML = `<div class="panel carga" style="padding:50px 20px"><span class="spin"></span>Abriendo la base de socios…</div>`; cargarNU(); return; }
+  if (!NU.conectado) { el.innerHTML = formAgendar('nutri'); armarForm($('#fagenda')); return; }
+  const foco = document.activeElement ? document.activeElement.id : '';
+  el.innerHTML = S.done ? listoN() : formN();
+  if (foco && $('#' + foco)) $('#' + foco).focus(); else if (!S.res && !S.done && $('#nq')) $('#nq').focus();
+}
+
+function fichaHTML(f) {
+  const est = f.sinFicha ? `<span class="chip ok">${ic('ok')} Alumno activo${f.vence ? ' · vence ' + ddmm(f.vence) : ''}</span><span class="chip neutro">Sin ficha: se crea al agendar</span>`
+    : f.estado === 'activo' ? `<span class="chip ok">${ic('ok')} Alumno activo${f.vence ? ' · vence ' + ddmm(f.vence) : ''}</span>`
+    : f.estado === 'inactivo' ? `<span class="chip neutro">Alumno inactivo</span>` : `<span class="chip neutro">Sin membresía registrada</span>`;
+  const datos = [f.dni ? 'DNI ' + esc(f.dni) : '', f.evaluaciones != null ? (f.evaluaciones ? (f.evaluaciones === 1 ? '1 evaluación' : f.evaluaciones + ' evaluaciones') + (f.ultima ? ' · última ' + ddmm(f.ultima) : '') : 'Primera evaluación') : '',
+    (f.tels || []).length ? (f.tels || []).slice(0, 2).join(' · ') : ''].filter(Boolean).join(' · ');
+  const on = S.sel === f.pid;
+  return `<button type="button" class="ficha ${on ? 'on' : ''}" role="radio" aria-checked="${on}" data-act="nuSel" data-pid="${esc(f.pid)}"><span class="radio"></span><span style="flex:1;min-width:0">
+    <span class="nom" style="display:block">${esc(f.nombre)}</span><span class="chips">${est}</span>${datos ? `<span class="sec2" style="display:block">${datos}</span>` : ''}
+    ${f.prox ? `<span class="prox">${ic('alerta')} Ya tiene cita el ${esc(fechaCorta(f.prox.fecha))} · ${h12(f.prox.hora).h} ${h12(f.prox.hora).s}: se moverá a la nueva hora</span>` : ''}</span></button>`;
+}
+
+function formN() {
+  const f = fichaN(), fs = fichasN();
+  let h = `<div class="panel"><div class="panel-h">${ic('nutri')} Agendar nutrición con Diego</div>
+    <div class="paso"><h4><span class="num">1</span> ¿Quién es?</h4>
+      <form id="nBuscarF" class="busca-n" role="search"><div class="buscar">${ic('buscar')}<label class="sr" for="nq">Buscar socio</label><input id="nq" class="campo" value="${esc(S.q)}" placeholder="Celular, código AppsFit, DNI o nombre" autocomplete="off"></div>
+      <button class="btn osc" type="submit" ${S.buscando ? 'disabled' : ''}>${S.buscando ? '<span class="spin"></span>' : 'Buscar'}</button></form>`;
+  if (S.buscando) h += `<div class="nlista">${'<div class="esq" style="grid-template-columns:1fr;height:58px;border:0"><i></i></div>'.repeat(2)}</div>`;
+  else if (S.res) {
+    h += `<div class="nlista" role="radiogroup" aria-label="Socio">${fs.length ? '' : `<p class="vacio-t">No está en Pipedrive ni en AppsFit. Crea su ficha:</p>`}${fs.map(fichaHTML).join('')}
+      <button type="button" class="ficha ${S.sel === 'nuevo' ? 'on' : ''}" role="radio" aria-checked="${S.sel === 'nuevo'}" data-act="nuSel" data-pid="nuevo"><span class="radio"></span><span><span class="nom">${ic('mas')} Es nuevo: crear ficha</span></span></button></div>`;
+    if (S.sel === 'nuevo') h += `<div class="nuevo-f"><div class="ancho"><label for="nNom">Nombre y apellido</label><input id="nNom" class="campo" value="${esc(S.nuevo.nombre)}" autocomplete="off"></div>
+        <div><label for="nTel">Celular</label><input id="nTel" class="campo" value="${esc(S.nuevo.tel)}" inputmode="numeric" maxlength="12" placeholder="9XXXXXXXX" autocomplete="off"></div>
+        <div><label for="nDni">DNI (opcional)</label><input id="nDni" class="campo" value="${esc(S.nuevo.dni)}" inputmode="numeric" maxlength="9" autocomplete="off"></div>
+        <div class="ancho par" id="nPar">${parHTML()}</div></div>`;
+    else if (f && (f.tels || []).length > 1) h += `<div style="margin-top:10px"><label class="lb" for="nTelSel">Celular para la cita</label><select id="nTelSel" class="campo">${f.tels.map((t) => `<option ${S.tel === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div>`;
+    else if (f && !(f.tels || []).length) h += `<div style="margin-top:10px"><label class="lb" for="nTel2">Celular para la cita</label><input id="nTel2" class="campo" value="${esc(S.tel)}" inputmode="numeric" maxlength="12" placeholder="9XXXXXXXX"></div>`;
+  } else h += `<p class="aviso" style="margin-top:8px">Con el celular completo busca solo. También sirve el código de AppsFit (ej. 1025).</p>`;
+  h += `</div>`;
+  if (S.sel) {
+    const lib = S.libres[S.fecha];
+    h += `<div class="paso"><h4><span class="num">2</span> ¿Cuándo? <span class="act" style="font-weight:500">martes y miércoles</span></h4>
+      <div class="opcs" role="group" aria-label="Día">${NU.fechas.map((d) => { const l = S.libres[d]; return `<button type="button" class="opc ${S.fecha === d ? 'on' : ''}" data-act="nuDia" data-f="${d}" aria-pressed="${S.fecha === d}" ${l && !l.length ? 'disabled' : ''}>${fechaCorta(d)}<small>${l ? (l.length ? l.length + ' libres' : 'lleno') : MESES[+d.slice(5, 7) - 1].slice(0, 3)}</small></button>`; }).join('')}</div>
+      ${S.fecha ? `<div style="margin-top:12px"><label class="lb">Hora libre</label>${S.cargandoHoras ? '<span class="guardando"><span class="spin"></span> Viendo horas…</span>'
+        : lib && lib.length ? `<div class="opcs" role="group" aria-label="Hora">${lib.map((x) => `<button type="button" class="opc ${S.hora === x ? 'on' : ''}" data-act="nuHora" data-h="${x}" aria-pressed="${S.hora === x}">${h12(x).h} ${h12(x).s}</button>`).join('')}</div>` : '<p class="vacio-t">No quedan horas ese día.</p>'}</div>` : ''}</div>
+      <div class="pie-n" id="nPie">${pieHTML()}</div>`;
+  }
+  return h + `</div>`;
+}
+function listoN() {
+  const f = fichaN(), dir = S.sel === 'nuevo' ? 'nuevo' : '';
+  const r = S.done;
+  return `<div class="panel"><div class="panel-b"><div class="listo-n">${ic('ok')}<div><b style="font-size:16px">${r.movida ? 'Cita cambiada' : 'Reserva confirmada'}</b><div class="resumen">${esc(r.msg || '')}</div></div></div>
+    <label class="lb" style="margin-top:16px;display:block;font-size:12.5px;font-weight:650;color:var(--sub)">Mensaje para el socio (WhatsApp)</label><div class="wa" id="nWa">${esc(waTxt(r))}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn pri" data-act="nuCopiar">Copiar mensaje</button><button class="btn sec" data-act="nuOtra">${ic('mas')} Agendar otra</button></div></div></div>`;
+}
+function waTxt(r) {
+  const n = cap(String(r.nombre || '').trim().split(/\s+/)[0]);
+  return '¡Hola ' + n + '! 👋 Tu evaluación nutricional en Rurush quedó agendada:\n📅 ' + fechaLarga(r.fecha) + '\n🕒 ' + h12(r.hora).h + ' ' + h12(r.hora).s + '\n📍 ' + DIR +
+    '\n\nTe esperamos 5 minutos antes. Si no puedes venir, avísanos para cambiar la hora. 💪';
+}
+function datosN() {   // lo que se manda a agendar, o el motivo de por qué aún no se puede
+  const f = fichaN();
+  if (!S.sel) return { falta: 'Elige al socio' };
+  let q;
+  if (S.sel === 'nuevo') {
+    if (String(S.nuevo.nombre).trim().split(/\s+/).filter((w) => w.length >= 2).length < 2) return { falta: 'Escribe nombre y apellido' };
+    if (!tel9(S.nuevo.tel)) return { falta: 'Escribe el celular (9 dígitos)' };
+    q = { nombre: S.nuevo.nombre.trim(), tel: tel9(S.nuevo.tel), dni: String(S.nuevo.dni || '').replace(/\D/g, '') };
+  } else {
+    if (!f) return { falta: 'Elige al socio' };
+    if (!tel9(S.tel)) return { falta: 'Falta el celular' };
+    q = { pid: f.pid, nombre: f.nombre, tel: tel9(S.tel) };
+    if (f.prox) q.mover = f.prox.act;
+  }
+  if (!S.fecha) return { falta: 'Elige el día' };
+  if (!S.hora) return { falta: 'Elige la hora' };
+  return { q: Object.assign(q, { fecha: S.fecha, hora: S.hora }) };
+}
+function pieHTML() {
+  const d = datosN(), f = fichaN(), nom = S.sel === 'nuevo' ? S.nuevo.nombre : f ? f.nombre : '';
+  const res = d.q ? `<b>${esc(nom)}</b> · ${fechaLarga(S.fecha)} · ${h12(S.hora).h} ${h12(S.hora).s}` : esc(d.falta);
+  return `<div class="resumen">${res}</div><button class="btn pri" data-act="nuAgendar" ${d.q && !S.guardando ? '' : 'disabled'}>${S.guardando ? '<span class="spin"></span> Agendando…' : ic(f && f.prox ? 'act' : 'mas') + (f && f.prox ? ' Mover cita' : ' Agendar nutrición')}</button>`;
+}
+function pieN() { const p = $('#nPie'); if (p) p.innerHTML = pieHTML(); }
+function parHTML() {
+  return S.par.length ? `Parecidos en Pipedrive (para no duplicar):<br>${S.par.map((x) => `<button type="button" class="btn sec peq" data-act="nuPar" data-pid="${esc(x.pid)}">Usar ${esc(x.nombre)}${x.tels.length ? ' · ' + esc(x.tels[0]) : ''}</button>`).join('')}` : '';
+}
+
+async function buscarN() {
+  const q0 = S.q.trim();
+  if (!q0 || S.buscando) return;
+  Object.assign(S, { buscando: true, res: null, sel: '', extra: [], par: [], tel: '' });
+  pintarNform();
+  try {
+    S.res = await llamar('fp_nuBuscar', q0);
+    const fs = S.res.fichas;
+    if (fs.length === 1) elegirN(fs[0].pid, true);
+    else if (!fs.length) { S.sel = 'nuevo'; S.nuevo = { nombre: S.res.modo === 'nombre' ? q0 : '', tel: S.res.tel || '', dni: S.res.dni || '' }; }
+  } catch (e) { toast(e.message, 'err'); }
+  S.buscando = false;
+  pintarNform();
+  if (S.sel === 'nuevo' && $('#nNom')) $('#nNom').focus();
+}
+function elegirN(pid, sinPintar) {
+  S.sel = pid;
+  const f = fichaN();
+  if (f) S.tel = S.res && S.res.tel && (f.tels || []).includes(S.res.tel) ? S.res.tel : ((f.tels || [])[0] || '');
+  if (pid === 'nuevo' && S.res && !S.nuevo.tel) S.nuevo.tel = S.res.tel || '';
+  if (!sinPintar) pintarNform();
+}
+async function diaN(f) {
+  S.fecha = f; S.hora = '';
+  if (!S.libres[f]) {
+    S.cargandoHoras = true; pintarNform();
+    try { S.libres[f] = await llamar('fp_nuLibres', f); } catch (e) { toast(e.message, 'err'); }
+    S.cargandoHoras = false;
+  }
+  pintarNform();
+}
+async function parecidosN() {
+  const n = String(S.nuevo.nombre || '').trim(), d = String(S.nuevo.dni || '').replace(/\D/g, '');
+  const k = n + '|' + d;
+  if (S.parK === k || (n.length < 5 && d.length < 8)) return;
+  S.parK = k;
+  try { S.par = await llamar('fp_nuParecidos', n, d); } catch (e) { S.par = []; }
+  const el = $('#nPar'); if (el) el.innerHTML = parHTML();
+}
+async function agendarN() {
+  if (S.guardando) return;
+  const d = datosN(); if (!d.q) return toast(d.falta, 'err');
+  S.guardando = true; pieN();
+  try {
+    const r = await llamar('fp_nuAgendar', d.q);
+    S.done = Object.assign({ movida: !!d.q.mover, nombre: d.q.nombre, fecha: d.q.fecha, hora: d.q.hora }, r);
+    toast(r.msg || 'Agendado', 'ok');
+    NU.libres = null; S.libres = {};
+    cargarNU(true); cargar(true);
+  } catch (e) {
+    toast(e.message, 'err', 8000);
+    if (/hora|ocupad|libre|choc/i.test(e.message)) { delete S.libres[S.fecha]; S.guardando = false; return diaN(S.fecha); }
+  }
+  S.guardando = false;
+  pintarNform();
+}
+function copiarN() {
+  const t = $('#nWa').textContent;
+  (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('Mensaje copiado', 'ok'), () => {
+    const r = document.createRange(); r.selectNodeContents($('#nWa')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); document.execCommand('copy'); toast('Mensaje copiado', 'ok');
+  });
 }
 
 /* ---------- agendar ---------- */
