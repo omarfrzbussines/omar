@@ -76,7 +76,8 @@ function hs_mapa_() {
     const med = m.length % 2 ? m[(m.length - 1) / 2] : Math.round((m[m.length / 2 - 1] + m[m.length / 2]) / 2);
     out[k] = { h: med, n: m.length };
   });
-  try { cache.put('hs_mapa', JSON.stringify(out), 600); } catch (e) {}
+  // 6 h: solo cambia cuando hs_tick anota visitas nuevas, y ese mismo reloj lo vuelve a armar (leer la hoja tarda ~2 s)
+  try { cache.put('hs_mapa', JSON.stringify(out), 21600); } catch (e) {}
   return out;
 }
 
@@ -85,6 +86,7 @@ function hs_tick() {
   const h = new Date(Date.now() + LIMA * 3600e3).getUTCHours();
   if (h < 6 || h >= 23) return;
   hs_anotar_(appsfitClientes(1, fechaLima(0), '2099-12-31'));
+  hs_mapa_();   // deja el mapa listo en caché para que al abrir la app no se lea la hoja
 }
 function hs_instalarSiFalta_() {
   const p = PropertiesService.getScriptProperties();
