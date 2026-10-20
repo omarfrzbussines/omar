@@ -41,3 +41,14 @@ Si no existe: nombre y apellido (+ DNI opcional); antes de crear muestra fichas 
 No se pide correo: la cita va directo a la ficha (`person_id`), así nunca cae en la ficha de Omar.
 Si ya tiene cita futura no deja crear otra: ofrece **moverla**. Al confirmar, la cita entra a Pipedrive (de Diego)
 y a CONTROL NUTRICIÓN, y sale el mensaje de WhatsApp listo para copiar.
+
+## Agendar desde la app Free Pass (otro proyecto)
+
+La app Free Pass (rurush-app-celular) usa estas mismas reservas por el link `/exec` de este proyecto, con la llave
+`NU_LLAVE` (acciones `rv_inicio`, `rv_buscar`, `rv_libres`, `rv_parecidos` y `rv_agendar`). Misma base de AppsFit, mismas reglas
+y la cita también entra a CONTROL NUTRICIÓN.
+
+1. Aquí: subir `Nutricion.gs` y crear una **nueva versión** de la implementación (el link no cambia).
+2. En el proyecto de la app Free Pass → Configuración → Propiedades del script, agregar a mano:
+   `FP_NU_URL` = el link `/exec` de este proyecto · `FP_NU_LLAVE` = el valor de `NU_LLAVE` de este proyecto.
+3. Nueva versión de la app Free Pass. Sin esas dos propiedades, la app usa el agendar simple de antes.

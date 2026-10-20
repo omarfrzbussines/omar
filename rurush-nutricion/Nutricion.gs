@@ -368,6 +368,11 @@ function doGet(e) {
   try {
     if (e.parameter.accion === 'plan') return nu_resp(Object.assign({ ok: true }, nu_plan()));
     if (e.parameter.accion === 'libres') return nu_resp({ ok: true, libres: nu_libres(e.parameter.fecha) });
+    // Reservas desde la app Free Pass (otro proyecto): mismas funciones y reglas que ?app=reservas
+    if (e.parameter.accion === 'rv_inicio') return nu_resp({ ok: true, r: rv_inicio() });
+    if (e.parameter.accion === 'rv_buscar') return nu_resp({ ok: true, r: rv_buscar(null, e.parameter.q) });
+    if (e.parameter.accion === 'rv_libres') return nu_resp({ ok: true, r: rv_libres(null, e.parameter.fecha) });
+    if (e.parameter.accion === 'rv_parecidos') return nu_resp({ ok: true, r: rv_parecidos(null, e.parameter.nombre, e.parameter.dni) });
     return nu_resp({ ok: true, pong: nu_hoy() });
   } catch (err) { return nu_resp({ ok: false, error: err.message }); }
 }
@@ -377,6 +382,7 @@ function doPost(e) {
     const q = JSON.parse(e.postData.contents || '{}');
     if (e.parameter.accion === 'agendar') return nu_resp(nu_agendar(q));
     if (e.parameter.accion === 'guardar') return nu_resp(nu_guardar(q.lista));
+    if (e.parameter.accion === 'rv_agendar') return nu_resp({ ok: true, r: rv_agendar(null, q) });
     return nu_resp({ ok: false, error: 'accion' });
   } catch (err) { return nu_resp({ ok: false, error: err.message }); }
 }
