@@ -119,17 +119,33 @@ async function pegarTexto(el, text) {
   return !!el.innerText.trim();
 }
 
-// Cuadro de descripción (caption) de la vista previa de la imagen
-function cajaCaption() {
-  return [...document.querySelectorAll('div[contenteditable="true"]')]
-    .filter((el) => !el.closest('#main footer') && !el.closest('#side') && el.offsetParent !== null)
-    .pop() || null;
+// WhatsApp cambia seguido la vista previa de la imagen (a veces la dibuja dentro del pie del chat y con
+// otro ícono): se reconoce por lo NUEVO que aparece al pegar — un botón «enviar/send» (ícono, aria-label
+// o <title> de svg) o el cuadro del comentario —, esté donde esté.
+function enviosEnPantalla() {
+  return [...document.querySelectorAll('[data-icon], [aria-label], svg title')].filter((e) =>
+    /send|enviar/i.test(e.getAttribute('data-icon') || e.getAttribute('aria-label') || (e.tagName.toLowerCase() === 'title' ? e.textContent : '') || ''));
 }
-
-function botonEnviarPreview() {
-  const icons = [...document.querySelectorAll('span[data-icon="send"], span[data-icon="wds-ic-send-filled"], [aria-label="Enviar"], [aria-label="Send"]')]
-    .filter((el) => !el.closest('#main footer'));
-  return icons.length ? (icons[0].closest('[role="button"], button') || icons[0]) : null;
+const ICONO_CERRAR = '[data-icon="x"], [data-icon*="close" i], [data-icon="x-alt"], [aria-label="Cerrar"], [aria-label="Close"]';
+function verEl(e) {
+  const el = e.tagName && e.tagName.toLowerCase() === 'title' ? (e.closest('svg') || e) : e;
+  const r = el.getBoundingClientRect();
+  return r.width > 0 && r.height > 0 && !el.closest('#side') && !el.closest('#pane-side');
+}
+function fotoPantalla() {
+  return { envios: new Set(enviosEnPantalla()), editables: new Set(document.querySelectorAll('[contenteditable="true"]')), cerrar: new Set(document.querySelectorAll(ICONO_CERRAR)) };
+}
+function vistaPreviaNueva(base) {
+  const envios = enviosEnPantalla().filter((e) => !base.envios.has(e) && verEl(e));
+  const textos = [...document.querySelectorAll('[contenteditable="true"]')].filter((e) => !base.editables.has(e) && verEl(e));
+  if (!envios.length && !textos.length) return null;
+  const ic = envios[envios.length - 1];
+  const cierres = [...document.querySelectorAll(ICONO_CERRAR)].filter((e) => !base.cerrar.has(e) && verEl(e));
+  return {
+    boton: ic ? (ic.closest('button, [role="button"]') || (ic.tagName.toLowerCase() === 'title' ? ic.closest('svg').parentElement : ic.parentElement)) : null,
+    caja: textos[textos.length - 1] || null,
+    cerrar: cierres.length ? (cierres[0].closest('button, [role="button"]') || cierres[0]) : null,
+  };
 }
 
 async function esperarSalida(antes, antesId, intentos = 30) {
@@ -158,18 +174,37 @@ async function enviarRecordatorio(text, phone, header, conImagen = true) {
     const dt = new DataTransfer();
     dt.items.add(file);
     const antes = outCount(), antesId = ultimoSaliente();
+    const base = fotoPantalla();
     c.focus();
     c.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
 
-    let btn = null;
-    for (let i = 0; i < 25 && !btn; i++) { await esperar(400); btn = botonEnviarPreview(); }
-    if (btn) {
-      const caja = cajaCaption();
-      const conTexto = caja ? await pegarTexto(caja, text) : false;
-      btn = botonEnviarPreview() || btn;
-      if (!seguro()) return { ok: false, noEnviado: true, error: 'el chat cambió antes de enviar' };
-      btn.click();
-      if (!(await esperarSalida(antes, antesId))) return { ok: false, error: 'la imagen no apareció en el chat' };
+    let vista = null;
+    for (let i = 0; i < 38 && !vista; i++) { await esperar(400); vista = vistaPreviaNueva(base); }
+    if (vista) {
+      await esperar(700);
+      vista = vistaPreviaNueva(base) || vista;
+      const conTexto = vista.caja ? await pegarTexto(vista.caja, text) : false;
+      if (!seguro()) {
+        if (vista.cerrar) vista.cerrar.click();
+        return { ok: false, noEnviado: true, error: 'el chat cambió antes de enviar' };
+      }
+      // clic como de mouse y, si a los 5 s no salió (o no hay botón), Enter en el comentario
+      if (vista.boton) clic(vista.boton);
+      let salio = vista.boton ? await esperarSalida(antes, antesId, 10) : false;
+      if (!salio && vista.caja && vistaPreviaNueva(base)) {
+        vista.caja.focus();
+        vista.caja.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+        salio = await esperarSalida(antes, antesId, 10);
+      }
+      if (!salio) {
+        const v = vistaPreviaNueva(base);
+        if (v && v.boton) { clic(v.boton); salio = await esperarSalida(antes, antesId, 20); }
+      }
+      if (!salio) {
+        const v = vistaPreviaNueva(base);
+        if (v && v.cerrar) v.cerrar.click();
+        return { ok: false, error: 'la imagen no apareció en el chat' };
+      }
       if (conTexto) return { ok: true, imagen: true };
       // la imagen salió sin descripción: mandar el texto aparte
       await esperar(1500);
@@ -178,7 +213,7 @@ async function enviarRecordatorio(text, phone, header, conImagen = true) {
     }
     // no abrió la vista previa: seguimos solo con texto
     // si quedó una vista previa abierta, no seguir: podría enviarse sola después
-    if (botonEnviarPreview()) return { ok: false, noEnviado: true, error: 'quedó abierta la vista previa de la imagen' };
+    if (vistaPreviaNueva(base)) return { ok: false, noEnviado: true, error: 'quedó abierta la vista previa de la imagen' };
     const r = await enviarTexto(text, seguro);
     return { ...r, imagen: false, aviso: r.ok ? 'no se pudo adjuntar la imagen, se envió solo el texto' : undefined };
   }
