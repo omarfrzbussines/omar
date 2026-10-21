@@ -207,7 +207,26 @@ async function clickSend() {
 // se acepta cualquier ícono «send» o un botón «Enviar» fuera del cuadro de texto del chat.
 const ICONO_ENVIAR = '[data-icon*="send" i], button[aria-label="Enviar"], button[aria-label="Send"], [role="button"][aria-label="Enviar"], [role="button"][aria-label="Send"]';
 
-function vistaPrevia() {
+// Con «base» (lo que había en pantalla antes de pegar): la vista previa es lo NUEVO que apareció,
+// esté donde esté (WhatsApp a veces la dibuja dentro del pie del chat). Sin base: lo de siempre.
+function fotoBase() {
+  return { compose: compose(), envios: new Set(document.querySelectorAll(ICONO_ENVIAR)), cerrar: new Set(document.querySelectorAll(ICONO_CERRAR)) };
+}
+const ICONO_CERRAR = '[data-icon="x"], [data-icon*="close" i], [data-icon="x-alt"], [aria-label="Cerrar"], [aria-label="Close"]';
+const fueraDeLista = (e) => !e.closest('#side') && !e.closest('#pane-side') && e.offsetParent;
+function vistaPrevia(base) {
+  if (base) {
+    const nuevos = [...document.querySelectorAll(ICONO_ENVIAR)].filter((i) => !base.envios.has(i) && fueraDeLista(i));
+    if (!nuevos.length) return null;
+    const icono = nuevos[nuevos.length - 1];
+    const textos = [...document.querySelectorAll('div[contenteditable="true"]')].filter((e) => e !== base.compose && fueraDeLista(e));
+    const cierres = [...document.querySelectorAll(ICONO_CERRAR)].filter((i) => !base.cerrar.has(i) && fueraDeLista(i));
+    return {
+      boton: icono.closest('button, [role="button"]') || icono.parentElement,
+      comentario: textos[textos.length - 1] || null,
+      cerrar: cierres.length ? (cierres[0].closest('button, [role="button"]') || cierres[0]) : null,
+    };
+  }
   const iconos = [...document.querySelectorAll(ICONO_ENVIAR)]
     .filter((i) => !i.closest('#main footer') && !i.closest('#side') && !i.closest('#pane-side') && i.offsetParent);
   if (!iconos.length) return null;
@@ -239,23 +258,28 @@ async function enviarImagen({ b64, mime, nombre, texto }) {
 
   // Con el texto ya en el cuadro, WhatsApp lo pasa como comentario de la imagen:
   // sale UN solo mensaje (imagen + texto abajo).
+  const base = fotoBase();
+  const vp = () => vistaPrevia(base);
   c.focus();
   c.dispatchEvent(new ClipboardEvent('paste', { clipboardData: conArchivo(), bubbles: true, cancelable: true }));
   let metodo = 'pegar';
-  let vista = await esperar(vistaPrevia, 8000);
+  let vista = await esperar(vp, 8000);
   if (!vista) {
     // plan B: soltar el archivo sobre el chat (como arrastrarlo)
     metodo = 'soltar';
     const zona = document.querySelector('#main');
     const dt = conArchivo();
     for (const t of ['dragenter', 'dragover', 'drop']) zona.dispatchEvent(new DragEvent(t, { dataTransfer: dt, bubbles: true, cancelable: true }));
-    vista = await esperar(vistaPrevia, 8000);
+    vista = await esperar(vp, 8000);
   }
   if (!vista) return { ok: false, error: 'no se abrió la vista previa de la imagen' };
   await new Promise((r) => setTimeout(r, 800));
-  vista = vistaPrevia() || vista;
+  vista = vp() || vista;
 
   const cancelar = (error) => {
+    // cerrar la vista previa con su ✕ (Escape solo no siempre la cierra)
+    const v = vp();
+    if (v && v.cerrar) v.cerrar.click();
     const esc = { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true, cancelable: true };
     (vista.comentario || document.activeElement || document.body).dispatchEvent(new KeyboardEvent('keydown', esc));
     document.dispatchEvent(new KeyboardEvent('keydown', esc));
@@ -286,15 +310,15 @@ async function enviarImagen({ b64, mime, nombre, texto }) {
     el.click();
   };
   clicar(vista.boton);
-  let cerro = await esperar(() => !vistaPrevia(), 5000);
-  if (!cerro && vistaPrevia() && vista.comentario) {
+  let cerro = await esperar(() => !vp(), 5000);
+  if (!cerro && vp() && vista.comentario) {
     const ent = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true };
     vista.comentario.focus();
     vista.comentario.dispatchEvent(new KeyboardEvent('keydown', ent));
-    cerro = await esperar(() => !vistaPrevia(), 5000);
+    cerro = await esperar(() => !vp(), 5000);
   }
-  if (!cerro && vistaPrevia()) { clicar(vistaPrevia().boton); }
-  if (!cerro) cerro = await esperar(() => !vistaPrevia(), 15000);
+  if (!cerro && vp()) { clicar(vp().boton); }
+  if (!cerro) cerro = await esperar(() => !vp(), 15000);
   if (!cerro) return cancelar('la imagen no salió (la vista previa no se cerró)');
   return { ok: true, metodo };
 }
