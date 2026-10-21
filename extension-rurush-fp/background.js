@@ -784,16 +784,6 @@ function decidirConfirmacion(fp, msgs, now) {
   }
   const recientes = msgs.slice(-4).filter((m) => !m.out);
   if (recientes.some((m) => RX_CANCELA.test(m.text || ''))) return { alerta: 'en el chat pide cancelar o cambiar — revisar a mano' };
-  // Si en lo último del chat se quedó «hoy» y Pipedrive dice otro día (o al revés), no confirmar una fecha
-  // equivocada: avisar para que la asesora corrija la actividad.
-  const charla = msgs.slice(-8).map((m) => m.text || '').join(' ').toLowerCase();
-  const diaPd = nombreDia(fp, now).toLowerCase();
-  if (/\bhoy\b/.test(charla) && !/\bmañana\b/.test(charla) && diaPd !== 'hoy') {
-    return { alerta: `en el chat quedaron para HOY, pero en Pipedrive la clase es ${diaPd} — corregir la fecha en Pipedrive` };
-  }
-  if (/\bmañana\b/.test(charla) && !/\bhoy\b/.test(charla) && diaPd !== 'mañana') {
-    return { alerta: `en el chat quedaron para MAÑANA, pero en Pipedrive la clase es ${diaPd} — corregir la fecha en Pipedrive` };
-  }
   return { enviar: msgConfirmacion(fp, now), imagen: true, extra: `🗺️ Ubicación GPS: ${GPS}` };
 }
 
