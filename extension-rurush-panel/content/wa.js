@@ -375,6 +375,14 @@
   // citas de gente que nunca contestó. WhatsApp solo tiene pintados los mensajes
   // cercanos, así que esto es "no veo que haya escrito", no una certeza — por eso
   // avisa y deja agendar igual en vez de bloquear.
+  // Últimos mensajes del chat abierto (de los dos lados), para revisar que la fecha cuadre.
+  function textosRecientes(n) {
+    const main = document.querySelector("#main");
+    if (!main) return [];
+    return [...main.querySelectorAll(".message-in, .message-out")].slice(-n)
+      .map((m) => (m.querySelector("span.selectable-text, [data-testid='selectable-text']") || m).innerText || "");
+  }
+
   function leadEscribio() {
     const main = document.querySelector("#main");
     if (!main) return true;
@@ -901,7 +909,8 @@
     const campos = (pre) => `
         <div class="rr-campos">
           <div><label class="rr-lbl">Fecha</label>
-            <input type="date" class="rr-input" id="rr-${pre}-fecha" value="${hoyLima(1)}" min="${hoyLima()}"></div>
+            <input type="date" class="rr-input" id="rr-${pre}-fecha" value="" min="${hoyLima()}">
+            <div class="rr-btns"><button type="button" class="rr-tab" data-dia="0">Hoy</button><button type="button" class="rr-tab" data-dia="1">Mañana</button></div></div>
           <div><label class="rr-lbl">Hora</label><select class="rr-select" id="rr-${pre}-hora">${horas}</select></div>
         </div>
         <div class="rr-campos">
@@ -970,11 +979,21 @@
         const ase = q("asesora").value
           .normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
         const lejos = !esRe && q("fecha").value > hoyLima(1);
+        const f = q("fecha").value;
         q("asunto").innerHTML =
           `Quedará como <b>${prefijo} ${esc(ase)} ${esc(via)}</b>` +
+          (f ? ` para <b>${esc(diaTexto(f).toUpperCase())}</b>` : ` · <span class="rr-ambar">elige la fecha</span>`) +
           (lejos ? ` · <span class="rr-ambar">⚠️ es más de un día: el lead se enfría</span>` : "");
       };
       ["via", "asesora", "fecha"].forEach((k) => q(k).addEventListener("change", verAsunto));
+      // La fecha ya no viene puesta: antes arrancaba en «mañana» y, si no se cambiaba, una clase
+      // de HOY quedaba en Pipedrive para mañana (y la confirmación automática decía «Mañana»).
+      q("fecha").parentElement.querySelectorAll("[data-dia]").forEach((b) => {
+        b.addEventListener("click", () => {
+          q("fecha").value = hoyLima(Number(b.dataset.dia));
+          q("fecha").dispatchEvent(new Event("change"));
+        });
+      });
 
       // Se recuerda por computadora, como en Llamadas: en la PC de Laura queda Laura
       // y deja de depender de que se acuerde de cambiarlo en cada agendamiento.
@@ -1016,6 +1035,14 @@
         const avisos = [];
         // Éste vale para los dos: agendar encima de una cita que ya existe termina
         // en dos recordatorios y una persona que no sabe a cuál ir.
+        // Si en el chat se habló de «hoy» o «mañana» y la fecha elegida dice otra cosa, avisar.
+        const charla = textosRecientes(8).join(" ").toLowerCase();
+        const dElegido = diasHasta(fecha);
+        if (/\bhoy\b/.test(charla) && !/\bmañana\b/.test(charla) && dElegido !== 0)
+          avisos.push(`En el chat se habla de HOY y estás agendando para ${diaTexto(fecha)}. Revisa la fecha.`);
+        if (/\bmañana\b/.test(charla) && !/\bhoy\b/.test(charla) && dElegido !== 1)
+          avisos.push(`En el chat se habla de MAÑANA y estás agendando para ${diaTexto(fecha)}. Revisa la fecha.`);
+
         if (personaPd?.proxima && diasHasta(personaPd.proxima.fecha) >= 0)
           avisos.push(`Ya tiene una cita ${diaTexto(personaPd.proxima.fecha)}` +
                       `${personaPd.proxima.hora ? " a las " + horaBonita(personaPd.proxima.hora) : ""}. ` +
