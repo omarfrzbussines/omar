@@ -29,7 +29,27 @@ function onOpen() {
     .addItem('🏃 Guardar clave de Apps Fit', 'guardarClaveAppsFit')
     .addItem('🏃 Armar lista de inasistencias ahora', 'generarInasistenciasMenu')
     .addItem('🏃 Activar lista diaria (9:30 am, lun–sáb)', 'activarInasistenciasDiario')
+    .addSeparator()
+    .addItem('🔑 Ver clave y URL de la extensión Difusiones', 'verClaveExtension')
     .addToUi();
+}
+
+/** Muestra la clave de la API y la URL de la app web para pegarlas en Opciones de la extensión.
+ *  Solo la ve quien puede abrir el menú del Sheet (editores). No crea ni cambia la clave. */
+function verClaveExtension() {
+  var key = PropertiesService.getScriptProperties().getProperty('API_KEY');
+  var url = '';
+  try { url = ScriptApp.getService().getUrl() || ''; } catch (e) {}
+  var esc = function (t) { return String(t || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); };
+  var campo = function (titulo, valor) {
+    return '<p style="margin:12px 0 4px;font-weight:600">' + titulo + '</p>'
+      + '<input readonly value="' + esc(valor) + '" onclick="this.select()" style="width:100%;padding:6px;font:13px monospace">';
+  };
+  var html = '<div style="font:14px Arial">'
+    + (key ? campo('Clave de la API', key) : '<p>Todavía no hay clave: ejecuta <b>configurar()</b> en Difusiones_API.gs.</p>')
+    + campo('URL de la app web (termina en /exec)', url || 'Implementar → Gestionar implementaciones → copiar la URL de la app web')
+    + '<p style="color:#666;margin-top:12px">Haz clic en cada cuadro, Ctrl+C y pégalo en Rurush Difusiones → Opciones → Guardar.</p></div>';
+  SpreadsheetApp.getUi().showModalDialog(HtmlService.createHtmlOutput(html).setWidth(520).setHeight(260), '🔑 Extensión Difusiones');
 }
 
 function guardarTokenPipedrive() {
