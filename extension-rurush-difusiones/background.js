@@ -848,14 +848,18 @@ async function cuadroPng(html) {
   return r.b64;
 }
 // prueba = true: lo manda ahora mismo (botón de prueba), sin mirar la hora
+// Devuelve un texto con el resultado (lo muestra el botón de prueba de la ventana).
 async function cuadroTick(prueba) {
-  if (cuadroOcupado || procesando || revisando) return;
+  if (cuadroOcupado || procesando || revisando) return 'La extensión está ocupada (enviando o revisando respuestas). Prueba en 1–2 min.';
   const turnoHoy = prueba ? { id: 'prueba-' + Date.now(), noche: limaNow().hour >= 14 } : cuadroTurnoActual();
-  if (!turnoHoy) return;
+  if (!turnoHoy) return '';
   const { cuadroHecho = {} } = await chrome.storage.local.get('cuadroHecho');
-  if (cuadroHecho[turnoHoy.id]) return;
+  if (cuadroHecho[turnoHoy.id]) return '';
   const run = await getRun();
-  if (run && run.estado === 'corriendo') return;           // primero termina la difusión
+  if (run && run.estado === 'corriendo') {                 // primero termina la difusión
+    if (prueba) await log('info', '📊 Cuadro (prueba): hay una tanda enviándose; pausa la tanda y vuelve a probar.');
+    return 'Hay una tanda enviándose: ⏸️ Pausar, probar el cuadro y luego ▶️ Iniciar.';
+  }
   cuadroOcupado = true;
   let tab = null, tomado = false;
   try {
@@ -866,7 +870,7 @@ async function cuadroTick(prueba) {
         cuadroHecho['aviso-' + limaNow().date] = 1; await chrome.storage.local.set({ cuadroHecho });
         await log('warn', '📊 Cuadro de ventas: falta autorizar esta extensión. Omar: revisa tu correo y toca «Autorizar».');
       }
-      return;
+      return 'Falta autorizar esta PC: Omar, revisa tu correo y toca «Autorizar».';
     }
     const info = JSON.parse(await cuadroGet({ cuadro: clave, info: 1 }));
     const cfg = await getConfig();
@@ -881,23 +885,26 @@ async function cuadroTick(prueba) {
     let ping = await ask(tab.id, { type: 'ping' });
     if (!ping) { await chrome.tabs.reload(tab.id); await sleep(5000); }
     if (!ping || !ping.loggedIn) ping = await waitFor(tab.id, { type: 'ping' }, (r) => r.loggedIn, 90000);
-    if (!ping) { await log('warn', '📊 Cuadro: WhatsApp Web no está abierto con sesión; reintento en 5 min.'); return; }
+    if (!ping) { await log('warn', '📊 Cuadro: WhatsApp Web no está abierto con sesión; reintento en 5 min.'); return 'WhatsApp Web no está abierto con sesión.'; }
     // con la extensión en varias líneas (por los estados), el cuadro sale solo desde la de Mónica
     const lineaCuadro = await estadosLinea(tab);
-    if (lineaCuadro && !/^\d+$/.test(lineaCuadro) && !/monica/.test(normTexto(lineaCuadro))) return;
+    if (lineaCuadro && !/^\d+$/.test(lineaCuadro) && !/monica/.test(normTexto(lineaCuadro))) return `El cuadro solo sale desde la línea de Mónica (esta es ${lineaCuadro}).`;
     const t = await turno(tab.id, 'tomar', 5 * 60e3);
-    if (!t || !t.ok) { await log('info', `📊 Cuadro: WhatsApp ocupado por ${(t && t.quien) || 'otro envío'}; reintento en 5 min.`); return; }
+    if (!t || !t.ok) { await log('info', `📊 Cuadro: WhatsApp ocupado por ${(t && t.quien) || 'otro envío'}; reintento en 5 min.`); return `WhatsApp ocupado por ${(t && t.quien) || 'otro envío'}; prueba en 5 min.`; }
     tomado = true;
     const ahora = limaNow();
     const texto = (turnoHoy.noche ? '🌙 Cierre de ventas ' : '📊 Ventas de hoy ') + ahora.date.slice(8) + '/' + ahora.date.slice(5, 7);
-    let ok = 0;
+    let ok = 0, primerError = '';
     for (const ph of destinos) {
       await turno(tab.id, 'tomar', 5 * 60e3);
       // el texto va precargado en el chat: WhatsApp lo pasa como comentario de la imagen (igual que la promo)
       const st = await openChat(tab.id, ph, texto);
-      if (!st || st.invalid) { await log('warn', `📊 Cuadro: ${ph} no tiene WhatsApp o no abrió el chat.`); continue; }
+      if (!st || st.invalid) { primerError = primerError || `${ph}: no abrió el chat`; await log('warn', `📊 Cuadro: ${ph} no tiene WhatsApp o no abrió el chat.`); continue; }
       const r = await ask(tab.id, { type: 'enviarImagen', b64, mime: 'image/png', nombre: 'cuadro-ventas.png', texto }, 60000);
-      if (r && r.ok) ok++; else await log('warn', `📊 Cuadro: no salió a ${ph} (${(r && r.error) || 'sin respuesta'}).`);
+      if (r && r.ok) ok++; else {
+        primerError = primerError || `${ph}: ${(r && r.error) || 'sin respuesta'}`;
+        await log('warn', `📊 Cuadro: no salió a ${ph} (${(r && r.error) || 'sin respuesta'}).`);
+      }
       await sleep(3000);
     }
     if (ok) {
@@ -907,8 +914,10 @@ async function cuadroTick(prueba) {
       await chrome.storage.local.set({ cuadroHecho });
     }
     await log(ok ? 'info' : 'warn', `📊 Cuadro de ventas ${turnoHoy.noche ? '(cierre) ' : ''}enviado a ${ok}/${destinos.length}.`);
+    return `Cuadro enviado a ${ok} de ${destinos.length}` + (primerError ? ` · ${primerError}` : '');
   } catch (e) {
     await log('error', '📊 Cuadro de ventas: ' + (e.message || e));
+    return 'Error: ' + (e.message || e);
   } finally {
     if (tomado) await soltarTurno();
     cuadroOcupado = false;

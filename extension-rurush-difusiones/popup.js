@@ -135,9 +135,9 @@ pintar();
 $('cuadro').addEventListener('click', async () => {
   $('cuadro').disabled = true;
   $('cuadro').textContent = 'Enviando cuadro… (~1 min)';
-  await send({ type: 'cuadroProbar' });
-  $('cuadro').textContent = '📊 Probar cuadro de ventas ahora';
-  $('cuadro').disabled = false;
+  const r = await send({ type: 'cuadroProbar' });
+  $('cuadro').textContent = (r && r.ok ? r.data : (r && r.error)) || '📊 Probar cuadro de ventas ahora';
+  setTimeout(() => { $('cuadro').textContent = '📊 Probar cuadro de ventas ahora'; $('cuadro').disabled = false; }, 8000);
 });
 
 $('estados').addEventListener('click', async () => {
