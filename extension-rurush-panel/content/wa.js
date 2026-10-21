@@ -375,14 +375,6 @@
   // citas de gente que nunca contestó. WhatsApp solo tiene pintados los mensajes
   // cercanos, así que esto es "no veo que haya escrito", no una certeza — por eso
   // avisa y deja agendar igual en vez de bloquear.
-  // Últimos mensajes del chat abierto (de los dos lados), para revisar que la fecha cuadre.
-  function textosRecientes(n) {
-    const main = document.querySelector("#main");
-    if (!main) return [];
-    return [...main.querySelectorAll(".message-in, .message-out")].slice(-n)
-      .map((m) => (m.querySelector("span.selectable-text, [data-testid='selectable-text']") || m).innerText || "");
-  }
-
   function leadEscribio() {
     const main = document.querySelector("#main");
     if (!main) return true;
@@ -1035,14 +1027,6 @@
         const avisos = [];
         // Éste vale para los dos: agendar encima de una cita que ya existe termina
         // en dos recordatorios y una persona que no sabe a cuál ir.
-        // Si en el chat se habló de «hoy» o «mañana» y la fecha elegida dice otra cosa, avisar.
-        const charla = textosRecientes(8).join(" ").toLowerCase();
-        const dElegido = diasHasta(fecha);
-        if (/\bhoy\b/.test(charla) && !/\bmañana\b/.test(charla) && dElegido !== 0)
-          avisos.push(`En el chat se habla de HOY y estás agendando para ${diaTexto(fecha)}. Revisa la fecha.`);
-        if (/\bmañana\b/.test(charla) && !/\bhoy\b/.test(charla) && dElegido !== 1)
-          avisos.push(`En el chat se habla de MAÑANA y estás agendando para ${diaTexto(fecha)}. Revisa la fecha.`);
-
         if (personaPd?.proxima && diasHasta(personaPd.proxima.fecha) >= 0)
           avisos.push(`Ya tiene una cita ${diaTexto(personaPd.proxima.fecha)}` +
                       `${personaPd.proxima.hora ? " a las " + horaBonita(personaPd.proxima.hora) : ""}. ` +
