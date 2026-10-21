@@ -893,7 +893,8 @@ async function cuadroTick(prueba) {
     let ok = 0;
     for (const ph of destinos) {
       await turno(tab.id, 'tomar', 5 * 60e3);
-      const st = await openChat(tab.id, ph);
+      // el texto va precargado en el chat: WhatsApp lo pasa como comentario de la imagen (igual que la promo)
+      const st = await openChat(tab.id, ph, texto);
       if (!st || st.invalid) { await log('warn', `📊 Cuadro: ${ph} no tiene WhatsApp o no abrió el chat.`); continue; }
       const r = await ask(tab.id, { type: 'enviarImagen', b64, mime: 'image/png', nombre: 'cuadro-ventas.png', texto }, 60000);
       if (r && r.ok) ok++; else await log('warn', `📊 Cuadro: no salió a ${ph} (${(r && r.error) || 'sin respuesta'}).`);

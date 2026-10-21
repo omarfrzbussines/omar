@@ -264,6 +264,12 @@ async function enviarImagen({ b64, mime, nombre, texto }) {
     vista.comentario.focus();
     vista.comentario.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
     await new Promise((r) => setTimeout(r, 600));
+    if (!leer()) {
+      // plan B: escribirlo como si se tecleara
+      vista.comentario.focus();
+      document.execCommand('insertText', false, texto);
+      await new Promise((r) => setTimeout(r, 600));
+    }
   }
   if (leer() !== normTexto(texto)) return cancelar('el comentario de la imagen no coincide con el mensaje del Sheet');
 
