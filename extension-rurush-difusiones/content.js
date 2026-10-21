@@ -203,10 +203,13 @@ async function clickSend() {
 
 // ── Imagen: se pega en el cuadro de texto (como Ctrl+V), WhatsApp abre la vista previa
 //    y se aprieta su botón Enviar. Sin texto: el texto va después, como mensaje normal.
-const ICONO_ENVIAR = 'span[data-icon="send"], span[data-icon="wds-ic-send-filled"]';
+// WhatsApp cambia el nombre del ícono seguido (send, wds-ic-send-filled, wds-ic-send…):
+// se acepta cualquier ícono «send» o un botón «Enviar» fuera del cuadro de texto del chat.
+const ICONO_ENVIAR = '[data-icon*="send" i], button[aria-label="Enviar"], button[aria-label="Send"], [role="button"][aria-label="Enviar"], [role="button"][aria-label="Send"]';
 
 function vistaPrevia() {
-  const iconos = [...document.querySelectorAll(ICONO_ENVIAR)].filter((i) => !i.closest('#main footer') && i.offsetParent);
+  const iconos = [...document.querySelectorAll(ICONO_ENVIAR)]
+    .filter((i) => !i.closest('#main footer') && !i.closest('#side') && !i.closest('#pane-side') && i.offsetParent);
   if (!iconos.length) return null;
   const icono = iconos[iconos.length - 1];
   const boton = icono.closest('button, [role="button"]') || icono.parentElement;
@@ -253,7 +256,9 @@ async function enviarImagen({ b64, mime, nombre, texto }) {
   vista = vistaPrevia() || vista;
 
   const cancelar = (error) => {
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+    const esc = { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true, cancelable: true };
+    (vista.comentario || document.activeElement || document.body).dispatchEvent(new KeyboardEvent('keydown', esc));
+    document.dispatchEvent(new KeyboardEvent('keydown', esc));
     return { ok: false, error, metodo };
   };
   const leer = () => normTexto(vista.comentario ? vista.comentario.innerText : '');
@@ -273,8 +278,23 @@ async function enviarImagen({ b64, mime, nombre, texto }) {
   }
   if (leer() !== normTexto(texto)) return cancelar('el comentario de la imagen no coincide con el mensaje del Sheet');
 
-  vista.boton.click();
-  const cerro = await esperar(() => !vistaPrevia(), 20000);
+  // clic como de mouse (WhatsApp a veces ignora un .click() solo) y, si no sale, Enter en el comentario
+  const clicar = (el) => {
+    const r = el.getBoundingClientRect();
+    const o = { bubbles: true, cancelable: true, view: window, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, button: 0 };
+    for (const t of ['pointerdown', 'mousedown', 'pointerup', 'mouseup']) el.dispatchEvent(new (t.startsWith('pointer') ? PointerEvent : MouseEvent)(t, o));
+    el.click();
+  };
+  clicar(vista.boton);
+  let cerro = await esperar(() => !vistaPrevia(), 5000);
+  if (!cerro && vistaPrevia() && vista.comentario) {
+    const ent = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true };
+    vista.comentario.focus();
+    vista.comentario.dispatchEvent(new KeyboardEvent('keydown', ent));
+    cerro = await esperar(() => !vistaPrevia(), 5000);
+  }
+  if (!cerro && vistaPrevia()) { clicar(vistaPrevia().boton); }
+  if (!cerro) cerro = await esperar(() => !vistaPrevia(), 15000);
   if (!cerro) return cancelar('la imagen no salió (la vista previa no se cerró)');
   return { ok: true, metodo };
 }
