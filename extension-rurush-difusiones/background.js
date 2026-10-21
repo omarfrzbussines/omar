@@ -902,6 +902,7 @@ async function cuadroTick(prueba) {
       if (!st || st.invalid) { primerError = primerError || `${ph}: no abrió el chat`; await log('warn', `📊 Cuadro: ${ph} no tiene WhatsApp o no abrió el chat.`); continue; }
       const r = await ask(tab.id, { type: 'enviarImagen', b64, mime: 'image/png', nombre: 'cuadro-ventas.png', texto }, 60000);
       if (r && r.ok) ok++; else {
+        await ask(tab.id, { type: 'clearDraft' });   // que no quede «📊 Ventas de hoy…» como borrador
         primerError = primerError || `${ph}: ${(r && r.error) || 'sin respuesta'}`;
         await log('warn', `📊 Cuadro: no salió a ${ph} (${(r && r.error) || 'sin respuesta'}).`);
       }
