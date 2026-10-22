@@ -1,6 +1,6 @@
 /**
  * RURUSH Llamadas → pestaña 🏋️ Socios: llamadas a socios ACTIVOS, en dos listas que la asesora elige:
- *   😴 "no"  = no vienen hace más de 5 días (que vuelvan)  · meta 7 al día
+ *   😴 "no"  = no vienen hace más de 5 días (que vuelvan)  · meta: toda su lista (mínimo 7)
  *   💪 "si"  = sí vienen (que sigan, renueven y den referidos) · meta 3 al día
  * Lee "3. BASE DE SOCIOS" del Sheet VENTAS RETENCIÓN (el mismo de Cobros, COB_ID) y escribe ahí mismo
  * el resultado en sus columnas de retención: U LLAMADA? · V RESULTADO · W FECHA LLAM. · X NOTAS · Y LLAMÓ.
@@ -13,7 +13,7 @@
 const SO_HOJA = "3. BASE DE SOCIOS";
 const SO_INI = 6;                 // primera fila de datos
 const SO_MIN_DIAS = 5;            // se llama a los que no vienen hace MÁS de 5 días
-const SO_META = { no: 7, si: 3 };  // llamadas por asesora al día, por lista
+const SO_META = { no: 7, si: 3 };  // mínimo de llamadas al día por lista (😴 sube a toda la lista si tiene más)
 const SO_REPOSO = { no: 7, si: 30 }; // días sin volver a llamar al mismo socio
 const SO_LOG = "🏋️ LLAMADAS SOCIOS";
 const SO_LOG_COLS = ["FECHA", "HORA", "ASESORA", "CÓDIGO", "SOCIO", "CELULAR", "DÍAS S/A", "INTENTOS", "SEGUNDOS", "RESULTADO", "NOTA", "TIPO"];
@@ -98,7 +98,10 @@ function so_lista(llave, como) {
   listas.no.sort(function (a, b) { return a.dias - b.dias || a.vence - b.vence; });   // los recién alejados se recuperan más fácil
   listas.si.sort(function (a, b) { return a.vence - b.vence || b.dias - a.dias; });   // los que están por renovar primero
   const cuenta = function (t) { return hechas.filter(function (x) { return x.tipo === t; }).length; };
-  return { quien: quien, meta: SO_META, hoy: { no: cuenta("no"), si: cuenta("si") }, listas: listas,
+  // 😴 meta = TODA su lista del día (mínimo 7): si Mónica tiene 16 que no vienen, su meta es 16.
+  const hoyN = { no: cuenta("no"), si: cuenta("si") };
+  const meta = { no: Math.max(SO_META.no, hoyN.no + listas.no.length), si: SO_META.si };
+  return { quien: quien, meta: meta, hoy: hoyN, listas: listas,
     hechas: hechas.map(function (x) { return { socio: x.socio, res: x.res, seg: x.seg, hora: x.hora, tipo: x.tipo }; }) };
 }
 
