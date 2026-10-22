@@ -158,66 +158,75 @@ async function esperarSalida(antes, antesId, intentos = 30) {
   return false;
 }
 
-// Envía el recordatorio en el chat ya abierto, sin recargar:
-// con imagen → una sola burbuja (imagen + texto como descripción); sin imagen → solo texto.
+// Envía el recordatorio en el chat ya abierto, sin recargar.
+// PRIMERO el texto (lo que de verdad importa y siempre funciona) y DESPUÉS la imagen de «cómo llegar»,
+// aparte y sin descripción. Antes iban juntas (imagen + texto como descripción): cuando WhatsApp cambiaba
+// el botón de enviar de la vista previa, se cerraba la vista previa y no salía NADA (los «dudoso»).
 async function enviarRecordatorio(text, phone, header, conImagen = true) {
   const seguro = () => chatEsDe(phone) && cabecera() === header;
   const c = compose();
   if (!c) return { ok: false, error: 'chat no abierto' };
   if (!seguro()) return { ok: false, noEnviado: true, error: 'el chat abierto no es el de este número' };
   if (c.innerText.trim()) return { ok: false, noEnviado: true, error: 'hay un borrador escrito en el chat' };
+  const r = await enviarTexto(text, seguro);
+  if (!r.ok) return r;
   const { gpsImage } = conImagen ? await chrome.storage.local.get('gpsImage') : {};
+  if (!gpsImage) return { ok: true, imagen: false };
+  await esperar(1500);
+  if (!seguro()) return { ok: true, imagen: false, aviso: 'salió el texto; la imagen no (el chat cambió)' };
+  let img;
+  try { img = await enviarImagen(gpsImage, seguro); } catch (e) { img = { ok: false, error: String(e) }; }
+  if (img.ok) return { ok: true, imagen: true, aviso: img.aviso };
+  return { ok: true, imagen: false, aviso: `salió el texto; la imagen no (${img.error})${img.diag ? ' · diag: ' + img.diag : ''}` };
+}
 
-  if (gpsImage) {
-    const blob = await (await fetch(gpsImage)).blob();
-    const file = new File([blob], 'como-llegar-rurush.' + (blob.type.split('/')[1] || 'jpg'), { type: blob.type });
-    const dt = new DataTransfer();
-    dt.items.add(file);
-    const antes = outCount(), antesId = ultimoSaliente();
-    const base = fotoPantalla();
-    c.focus();
-    c.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+// Lo que se vio de la vista previa, para ajustar la extensión si WhatsApp la vuelve a cambiar.
+function diagVista(v) {
+  const d = (el) => el ? `${el.tagName.toLowerCase()}[${['role', 'aria-label', 'data-icon', 'title'].map((a) => el.getAttribute && el.getAttribute(a)).filter(Boolean).join('|')}]` : '-';
+  const env = enviosEnPantalla().filter(verEl).slice(-4).map(d).join(',');
+  return `boton=${d(v && v.boton)} caja=${v && v.caja ? 'sí' : 'no'} envios=${env}`.slice(0, 400);
+}
 
-    let vista = null;
-    for (let i = 0; i < 38 && !vista; i++) { await esperar(400); vista = vistaPreviaNueva(base); }
-    if (vista) {
-      await esperar(700);
-      vista = vistaPreviaNueva(base) || vista;
-      const conTexto = vista.caja ? await pegarTexto(vista.caja, text) : false;
-      if (!seguro()) {
-        if (vista.cerrar) vista.cerrar.click();
-        return { ok: false, noEnviado: true, error: 'el chat cambió antes de enviar' };
-      }
-      // clic como de mouse y, si a los 5 s no salió (o no hay botón), Enter en el comentario
-      if (vista.boton) clic(vista.boton);
-      let salio = vista.boton ? await esperarSalida(antes, antesId, 10) : false;
-      if (!salio && vista.caja && vistaPreviaNueva(base)) {
-        vista.caja.focus();
-        vista.caja.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
-        salio = await esperarSalida(antes, antesId, 10);
-      }
-      if (!salio) {
-        const v = vistaPreviaNueva(base);
-        if (v && v.boton) { clic(v.boton); salio = await esperarSalida(antes, antesId, 20); }
-      }
-      if (!salio) {
-        const v = vistaPreviaNueva(base);
-        if (v && v.cerrar) v.cerrar.click();
-        return { ok: false, error: 'la imagen no apareció en el chat' };
-      }
-      if (conTexto) return { ok: true, imagen: true };
-      // la imagen salió sin descripción: mandar el texto aparte
-      await esperar(1500);
-      const r = await enviarTexto(text, seguro);
-      return { ok: true, imagen: true, aviso: r.ok ? 'imagen y texto salieron por separado' : `salió la imagen, pero el texto no (${r.error})` };
-    }
-    // no abrió la vista previa: seguimos solo con texto
-    // si quedó una vista previa abierta, no seguir: podría enviarse sola después
-    if (vistaPreviaNueva(base)) return { ok: false, noEnviado: true, error: 'quedó abierta la vista previa de la imagen' };
-    const r = await enviarTexto(text, seguro);
-    return { ...r, imagen: false, aviso: r.ok ? 'no se pudo adjuntar la imagen, se envió solo el texto' : undefined };
+// Imagen sola (sin descripción). Si no se puede confirmar que salió y la vista previa sigue abierta,
+// se cierra (así no se envía sola después) y se avisa con un diagnóstico.
+async function enviarImagen(gpsImage, seguro) {
+  const c = compose();
+  if (!c) return { ok: false, error: 'chat no abierto' };
+  const blob = await (await fetch(gpsImage)).blob();
+  const file = new File([blob], 'como-llegar-rurush.' + (blob.type.split('/')[1] || 'jpg'), { type: blob.type });
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  const antes = outCount(), antesId = ultimoSaliente();
+  const base = fotoPantalla();
+  c.focus();
+  c.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+
+  let vista = null;
+  for (let i = 0; i < 38 && !vista; i++) { await esperar(400); vista = vistaPreviaNueva(base); }
+  if (!vista) return { ok: false, error: 'no se abrió la vista previa de la imagen' };
+  await esperar(700);
+  vista = vistaPreviaNueva(base) || vista;
+  if (!seguro()) { if (vista.cerrar) vista.cerrar.click(); return { ok: false, error: 'el chat cambió antes de enviar' }; }
+
+  // 1) clic al botón enviar de la vista previa · 2) Enter en el comentario · 3) Enter en lo que tenga el foco
+  //    · 4) cualquier botón «Enviar» visible nuevo. Se para apenas sale o la vista previa se cierra sola.
+  const salioYa = async (n) => (await esperarSalida(antes, antesId, n)) || !vistaPreviaNueva(base);
+  const enter = (el) => ['keydown', 'keypress', 'keyup'].forEach((t) =>
+    el.dispatchEvent(new KeyboardEvent(t, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true })));
+  let salio = false;
+  if (vista.boton) { clic(vista.boton); salio = await salioYa(8); }
+  if (!salio && vista.caja) { vista.caja.focus(); enter(vista.caja); salio = await salioYa(8); }
+  if (!salio && document.activeElement) { enter(document.activeElement); salio = await salioYa(6); }
+  if (!salio) {
+    const otros = [...document.querySelectorAll('[aria-label="Enviar"], [aria-label="Send"], [data-icon*="send"]')]
+      .filter((e) => !base.envios.has(e) && verEl(e)).map((e) => e.closest('button, [role="button"]') || e);
+    for (const b of otros.reverse()) { clic(b); if ((salio = await salioYa(6))) break; }
   }
-  return enviarTexto(text, seguro);
+  if (salio) return { ok: true };
+  const v = vistaPreviaNueva(base);
+  const diag = diagVista(v || vista);
+  if (v && v.cerrar) v.cerrar.click();
+  return { ok: false, error: 'el botón enviar de la imagen no respondió', diag };
 }
 
 // ───────── etiqueta de WhatsApp Business ("FREE PASS") ─────────

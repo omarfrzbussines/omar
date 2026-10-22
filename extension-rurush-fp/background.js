@@ -1548,7 +1548,18 @@ async function cargarVideosPrecargados() {
   await chrome.storage.local.set({ videosAnuncio, precargadosVistos: [...vistos] });
 }
 
-chrome.runtime.onInstalled.addListener((d) => { programar(d.reason !== 'install' && d.reason !== 'update'); cargarVideosPrecargados().catch(() => {}); });
+// 2.9.9 (una sola vez): los «dudoso» de las últimas 36 h fueron la imagen que no salió (con ella iba el texto, así que
+// no llegó nada). Se liberan para que «Ejecutar ahora» los vuelva a enviar, ya con texto primero e imagen aparte.
+async function liberarDudososImagen() {
+  const { fix299, sent = {} } = await chrome.storage.local.get(['fix299', 'sent']);
+  if (fix299) return;
+  const desde = Date.now() - 36 * 3600e3;
+  let n = 0;
+  for (const [k, v] of Object.entries(sent)) if (v && v.estado === 'intento' && Date.parse(v.at) > desde) { delete sent[k]; n++; }
+  await chrome.storage.local.set({ sent, fix299: new Date().toISOString() });
+  if (n) log({ mod: 'fix', msg: `🔁 ${n} recordatorios que no salieron por la imagen quedan pendientes otra vez (usa «Ejecutar ahora»)` });
+}
+chrome.runtime.onInstalled.addListener((d) => { liberarDudososImagen().catch(() => {}).then(() => programar(d.reason !== 'install' && d.reason !== 'update')); cargarVideosPrecargados().catch(() => {}); });
 chrome.runtime.onStartup.addListener(() => { programar(true); cargarVideosPrecargados().catch(() => {}); });
 // Autorrecarga: cuando ACTUALIZAR.bat deja archivos nuevos en la carpeta de la extensión, esta se
 // recarga sola (cada 5 min se compara la versión del manifest en disco), pero nunca a mitad de un envío.
