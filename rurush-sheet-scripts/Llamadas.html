@@ -205,10 +205,12 @@ const MIN_SEG = { 'APAGADO': 0, 'NO CONTESTO': 15, 'CORTO': 15, 'CONTESTO': 30, 
 let llamada = { fila: null, intentos: 0, fueraMs: 0, salio: null, toco: 0, wa: 0 };
 const segundos = () => Math.round(llamada.fueraMs / 1000);
 const mmss = (s) => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
-function guardarLlamada() { try { localStorage.setItem('rr_llamada', JSON.stringify(llamada)); } catch (e) {} }
+// Llamadas y 🏋️ Socios guardan su llamada en curso por separado (cambiar de pestaña no borra la otra).
+const llKey = (fila) => 'rr_llamada' + (String(fila).startsWith('soc:') ? '_soc' : '');
+function guardarLlamada() { try { localStorage.setItem(llKey(llamada.fila), JSON.stringify(llamada)); } catch (e) {} }
 function nuevaLlamada(fila) {
   try {
-    const g = JSON.parse(localStorage.getItem('rr_llamada') || 'null');
+    const g = JSON.parse(localStorage.getItem(llKey(fila)) || 'null');
     if (g && g.fila === fila) { llamada = g; if (llamada.salio) { llamada.fueraMs += Date.now() - llamada.salio; llamada.salio = null; } return; }
   } catch (e) {}
   llamada = { fila, intentos: 0, fueraMs: 0, salio: null, toco: 0, wa: 0 };
@@ -230,7 +232,7 @@ function actualizarBotones() {
   if (med) med.innerHTML = llamada.intentos
     ? `<span>📞 Intentos: <b>${llamada.intentos}</b></span><span>⏱ En llamada: <b>${mmss(seg)}</b></span>`
     : '<span>Toca 📞 Llamar o 📲 WhatsApp para habilitar los resultados</span>';
-  document.querySelectorAll('.est').forEach((b) => {
+  document.querySelectorAll('.est:not(.sest)').forEach((b) => {
     const min = MIN_SEG[b.dataset.e] || 0;
     const ok = llamada.intentos > 0 && llamada.salio == null && seg >= min;
     b.disabled = !ok;
@@ -388,16 +390,21 @@ const SO_BOT = {
   si: [['CONTENTO', '😊 Contento', 30], ['QUEJA', '🗣️ Queja o sugerencia', 30], ['REFERIDO', '👥 Dio referido', 30], ['NO CONTESTÓ', '📵 No contestó', 15]]
 };
 const SO_TXT = { no: '😴 No vienen', si: '💪 Sí vienen' };
-let SOC = null, SOC_RES = null, cargandoSoc = false, SOC_CTL = null, SOC_TIPO = 'no', SOC_SEL = null, SOC_BUSCA = '';
+let SOC = null, SOC_RES = null, SOC_PIDE = 0, SOC_CTL = null, SOC_TIPO = 'no', SOC_SEL = null, SOC_BUSCA = '';
 function traerSocios() {
-  if (cargandoSoc) return; cargandoSoc = true;
+  const n = ++SOC_PIDE, como = COMO;
   google.script.run
-    .withSuccessHandler((r) => { cargandoSoc = false; SOC = r; if (SOC_SEL && !SOC.listas[SOC_SEL.tipo].some((x) => x.cod === SOC_SEL.cod)) SOC_SEL = null; if (VISTA === 'socios') pintarSocios(); })
-    .withFailureHandler((e) => { cargandoSoc = false; if (/CELULAR_NO_AUTORIZADO/.test(e.message || e)) return google.script.run.withSuccessHandler(pantallaPin).app_estadoCelular(LLAVE); toast(e.message || String(e), true); if (VISTA === 'socios' && !SOC) $('#main').innerHTML = `<div class="vacio">⚠️ ${esc(e.message || e)}</div>`; })
+    .withSuccessHandler((r) => {
+      if (n !== SOC_PIDE || como !== COMO) return;            // llegó una respuesta vieja (otro "Ver como" o 🔄)
+      SOC = r;
+      if (VISTA !== 'socios' || SOC_SEL) return;              // si está con un socio abierto, no se le cambia la pantalla
+      const y = window.scrollY; pintarListaSoc(); window.scrollTo(0, y);
+    })
+    .withFailureHandler((e) => { if (n !== SOC_PIDE) return; if (/CELULAR_NO_AUTORIZADO/.test(e.message || e)) return google.script.run.withSuccessHandler(pantallaPin).app_estadoCelular(LLAVE); toast(e.message || String(e), true); if (VISTA === 'socios' && !SOC) $('#main').innerHTML = `<div class="vacio">⚠️ ${esc(e.message || e)}</div>`; })
     .so_lista(LLAVE, COMO);
   if (ASESORA === 'OMAR') traerControl();
 }
-function traerControl() { google.script.run.withSuccessHandler((r) => { SOC_CTL = r; if (VISTA === 'socios' && SOC && !SOC_SEL) pintarSocios(); }).so_resumen(LLAVE); }
+function traerControl() { google.script.run.withSuccessHandler((r) => { SOC_CTL = r; if (VISTA === 'socios' && SOC && !SOC_SEL) { const y = window.scrollY; pintarListaSoc(); window.scrollTo(0, y); } }).so_resumen(LLAVE); }
 function controlOmar() {
   if (!SOC_CTL) return '';
   if (!SOC_CTL.length) return '<h2>📊 Control de llamadas a socios</h2><div class="tip">Todavía no hay llamadas registradas.</div>';
@@ -486,7 +493,7 @@ function guardarSocio() {
       toast('✓ ' + (p.nombre || p.cod) + ': ' + SOC_RES);
       SOC.hechas.push({ socio: p.nombre, res: SOC_RES, seg: d.segundos, hora: new Date().toTimeString().slice(0, 5), tipo: p.tipo });
       SOC.hoy[p.tipo]++; SOC.listas[p.tipo] = SOC.listas[p.tipo].filter((x) => x.tel !== p.tel);
-      try { localStorage.removeItem('rr_llamada'); } catch (e) {}
+      try { localStorage.removeItem('rr_llamada_soc'); } catch (e) {}
       SOC_SEL = null; pintarListaSoc(); window.scrollTo(0, 0);
       if (ASESORA === 'OMAR') traerControl();
     })
@@ -653,7 +660,15 @@ if (ASESORA === 'OMAR') {
       .withFailureHandler((e) => toast('📊 Error: ' + (e.message || e), true))
       .app_dashAhora(LLAVE);
   };
-  $('#como').onchange = () => { COMO = $('#como').value; mostrando = false; cola = []; idx = 0; $('#main').innerHTML = '<div class="vacio">Cargando la cola' + (COMO ? ' de ' + esc(COMO) : '') + '…</div>'; traer(true); };
+  $('#como').onchange = () => {
+    COMO = $('#como').value; mostrando = false; cola = []; idx = 0; trayendo = false;
+    SOC = null; SOC_SEL = null; SOC_BUSCA = ''; cobros = null;
+    const de = COMO ? ' de ' + esc(COMO) : '';
+    if (VISTA === 'socios') { $('#main').innerHTML = '<div class="vacio">Cargando los socios' + de + '…</div>'; traerSocios(); }
+    else if (VISTA === 'cobros') { $('#main').innerHTML = '<div class="vacio">Cargando los cobros' + de + '…</div>'; traerCobros(); }
+    else $('#main').innerHTML = '<div class="vacio">Cargando la cola' + de + '…</div>';
+    traer(true);
+  };
   $('#links').onclick = () => {
     $('#main').innerHTML = '<div class="vacio">Cargando links…</div>';
     google.script.run
