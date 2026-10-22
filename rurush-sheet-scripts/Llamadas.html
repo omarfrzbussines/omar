@@ -381,7 +381,7 @@ setInterval(() => {
 
 function revisarCola() { if (cola.length - idx <= 5) traer(false); }
 
-/* ---------- 🏋️ Socios activos: 😴 no vienen (+5 d, meta 7) · 💪 sí vienen (meta 3) ---------- */
+/* ---------- 🏋️ Socios activos: 😴 no vienen (+5 d, meta: toda su lista, mín. 7) · 💪 sí vienen (meta 3) ---------- */
 // La asesora elige a quién llamar. Solo se registra si llamó desde la app: el tiempo fuera de la app tras tocar 📞 es la duración.
 const SO_BOT = {
   no: [['VIENE', '✅ Viene', 30], ['DA EXCUSAS', '🤷 Da excusas', 30], ['NO INTERESA', '❌ No le interesa', 30], ['NO CONTESTÓ', '📵 No contestó', 15]],
@@ -403,7 +403,7 @@ function controlOmar() {
   if (!SOC_CTL.length) return '<h2>📊 Control de llamadas a socios</h2><div class="tip">Todavía no hay llamadas registradas.</div>';
   const fila = (a, t) => `<tr><td>${esc(a)}</td><td>${t.no}</td><td>${t.si}</td><td>${t.contesto}</td><td>${t.prom ? mmss(t.prom) : '—'}</td><td>${t.viene}</td><td>${t.volvio}</td><td class="${t.cortas ? 'mal' : ''}">${t.cortas}</td></tr>`;
   const tabla = (titulo, k) => `<h2>${titulo}</h2><table class="ctl"><tr><th>ASESORA</th><th>😴</th><th>💪</th><th>CONTEST.</th><th>DUR. PROM.</th><th>VIENE</th><th>VOLVIÓ</th><th>⚠️ CORTAS</th></tr>${SOC_CTL.map((x) => fila(x.asesora, x[k])).join('')}</table>`;
-  return tabla('📊 Hoy', 'hoy') + tabla('📊 Últimos 7 días', 'sem') + '<div class="tip">😴 no vienen (meta 7) · 💪 sí vienen (meta 3). VOLVIÓ = un 😴 que vino al gym después de la llamada. ⚠️ CORTAS = contestadas de menos de 45 s.</div>';
+  return tabla('📊 Hoy', 'hoy') + tabla('📊 Últimos 7 días', 'sem') + '<div class="tip">😴 no vienen (meta: toda su lista, mín. 7) · 💪 sí vienen (meta 3). VOLVIÓ = un 😴 que vino al gym después de la llamada. ⚠️ CORTAS = contestadas de menos de 45 s.</div>';
 }
 const cap = (t) => String(t || '').charAt(0).toUpperCase() + String(t || '').slice(1).toLowerCase();
 function pintarSocios() { if (SOC_SEL) return pintarSocioLlamar(SOC_SEL); pintarListaSoc(); }
@@ -418,7 +418,7 @@ function pintarListaSoc() {
     ${p.antes ? `<small>Última llamada: ${esc(p.antes)}</small>` : ''}</button>`;
   const hechas = s.hechas.filter((h) => h.tipo === SOC_TIPO);
   $('#main').innerHTML = `<div class="stipos">${meta('no')}${meta('si')}</div>
-    <div class="tip" style="margin:8px 2px">${SOC_TIPO === 'no' ? 'Activos que no vienen hace más de 5 días: que vuelvan.' : 'Activos que sí vienen: que sigan, renueven y te den referidos.'} Toca a quién vas a llamar.</div>
+    <div class="tip" style="margin:8px 2px">${SOC_TIPO === 'no' ? 'Activos que no vienen hace más de 5 días: llama a todos para que vuelvan.' : 'Activos que sí vienen: que sigan, renueven y te den referidos.'} Toca a quién vas a llamar.</div>
     <input id="sBusca" placeholder="🔍 Buscar por nombre, código o celular" value="${esc(SOC_BUSCA)}">
     <div class="slista">${l.map(item).join('') || `<div class="vacio" style="padding:30px 10px">${q ? 'Nadie con ese nombre.' : '🎉 No hay socios por llamar en esta lista.'}</div>`}</div>
     ${hechas.length ? '<h2>Hechas hoy</h2>' + hechas.map((h) => `<div class="hecha">${esc(h.hora)} · ${esc(h.socio)} · <b>${esc(h.res)}</b> · ${mmss(h.seg)}</div>`).join('') : ''}` + controlOmar();
