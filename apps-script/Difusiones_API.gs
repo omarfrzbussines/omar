@@ -234,7 +234,39 @@ function soloInasistencias_(asesora) {
 }
 
 function mismaAsesora_(a, b) {
-  return sinTildes_(a) && sinTildes_(a) === sinTildes_(b);
+  return !!baseAsesora_(a) && baseAsesora_(a) === baseAsesora_(b);
+}
+
+/**
+ * Una asesora puede tener 2 líneas en LINEAS: «DANNA» y «DANNA DIFUSIONES». Las dos son DANNA
+ * en las filas; lo que cambia es la nota de cada línea en ⚙️ CONFIG:
+ *   «SOLO INASISTENCIAS» → esa línea solo escribe a socios (🏃 INASISTENCIAS, 📣 SOCIOS)
+ *   «SOLO DIFUSIONES»    → esa línea solo envía tandas
+ *   «TOPE 15»            → máximo de envíos de tanda al día de esa asesora (se cuenta en 📜 LOG)
+ */
+function baseAsesora_(s) {
+  return sinTildes_(s).split(/[\s·(]+/)[0];
+}
+
+function notaLinea_(asesora) {
+  var r = SpreadsheetApp.getActive().getRangeByName('LINEAS');
+  if (!r) return '';
+  var quien = sinTildes_(asesora), nota = '';
+  r.getSheet().getRange(r.getRow(), r.getColumn(), r.getNumRows(), 3).getDisplayValues().forEach(function (row) {
+    if (sinTildes_(row[0]) === quien) nota = String(row[2] || '');
+  });
+  return nota;
+}
+
+/** Envíos de tanda (no a socios) de hoy de esa asesora, según 📜 LOG EXTENSIÓN. */
+function enviadosTandaHoy_(asesora) {
+  var sh = SpreadsheetApp.getActive().getSheetByName(LOG_SHEET);
+  if (!sh || sh.getLastRow() < 2) return 0;
+  var desde = Math.max(2, sh.getLastRow() - 600), hoy = hoyLima_(), base = baseAsesora_(asesora), n = 0;
+  sh.getRange(desde, 1, sh.getLastRow() - desde + 1, 7).getDisplayValues().forEach(function (r) {
+    if (r[0] === hoy && r[6] === 'ENVIADO' && baseAsesora_(r[5]) === base && !esChatExistente_(r[2])) n++;
+  });
+  return n;
 }
 
 // ───────────────────────── acciones ─────────────────────────
@@ -319,6 +351,18 @@ function pendientes_(tab, asesora, diasAntiDup) {
   if (soloInasistencias_(asesora) && !esChatExistente_(tab)) {
     return { ok: false, error: 'La línea de ' + asesora + ' solo envía 🏃 INASISTENCIAS (⚙️ CONFIG). No se envía esta tanda.' };
   }
+  var nota = notaLinea_(asesora);
+  var vacio = function (motivo) {
+    return { ok: true, tab: tab, asesora: asesora, linea: linea, dias: diasHoy_(), diasAntiDup: diasAntiDup, items: [],
+      excluidos: [{ fila: 0, nombre: '', motivo: motivo }], imagen: false, chatExistente: esChatExistente_(tab) };
+  };
+  if (/SOLO DIFUS/i.test(nota) && esChatExistente_(tab)) return vacio('La línea de ' + asesora + ' solo envía difusiones (⚙️ CONFIG).');
+  var tope = Number((/TOPE\s*(\d+)/i.exec(nota) || [])[1]) || 0;
+  var quedan = Infinity;
+  if (tope && !esChatExistente_(tab)) {
+    quedan = Math.max(0, tope - enviadosTandaHoy_(asesora));
+    if (!quedan) return vacio('Tope de ' + tope + ' envíos al día de ' + asesora + ' (⚙️ CONFIG). Sigue mañana.');
+  }
 
   var imagen = imagenUrl_(sh, h);
   if (imagen === 'FALTA') return { ok: false, error: 'Falta el enlace de la imagen en «🖼 IMAGEN» de la pestaña. No se envía sin imagen.' };
@@ -367,6 +411,7 @@ function pendientes_(tab, asesora, diasAntiDup) {
     }
     if (/\{[A-Z_]+\}/.test(msj)) return excluir('Mensaje con una variable {…} sin reemplazar');
 
+    if (items.length >= quedan) return;                  // tope de la línea: el resto queda para mañana
     items.push({ fila: f.fila, nombre: nombre, celular: tel, mensaje: msj });
   });
 
@@ -452,13 +497,16 @@ function marcar_(p) {
 function porRevisar_(asesora, dias) {
   var quien = sinTildes_(asesora);
   if (!quien) return { ok: false, error: 'Falta la asesora' };
+  var nota = notaLinea_(asesora), soloDif = /SOLO DIFUS/i.test(nota), soloIna = soloInasistencias_(asesora);
   var items = [];
   pestanasTanda_().forEach(function (t) {
     var h = t.h;
     if (h.asesora < 0 || h.resultado < 0) return;
+    var chat = esChatExistente_(t.sh.getName());
+    if ((soloDif && chat) || (soloIna && !chat)) return;
     filas_(t.sh, h).forEach(function (f) {
       var v = f.v;
-      if (sinTildes_(v[h.asesora]) !== quien || !esTrue_(v[h.env])) return;
+      if (!mismaAsesora_(v[h.asesora], asesora) || !esTrue_(v[h.env])) return;
       if (sinTildes_(v[h.resultado]) !== 'ENVIADO SIN RESPUESTA') return;
       var d = h.fecha >= 0 ? diasDesde_(v[h.fecha]) : null;
       if (d === null || d > dias) return;
