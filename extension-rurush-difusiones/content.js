@@ -361,6 +361,43 @@ const MAS_ESTADO = ['[aria-label="Agregar estado"]', '[aria-label="Añadir estad
 const inputFoto = () => [...document.querySelectorAll('input[type="file"]')].reverse()
   .find((i) => /image|video|\*/.test(i.getAttribute('accept') || '*')) || null;
 
+// Editor del estado (WhatsApp Web, oct-2026): ya no tiene ícono «send»; su botón dice «Enviar 1 seleccionado»
+// y trae «Añadir archivo». Devuelve { boton, comentario, cantidad } o, si no lo halla, la vista previa de antes.
+const RE_ENVIAR_SEL = /^(enviar|send)(\s+(\d+)\s+\S+)?$/i;
+const fueraDelChat = (e) => !e.closest('#main footer') && !e.closest('#side') && !e.closest('#pane-side');
+function editorEstado() {
+  const etiqueta = (e) => (e.getAttribute('aria-label') || (e.innerText || '').split('\n')[0] || '').trim();
+  const env = [...document.querySelectorAll('[aria-label], button, [role="button"]')]
+    .filter((e) => visible(e) && fueraDelChat(e)).find((e) => RE_ENVIAR_SEL.test(etiqueta(e)));
+  if (!env) {
+    const v = vistaPrevia();
+    return v ? Object.assign(v, { cantidad: 1 }) : null;
+  }
+  const n = etiqueta(env).match(/\d+/);
+  const textos = [...document.querySelectorAll('div[contenteditable="true"]')].filter((e) => visible(e) && fueraDelChat(e));
+  return { boton: clicable(env), comentario: textos[textos.length - 1] || null, cantidad: n ? Number(n[0]) : 1 };
+}
+function clicMouse(el) {
+  const r = el.getBoundingClientRect();
+  const o = { bubbles: true, cancelable: true, view: window, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, button: 0 };
+  for (const t of ['pointerdown', 'mousedown', 'pointerup', 'mouseup']) el.dispatchEvent(new (t.startsWith('pointer') ? PointerEvent : MouseEvent)(t, o));
+  el.click();
+}
+// Cierra un editor de estado abierto (✕ o Escape) y confirma «Descartar». Así un intento fallido no deja
+// la foto esperando: antes se acumulaban (llegó a «Enviar 9 seleccionados») y se habría publicado repetida.
+async function cerrarEditorEstado() {
+  for (let i = 0; i < 4 && editorEstado(); i++) {
+    const x = [...document.querySelectorAll(ICONO_CERRAR)].filter((e) => visible(e) && fueraDelChat(e)).pop();
+    if (x) clicMouse(clicable(x));
+    else document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+    await new Promise((r) => setTimeout(r, 800));
+    const desc = [...document.querySelectorAll('button, [role="button"]')].filter(visible)
+      .find((b) => /^(descartar|discard|salir|exit)$/i.test((b.innerText || b.getAttribute('aria-label') || '').trim()));
+    if (desc) { clicMouse(desc); await new Promise((r) => setTimeout(r, 800)); }
+  }
+  return !editorEstado();
+}
+
 // Qué se ve en pantalla (para entender un fallo sin estar frente a la PC).
 function pistas() {
   const v = [...document.querySelectorAll('[aria-label], [data-icon], [role="menuitem"], li')].filter(visible)
@@ -372,12 +409,14 @@ function pistas() {
 async function subirEstado({ b64, mime, nombre, texto }) {
   let paso = 'abrir Estados';
   const volver = () => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true })); const c = buscar(NAV_CHATS); if (c) c.click(); };
-  const falla = (error) => { const p = pistas(); volver(); return { ok: false, error: error + ' · veo: ' + p }; };
+  const falla = async (error) => { const p = pistas(); await cerrarEditorEstado(); volver(); return { ok: false, error: error + ' · veo: ' + p }; };
   try {
     const nav = buscar(NAV_ESTADOS);
     if (!nav) return falla('no encontré el botón Estados');
     nav.click();
     await new Promise((r) => setTimeout(r, 1500));
+    // un estado a medias de un intento anterior: se descarta antes de empezar
+    if (editorEstado() && !(await cerrarEditorEstado())) return falla('quedó abierto un estado anterior y no se pudo descartar');
     paso = 'botón ＋ de estado';
     const mas = await esperar(() => buscar(MAS_ESTADO, document.querySelector('#app') || document), 8000);
     if (!mas) return falla('no encontré el ＋ para agregar estado');
@@ -391,7 +430,7 @@ async function subirEstado({ b64, mime, nombre, texto }) {
     await new Promise((r) => setTimeout(r, 1200));
     paso = 'Fotos y videos';
     let item = null, input = null;
-    if (!entregado && !vistaPrevia()) {
+    if (!entregado && !editorEstado()) {
       // el texto exacto «Fotos y videos» (no el menú entero) y de ahí su fila clicable
       const hoja = [...document.querySelectorAll('span, div')].filter(visible)
         .find((e) => /^(fotos y v[ií]deos|photos (&|and) videos)$/i.test((e.innerText || '').trim()) && e.children.length <= 2);
@@ -406,7 +445,7 @@ async function subirEstado({ b64, mime, nombre, texto }) {
         }
       }
     }
-    if (!entregado && !vistaPrevia()) {
+    if (!entregado && !editorEstado()) {
       // plan B: un <input type=file> que sí esté en la página
       input = input || [...document.querySelectorAll('input[type="file"]')].reverse().find((i) => !antes.has(i)) || inputFoto();
       if (input) {
@@ -418,14 +457,15 @@ async function subirEstado({ b64, mime, nombre, texto }) {
     }
     window.removeEventListener('message', oir);
     paso = 'vista previa';
-    let vista = await esperar(vistaPrevia, 15000);
+    let vista = await esperar(editorEstado, 15000);
     if (!vista) {
       const ins = [...document.querySelectorAll('input[type="file"]')].map((i) => i.getAttribute('accept') || '*').join(', ');
       return falla((entregado ? 'entregué la foto pero no se abrió la vista previa' : 'no se abrió la vista previa')
         + ` [opción: ${item ? item.tagName + ' «' + (item.innerText || '').trim().slice(0, 20) + '»' : 'no la hallé'} · input: ${input ? 'sí' : 'no'} · inputs en página: ${ins || 'ninguno'}]`);
     }
-    await new Promise((r) => setTimeout(r, 1000));
-    vista = vistaPrevia() || vista;
+    await new Promise((r) => setTimeout(r, 1500));
+    vista = editorEstado() || vista;
+    if (vista.cantidad > 1) return falla(`el estado tenía ${vista.cantidad} archivos (los descarté para no publicar repetido)`);
     if (texto && vista.comentario) {
       const t = new DataTransfer(); t.setData('text/plain', texto);
       vista.comentario.focus();
@@ -433,8 +473,9 @@ async function subirEstado({ b64, mime, nombre, texto }) {
       await new Promise((r) => setTimeout(r, 600));
     }
     paso = 'enviar';
-    vista.boton.click();
-    const cerro = await esperar(() => !vistaPrevia(), 30000);
+    if (!vista.boton) return falla('no encontré el botón Enviar del estado');
+    clicMouse(vista.boton);
+    const cerro = await esperar(() => !editorEstado(), 30000);
     if (!cerro) return falla('el estado no salió (la vista previa no se cerró)');
     await new Promise((r) => setTimeout(r, 2000));
     const c = buscar(NAV_CHATS); if (c) c.click();
