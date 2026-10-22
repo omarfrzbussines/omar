@@ -187,6 +187,9 @@ function traer(reset) {
 const actual = () => cola[idx];
 
 // Tiempo mínimo en el marcador para poder marcar cada resultado (igual que en el servidor).
+// "llamar luego": si quien lo programó no llamó a tiempo (30 min), pasa a cualquier asesora → se dice claro
+const quienLuego = (a) => (String(a || '').toUpperCase() === ASESORA ? 'Lo programaste tú'
+  : `Lo programó ${esc(a)} y no llamó a tiempo → <b>te toca a ti</b>`);
 const MIN_SEG = { 'APAGADO': 0, 'NO CONTESTO': 15, 'CORTO': 15, 'CONTESTO': 30, 'AGENDADO': 30, 'CLIENTE': 30, 'DESCARTADO': 10, 'Otra Ciudad': 30, 'LLAMAR LUEGO': 10 };
 let llamada = { fila: null, intentos: 0, fueraMs: 0, salio: null, toco: 0, wa: 0 };
 const segundos = () => Math.round(llamada.fueraMs / 1000);
@@ -253,7 +256,7 @@ function pintar() {
       <div class="fila2"><input type="date" id="fpf"><select id="fph"><option value="">Hora</option>${HORAS.map((h) => `<option>${h}</option>`).join('')}</select></div></div>` : '';
   $('#main').innerHTML = bannerConfirmar() + `
     <div class="card${p.luego ? ' esLuego' : ''}">
-      ${p.luego ? `<div class="luego">🔔 <b>LLAMAR AHORA</b> · pidió ${esc(p.luego.texto)}${p.luego.nota ? `<br>📝 ${esc(p.luego.nota)}` : ''}<br>Lo atendió ${esc(p.luego.asesora)}</div>` : ''}
+      ${p.luego ? `<div class="luego">🔔 <b>LLAMAR AHORA</b> · pidió que lo llamen el ${esc(p.luego.texto)}${p.luego.nota ? `<br>📝 ${esc(p.luego.nota)}` : ''}<br>${quienLuego(p.luego.asesora)}</div>` : ''}
       <div class="nombre">${esc(esNum || !p.nombre ? 'Sin nombre' : p.nombre)}</div>
       <div class="num">+51 ${esc(p.numero.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3'))}</div>
       <div class="meta"><span class="tag">${p.ronda}ª llamada</span>${p.dia ? `<span class="tag">lead del ${esc(p.dia)}</span>` : ''}${p.origen ? `<span class="tag">${esc(p.origen)}</span>` : ''}</div>
