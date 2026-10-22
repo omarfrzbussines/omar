@@ -1172,8 +1172,99 @@ document.addEventListener('input', (ev) => {
   refrescarCalc();
 });
 
+/* ---------- leer el QR del comprobante (SUNAT) ----------
+   Las facturas/boletas electrónicas traen un QR con:
+   RUC emisor | tipo (01 factura, 03 boleta…) | serie | número | IGV | total | fecha | …
+   Se lee aquí mismo en el celular (sin servidor): BarcodeDetector si el celular lo
+   tiene, si no jsQR; para PDF se dibuja la 1.ª página con pdf.js. Librerías bajo demanda. */
+
+const LIBS = {
+  jsqr: 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js',
+  pdf: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js',
+  pdfWorker: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'
+};
+const cargado = {};
+function cargarScript(url) {
+  if (!cargado[url]) cargado[url] = new Promise((res, rej) => {
+    const sc = document.createElement('script'); sc.src = url; sc.onload = res;
+    sc.onerror = () => { delete cargado[url]; rej(new Error('No cargó el lector de QR (¿sin internet?).')); };
+    document.head.appendChild(sc);
+  });
+  return cargado[url];
+}
+async function qrDeCanvas(c) {
+  if ('BarcodeDetector' in window) {
+    try {
+      const r = await new BarcodeDetector({ formats: ['qr_code'] }).detect(c);
+      if (r[0] && r[0].rawValue) return r[0].rawValue;
+    } catch (e) { /* sin soporte: jsQR */ }
+  }
+  await cargarScript(LIBS.jsqr);
+  const d = c.getContext('2d').getImageData(0, 0, c.width, c.height);
+  const r = jsQR(d.data, d.width, d.height, { inversionAttempts: 'attemptBoth' });
+  return r ? r.data : '';
+}
+function canvasDe(img, max) {
+  const k = Math.min(1, max / Math.max(img.width, img.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return c;
+}
+async function qrDeArchivo(file) {
+  if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
+    await cargarScript(LIBS.pdf);
+    pdfjsLib.GlobalWorkerOptions.workerSrc = LIBS.pdfWorker;
+    const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+    for (let n = 1; n <= Math.min(pdf.numPages, 2); n++) {
+      const pag = await pdf.getPage(n);
+      const vp = pag.getViewport({ scale: 2.5 });
+      const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height;
+      await pag.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+      const t = await qrDeCanvas(c);
+      if (t) return t;
+    }
+    return '';
+  }
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    // Varias resoluciones: un QR chico se lee mejor en grande y uno grande en chico.
+    for (const max of [1600, 2600, 1000]) { const t = await qrDeCanvas(canvasDe(img, max)); if (t) return t; }
+    return '';
+  } finally { URL.revokeObjectURL(url); }
+}
+// "20601234567|01|F001|4567|9.00|59.00|2026-10-09|6|…" → datos (o null si no es de SUNAT)
+function datosQR(t) {
+  const p = String(t || '').split('|').map((x) => x.trim());
+  if (p.length < 7 || !/^\d{11}$/.test(p[0]) || !num(p[5])) return null;
+  let f = p[6];
+  const m = f.match(/^(\d{2})[/-](\d{2})[/-](\d{4})$/);
+  if (m) f = m[3] + '-' + m[2] + '-' + m[1];
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(f)) f = '';
+  return { ruc: p[0], tipo: p[1], numero: (p[2] + '-' + p[3]).toUpperCase(), igv: num(p[4]), total: num(p[5]), fecha: f };
+}
+async function leerComprobante(file) {
+  if (F.qr) return;   // ya se leyó de otra foto de este gasto
+  let d;
+  try { d = datosQR(await qrDeArchivo(file)); } catch (e) { return; }
+  if (!d) return toast('No encontré un QR de SUNAT: llena los datos a mano.', 3500);
+  F.qr = true;
+  F.ruc = d.ruc; F.numero = d.numero; F.total = String(d.total);
+  if (d.fecha) F.fecha = d.fecha;
+  const nombre = { '01': 'FACTURA', '03': 'BOLETA' }[d.tipo];
+  const comp = nombre && CFG.comprobantes.find((c) => sinTildes(c.nombre).includes(nombre));
+  if (comp) F.comprobante = comp.nombre;
+  // Proveedor conocido por su RUC (se aprende de gastos anteriores en este celular).
+  const prov = Object.entries(proveedores()).find(([, r]) => r === d.ruc);
+  if (prov && !F.proveedor) F.proveedor = prov[0];
+  pintar();
+  toast('✅ Datos leídos del QR: ' + d.numero + ' · ' + soles(d.total), 4000);
+}
+
 async function agregarFotos(ev) {
   for (const file of Array.from(ev.target.files || []).slice(0, 5)) {
+    leerComprobante(file);
     try {
       // PDF (facturas electrónicas): se sube tal cual, sin comprimir.
       if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
