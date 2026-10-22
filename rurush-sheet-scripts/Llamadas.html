@@ -51,6 +51,13 @@
   .vacio { text-align:center; color:var(--mut); padding:60px 10px; }
   .tabs { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-top:10px; }
   .prog { height:8px; background:var(--line); border-radius:9px; overflow:hidden; margin-top:8px; } .prog i { display:block; height:100%; background:var(--grn); }
+  .stipos { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .stipo { background:var(--card); border:1px solid var(--line); color:var(--tx); border-radius:14px; padding:10px 12px; text-align:left; font-family:inherit; }
+  .stipo span { font-size:14px; font-weight:600; } .stipo b { display:block; font-size:22px; margin-top:2px; } .stipo small { display:block; color:var(--mut); font-size:12px; margin-top:6px; }
+  .stipo.on { border-color:var(--ice); background:#13293d; }
+  .slista { display:grid; gap:8px; margin-top:10px; }
+  .sitem { background:var(--card); border:1px solid var(--line); color:var(--tx); border-radius:14px; padding:12px; text-align:left; font-family:inherit; font-size:15px; display:grid; gap:6px; }
+  .sitem small { color:#e8c66a; font-size:12px; }
   .hecha { font-size:13px; color:var(--mut); padding:6px 0; border-bottom:1px solid var(--line); }
   table.ctl { width:100%; border-collapse:collapse; font-size:13px; } .ctl th, .ctl td { padding:7px 4px; border-bottom:1px solid var(--line); text-align:right; } .ctl th:first-child, .ctl td:first-child { text-align:left; } .ctl th { color:var(--mut); font-weight:600; font-size:11px; }
   .ctl .mal { color:var(--red); font-weight:700; }
@@ -374,39 +381,60 @@ setInterval(() => {
 
 function revisarCola() { if (cola.length - idx <= 5) traer(false); }
 
-/* ---------- 🏋️ Socios activos que no vienen (seguimiento) ---------- */
-// Solo se registra si llamó desde la app: el tiempo fuera de la app tras tocar 📞 es la duración de la llamada.
-const SO_BOT = [['VIENE', '✅ Viene', 30], ['DA EXCUSAS', '🤷 Da excusas', 30], ['NO INTERESA', '❌ No le interesa', 30], ['NO CONTESTÓ', '📵 No contestó', 15]];
-let SOC = null, SOC_RES = null, cargandoSoc = false, SOC_CTL = null;
+/* ---------- 🏋️ Socios activos: 😴 no vienen (+5 d, meta 7) · 💪 sí vienen (meta 3) ---------- */
+// La asesora elige a quién llamar. Solo se registra si llamó desde la app: el tiempo fuera de la app tras tocar 📞 es la duración.
+const SO_BOT = {
+  no: [['VIENE', '✅ Viene', 30], ['DA EXCUSAS', '🤷 Da excusas', 30], ['NO INTERESA', '❌ No le interesa', 30], ['NO CONTESTÓ', '📵 No contestó', 15]],
+  si: [['CONTENTO', '😊 Contento', 30], ['QUEJA', '🗣️ Queja o sugerencia', 30], ['REFERIDO', '👥 Dio referido', 30], ['NO CONTESTÓ', '📵 No contestó', 15]]
+};
+const SO_TXT = { no: '😴 No vienen', si: '💪 Sí vienen' };
+let SOC = null, SOC_RES = null, cargandoSoc = false, SOC_CTL = null, SOC_TIPO = 'no', SOC_SEL = null, SOC_BUSCA = '';
 function traerSocios() {
   if (cargandoSoc) return; cargandoSoc = true;
   google.script.run
-    .withSuccessHandler((r) => { cargandoSoc = false; SOC = r; if (VISTA === 'socios') pintarSocios(); })
+    .withSuccessHandler((r) => { cargandoSoc = false; SOC = r; if (SOC_SEL && !SOC.listas[SOC_SEL.tipo].some((x) => x.cod === SOC_SEL.cod)) SOC_SEL = null; if (VISTA === 'socios') pintarSocios(); })
     .withFailureHandler((e) => { cargandoSoc = false; if (/CELULAR_NO_AUTORIZADO/.test(e.message || e)) return google.script.run.withSuccessHandler(pantallaPin).app_estadoCelular(LLAVE); toast(e.message || String(e), true); if (VISTA === 'socios' && !SOC) $('#main').innerHTML = `<div class="vacio">⚠️ ${esc(e.message || e)}</div>`; })
     .so_lista(LLAVE, COMO);
-  if (ASESORA === 'OMAR') google.script.run.withSuccessHandler((r) => { SOC_CTL = r; if (VISTA === 'socios' && SOC) pintarSocios(); }).so_resumen(LLAVE);
+  if (ASESORA === 'OMAR') traerControl();
 }
+function traerControl() { google.script.run.withSuccessHandler((r) => { SOC_CTL = r; if (VISTA === 'socios' && SOC && !SOC_SEL) pintarSocios(); }).so_resumen(LLAVE); }
 function controlOmar() {
   if (!SOC_CTL) return '';
   if (!SOC_CTL.length) return '<h2>📊 Control de llamadas a socios</h2><div class="tip">Todavía no hay llamadas registradas.</div>';
-  const fila = (a, t) => `<tr><td>${esc(a)}</td><td>${t.llamadas}</td><td>${t.contesto}</td><td>${t.prom ? mmss(t.prom) : '—'}</td><td>${t.viene}</td><td>${t.volvio}</td><td class="${t.cortas ? 'mal' : ''}">${t.cortas}</td></tr>`;
-  const tabla = (titulo, k) => `<h2>${titulo}</h2><table class="ctl"><tr><th>ASESORA</th><th>LLAM.</th><th>CONTEST.</th><th>DUR. PROM.</th><th>VIENE</th><th>VOLVIÓ</th><th>⚠️ CORTAS</th></tr>${SOC_CTL.map((x) => fila(x.asesora, x[k])).join('')}</table>`;
-  return tabla('📊 Hoy', 'hoy') + tabla('📊 Últimos 7 días', 'sem') + '<div class="tip">VOLVIÓ = vino al gym después de la llamada. ⚠️ CORTAS = contestadas de menos de 45 s.</div>';
+  const fila = (a, t) => `<tr><td>${esc(a)}</td><td>${t.no}</td><td>${t.si}</td><td>${t.contesto}</td><td>${t.prom ? mmss(t.prom) : '—'}</td><td>${t.viene}</td><td>${t.volvio}</td><td class="${t.cortas ? 'mal' : ''}">${t.cortas}</td></tr>`;
+  const tabla = (titulo, k) => `<h2>${titulo}</h2><table class="ctl"><tr><th>ASESORA</th><th>😴</th><th>💪</th><th>CONTEST.</th><th>DUR. PROM.</th><th>VIENE</th><th>VOLVIÓ</th><th>⚠️ CORTAS</th></tr>${SOC_CTL.map((x) => fila(x.asesora, x[k])).join('')}</table>`;
+  return tabla('📊 Hoy', 'hoy') + tabla('📊 Últimos 7 días', 'sem') + '<div class="tip">😴 no vienen (meta 7) · 💪 sí vienen (meta 3). VOLVIÓ = un 😴 que vino al gym después de la llamada. ⚠️ CORTAS = contestadas de menos de 45 s.</div>';
 }
-function pintarSocios() {
-  const s = SOC, p = s.lista[0];
-  const cab = `<div class="card" style="padding:12px 14px"><div style="display:flex;justify-content:space-between"><b>🏋️ Llamadas de hoy</b><b>${s.hoy} / ${s.meta}</b></div>
-    <div class="prog"><i style="width:${Math.min(100, s.hoy / s.meta * 100)}%"></i></div>
-    <div class="tip">Socios activos que no vienen hace más de 5 días · quedan ${s.pendientes} en tu lista</div></div>`;
-  if (!p) {
-    $('#main').innerHTML = cab + `<div class="vacio" style="padding:40px 10px">${s.hoy >= s.meta ? '✅ ¡Listo por hoy! Hiciste tus ' + s.meta + ' llamadas.' : '🎉 No tienes socios por llamar ahora.'}</div>`
-      + (s.hechas.length ? '<h2>Hechas hoy</h2>' + s.hechas.map((h) => `<div class="hecha">${esc(h.hora)} · ${esc(h.socio)} · <b>${esc(h.res)}</b> · ${mmss(h.seg)}</div>`).join('') : '') + controlOmar();
-    return;
-  }
+const cap = (t) => String(t || '').charAt(0).toUpperCase() + String(t || '').slice(1).toLowerCase();
+function pintarSocios() { if (SOC_SEL) return pintarSocioLlamar(SOC_SEL); pintarListaSoc(); }
+function pintarListaSoc() {
+  const s = SOC;
+  const meta = (t) => { const n = s.hoy[t], m = s.meta[t];
+    return `<button class="stipo ${SOC_TIPO === t ? 'on' : ''}" data-t="${t}"><span>${SO_TXT[t]}</span><b>${n} / ${m}${n >= m ? ' ✅' : ''}</b>
+      <div class="prog"><i style="width:${Math.min(100, n / m * 100)}%"></i></div><small>${s.listas[t].length} por llamar</small></button>`; };
+  const q = cob_q(SOC_BUSCA), l = s.listas[SOC_TIPO].filter((p) => !q || cob_q(p.nombre + ' ' + p.cod + ' ' + p.tel).includes(q));
+  const item = (p) => `<button class="sitem" data-c="${esc(p.cod)}"><b>${esc(p.nombre || 'Cód. ' + p.cod)}</b>
+    <span>${diasSA(p.dias)} <span class="tag">${esc(p.plan || '—')}</span> ${p.fin ? `<span class="tag">vence ${fechaCorta(p.fin)}</span>` : ''}</span>
+    ${p.antes ? `<small>Última llamada: ${esc(p.antes)}</small>` : ''}</button>`;
+  const hechas = s.hechas.filter((h) => h.tipo === SOC_TIPO);
+  $('#main').innerHTML = `<div class="stipos">${meta('no')}${meta('si')}</div>
+    <div class="tip" style="margin:8px 2px">${SOC_TIPO === 'no' ? 'Activos que no vienen hace más de 5 días: que vuelvan.' : 'Activos que sí vienen: que sigan, renueven y te den referidos.'} Toca a quién vas a llamar.</div>
+    <input id="sBusca" placeholder="🔍 Buscar por nombre, código o celular" value="${esc(SOC_BUSCA)}">
+    <div class="slista">${l.map(item).join('') || `<div class="vacio" style="padding:30px 10px">${q ? 'Nadie con ese nombre.' : '🎉 No hay socios por llamar en esta lista.'}</div>`}</div>
+    ${hechas.length ? '<h2>Hechas hoy</h2>' + hechas.map((h) => `<div class="hecha">${esc(h.hora)} · ${esc(h.socio)} · <b>${esc(h.res)}</b> · ${mmss(h.seg)}</div>`).join('') : ''}` + controlOmar();
+  document.querySelectorAll('.stipo').forEach((b) => b.onclick = () => { SOC_TIPO = b.dataset.t; SOC_BUSCA = ''; pintarListaSoc(); });
+  document.querySelectorAll('.sitem').forEach((b) => b.onclick = () => { SOC_SEL = s.listas[SOC_TIPO].find((p) => p.cod === b.dataset.c); pintarSocioLlamar(SOC_SEL); window.scrollTo(0, 0); });
+  const bu = $('#sBusca'); bu.oninput = () => { SOC_BUSCA = bu.value; const pos = bu.selectionStart; pintarListaSoc(); const n = $('#sBusca'); n.focus(); n.setSelectionRange(pos, pos); };
+}
+function pintarSocioLlamar(p) {
   nuevaLlamada('soc:' + p.cod);
   SOC_RES = null;
-  $('#main').innerHTML = cab + `
-    <div class="card" style="margin-top:10px">
+  const nom = esc(cap((p.nombre || '').split(/[ ,]+/)[0] || '')), yo = esc(cap(SOC.quien));
+  const guion = p.tipo === 'no'
+    ? `«Hola ${nom}, te habla ${yo} de RURUSH 💪 Te extrañamos estos días, ¿todo bien? ¿Qué día de esta semana te esperamos para retomar?»`
+    : `«Hola ${nom}, te habla ${yo} de RURUSH 💪 Te vemos constante, ¡felicitaciones! ¿Cómo te sientes con tus entrenamientos? ¿Algo que podamos mejorar? ¿Algún amigo o familiar que quiera entrenar contigo?»`;
+  $('#main').innerHTML = `<button class="saltar" id="sVolver" style="text-align:left;margin:0 0 6px;padding:6px 0">← Volver a la lista (${SO_TXT[p.tipo]})</button>
+    <div class="card">
       <div class="nombre">${esc(p.nombre || 'Cód. ' + p.cod)}</div>
       <div class="num">+51 ${esc(p.tel.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3'))}</div>
       <div class="meta"><span class="tag">Cód. ${esc(p.cod)}</span>${p.plan ? `<span class="tag">${esc(p.plan)}</span>` : ''}${p.fin ? `<span class="tag">vence ${fechaCorta(p.fin)} (${p.vence} d)</span>` : ''}</div>
@@ -414,17 +442,16 @@ function pintarSocios() {
       ${p.antes ? `<div class="aviso">Última llamada: ${esc(p.antes)}</div>` : ''}
       <div class="acciones" style="grid-template-columns:1fr 1fr">
         <a class="llamar" id="sLlamar" href="tel:+51${p.tel}">📞 Llamar</a>
-        <a class="wacall" id="sWa" href="https:\/\/wa.me/51${p.tel}" target="_blank">📲 WhatsApp</a>
+        <a class="wacall" id="sWa" href="https://wa.me/51${p.tel}" target="_blank">📲 WhatsApp</a>
       </div>
       <div class="medidor" id="sMed"></div>
     </div>
-    <div class="aviso" style="background:#13293d;color:#9fd3ff">💬 <b>Guion:</b> «Hola ${esc(cap((p.nombre || '').split(/[ ,]+/)[0] || ''))}, te habla ${esc(cap(s.quien))} de RURUSH 💪 Te extrañamos estos días, ¿todo bien? ¿Qué día de esta semana te esperamos para retomar?»</div>
+    <div class="aviso" style="background:#13293d;color:#9fd3ff">💬 <b>Guion:</b> ${guion}</div>
     <h2>¿Cómo salió?</h2>
-    <div class="estados">${SO_BOT.map((b) => `<button class="est sest" data-r="${b[0]}" data-min="${b[2]}" disabled>${b[1]}<small></small></button>`).join('')}</div>
+    <div class="estados">${SO_BOT[p.tipo].map((b) => `<button class="est sest" data-r="${b[0]}" data-min="${b[2]}" disabled>${b[1]}<small></small></button>`).join('')}</div>
     <h2>Nota</h2>
-    <textarea id="sNota" placeholder="Ej.: vuelve el lunes en la tarde (usa el 🎤 del teclado)"></textarea>
-    <button class="guardar" id="sGuardar" disabled>Guardar y siguiente</button>
-    <button class="saltar" id="sSaltar">Saltar (no llamé)</button>` + controlOmar();
+    <textarea id="sNota" placeholder="${p.tipo === 'no' ? 'Ej.: vuelve el lunes en la tarde' : 'Ej.: pide más clases de noche / refirió a su hermana 9xx…'} (usa el 🎤 del teclado)"></textarea>
+    <button class="guardar" id="sGuardar" disabled>Guardar y volver a la lista</button>`;
   const marca = () => { llamada.intentos++; llamada.toco = Date.now(); guardarLlamada(); actualizarSocio(); };
   $('#sLlamar').onclick = marca; $('#sWa').onclick = () => { llamada.wa = (llamada.wa || 0) + 1; marca(); };
   document.querySelectorAll('.sest').forEach((b) => b.onclick = () => {
@@ -432,12 +459,12 @@ function pintarSocios() {
     document.querySelectorAll('.sest').forEach((x) => x.classList.toggle('on', x === b));
     $('#sGuardar').disabled = false;
   });
-  $('#sSaltar').onclick = () => { SOC.lista.shift(); pintarSocios(); };
+  $('#sVolver').onclick = () => { SOC_SEL = null; pintarListaSoc(); };
   $('#sGuardar').onclick = guardarSocio;
   actualizarSocio();
 }
-const cap = (t) => String(t || '').charAt(0) + String(t || '').slice(1).toLowerCase();
 function actualizarSocio() {
+  if (!SOC_SEL) return;
   const seg = segundos(), med = $('#sMed');
   if (med) med.innerHTML = llamada.intentos ? `<span>📞 Intentos: <b>${llamada.intentos}</b></span><span>⏱ En llamada: <b>${mmss(seg)}</b></span>`
     : '<span>Toca 📞 Llamar para habilitar los resultados</span>';
@@ -449,24 +476,24 @@ function actualizarSocio() {
   });
 }
 function guardarSocio() {
-  const p = SOC.lista[0];
+  const p = SOC_SEL;
   if (!p || !SOC_RES) return;
   const btn = $('#sGuardar'); if (btn.disabled) return;
   btn.disabled = true; btn.textContent = 'Guardando…';
-  const d = { fila: p.fila, cod: p.cod, nombre: p.nombre, tel: p.tel, dias: p.dias, resultado: SOC_RES, nota: $('#sNota').value, intentos: llamada.intentos, segundos: segundos(), como: COMO };
+  const d = { fila: p.fila, cod: p.cod, nombre: p.nombre, tel: p.tel, dias: p.dias, tipo: p.tipo, resultado: SOC_RES, nota: $('#sNota').value, intentos: llamada.intentos, segundos: segundos(), como: COMO };
   google.script.run
     .withSuccessHandler(() => {
       toast('✓ ' + (p.nombre || p.cod) + ': ' + SOC_RES);
-      SOC.hechas.push({ socio: p.nombre, res: SOC_RES, seg: d.segundos, hora: new Date().toTimeString().slice(0, 5) });
-      SOC.hoy++; SOC.lista.shift(); SOC.pendientes = Math.max(0, SOC.pendientes - 1);
+      SOC.hechas.push({ socio: p.nombre, res: SOC_RES, seg: d.segundos, hora: new Date().toTimeString().slice(0, 5), tipo: p.tipo });
+      SOC.hoy[p.tipo]++; SOC.listas[p.tipo] = SOC.listas[p.tipo].filter((x) => x.tel !== p.tel);
       try { localStorage.removeItem('rr_llamada'); } catch (e) {}
-      if (SOC.hoy >= SOC.meta) SOC.lista = [];
-      pintarSocios();
-      if (ASESORA === 'OMAR') google.script.run.withSuccessHandler((r) => { SOC_CTL = r; if (VISTA === 'socios') pintarSocios(); }).so_resumen(LLAVE);
+      SOC_SEL = null; pintarListaSoc(); window.scrollTo(0, 0);
+      if (ASESORA === 'OMAR') traerControl();
     })
-    .withFailureHandler((e) => { btn.disabled = false; btn.textContent = 'Guardar y siguiente'; toast(e.message || String(e), true); })
+    .withFailureHandler((e) => { btn.disabled = false; btn.textContent = 'Guardar y volver a la lista'; toast(e.message || String(e), true); })
     .so_guardar(LLAVE, d);
 }
+const cob_q = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 /* ---------- 💰 Cobros pendientes (pestaña "2. COLA RENOVAR" de VENTAS RETENCIÓN) ---------- */
 let VISTA = 'llamadas', cobros = null, cargandoCobros = false;
