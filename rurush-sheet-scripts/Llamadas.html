@@ -49,7 +49,11 @@
   .toast { white-space:pre-line; position:fixed; left:16px; right:16px; bottom:16px; background:#2c2c2e; color:#fff; padding:12px 14px; border-radius:12px; font-size:14px; display:none; z-index:20; }
   .toast.err { background:#5c1f1f; }
   .vacio { text-align:center; color:var(--mut); padding:60px 10px; }
-  .tabs { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:10px; }
+  .tabs { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-top:10px; }
+  .prog { height:8px; background:var(--line); border-radius:9px; overflow:hidden; margin-top:8px; } .prog i { display:block; height:100%; background:var(--grn); }
+  .hecha { font-size:13px; color:var(--mut); padding:6px 0; border-bottom:1px solid var(--line); }
+  table.ctl { width:100%; border-collapse:collapse; font-size:13px; } .ctl th, .ctl td { padding:7px 4px; border-bottom:1px solid var(--line); text-align:right; } .ctl th:first-child, .ctl td:first-child { text-align:left; } .ctl th { color:var(--mut); font-weight:600; font-size:11px; }
+  .ctl .mal { color:var(--red); font-weight:700; }
   .tab { background:var(--card); color:var(--mut); border:1px solid var(--line); border-radius:10px; padding:9px; font-size:15px; font-weight:600; }
   .tab.on { background:#2a1414; border-color:var(--red); color:#fff; }
   .totales { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
@@ -85,7 +89,7 @@
     <div><h1><b>RURUSH</b> Llamadas</h1><div class="sub" id="sub">Hola <?= asesora ?></div></div>
     <button class="btn-s" id="recargar">🔄</button>
   </div>
-  <div class="tabs"><button class="tab on" data-v="llamadas">📞 Llamadas</button><button class="tab" data-v="cobros">💰 Cobros</button></div>
+  <div class="tabs"><button class="tab on" data-v="llamadas">📞 Llamadas</button><button class="tab" data-v="socios">🏋️ Socios</button><button class="tab" data-v="cobros">💰 Cobros</button></div>
   <div id="vistaLlamadas"><select class="bases" id="base"></select>
   <div class="marcador" id="marcador"></div></div>
 </header>
@@ -207,7 +211,7 @@ function salioDeLaApp() {
   if (llamada.salio == null && llamada.toco && Date.now() - llamada.toco < 20000) { llamada.salio = Date.now(); guardarLlamada(); }
 }
 function volvioALaApp() {
-  if (llamada.salio != null) { llamada.fueraMs += Date.now() - llamada.salio; llamada.salio = null; guardarLlamada(); actualizarBotones(); }
+  if (llamada.salio != null) { llamada.fueraMs += Date.now() - llamada.salio; llamada.salio = null; guardarLlamada(); actualizarBotones(); if (VISTA === 'socios') actualizarSocio(); }
 }
 document.addEventListener('visibilitychange', () => (document.hidden ? salioDeLaApp() : volvioALaApp()));
 window.addEventListener('blur', salioDeLaApp);
@@ -370,6 +374,100 @@ setInterval(() => {
 
 function revisarCola() { if (cola.length - idx <= 5) traer(false); }
 
+/* ---------- 🏋️ Socios activos que no vienen (seguimiento) ---------- */
+// Solo se registra si llamó desde la app: el tiempo fuera de la app tras tocar 📞 es la duración de la llamada.
+const SO_BOT = [['VIENE', '✅ Viene', 30], ['DA EXCUSAS', '🤷 Da excusas', 30], ['NO INTERESA', '❌ No le interesa', 30], ['NO CONTESTÓ', '📵 No contestó', 15]];
+let SOC = null, SOC_RES = null, cargandoSoc = false, SOC_CTL = null;
+function traerSocios() {
+  if (cargandoSoc) return; cargandoSoc = true;
+  google.script.run
+    .withSuccessHandler((r) => { cargandoSoc = false; SOC = r; if (VISTA === 'socios') pintarSocios(); })
+    .withFailureHandler((e) => { cargandoSoc = false; if (/CELULAR_NO_AUTORIZADO/.test(e.message || e)) return google.script.run.withSuccessHandler(pantallaPin).app_estadoCelular(LLAVE); toast(e.message || String(e), true); if (VISTA === 'socios' && !SOC) $('#main').innerHTML = `<div class="vacio">⚠️ ${esc(e.message || e)}</div>`; })
+    .so_lista(LLAVE, COMO);
+  if (ASESORA === 'OMAR') google.script.run.withSuccessHandler((r) => { SOC_CTL = r; if (VISTA === 'socios' && SOC) pintarSocios(); }).so_resumen(LLAVE);
+}
+function controlOmar() {
+  if (!SOC_CTL) return '';
+  if (!SOC_CTL.length) return '<h2>📊 Control de llamadas a socios</h2><div class="tip">Todavía no hay llamadas registradas.</div>';
+  const fila = (a, t) => `<tr><td>${esc(a)}</td><td>${t.llamadas}</td><td>${t.contesto}</td><td>${t.prom ? mmss(t.prom) : '—'}</td><td>${t.viene}</td><td>${t.volvio}</td><td class="${t.cortas ? 'mal' : ''}">${t.cortas}</td></tr>`;
+  const tabla = (titulo, k) => `<h2>${titulo}</h2><table class="ctl"><tr><th>ASESORA</th><th>LLAM.</th><th>CONTEST.</th><th>DUR. PROM.</th><th>VIENE</th><th>VOLVIÓ</th><th>⚠️ CORTAS</th></tr>${SOC_CTL.map((x) => fila(x.asesora, x[k])).join('')}</table>`;
+  return tabla('📊 Hoy', 'hoy') + tabla('📊 Últimos 7 días', 'sem') + '<div class="tip">VOLVIÓ = vino al gym después de la llamada. ⚠️ CORTAS = contestadas de menos de 45 s.</div>';
+}
+function pintarSocios() {
+  const s = SOC, p = s.lista[0];
+  const cab = `<div class="card" style="padding:12px 14px"><div style="display:flex;justify-content:space-between"><b>🏋️ Llamadas de hoy</b><b>${s.hoy} / ${s.meta}</b></div>
+    <div class="prog"><i style="width:${Math.min(100, s.hoy / s.meta * 100)}%"></i></div>
+    <div class="tip">Socios activos que no vienen hace más de 5 días · quedan ${s.pendientes} en tu lista</div></div>`;
+  if (!p) {
+    $('#main').innerHTML = cab + `<div class="vacio" style="padding:40px 10px">${s.hoy >= s.meta ? '✅ ¡Listo por hoy! Hiciste tus ' + s.meta + ' llamadas.' : '🎉 No tienes socios por llamar ahora.'}</div>`
+      + (s.hechas.length ? '<h2>Hechas hoy</h2>' + s.hechas.map((h) => `<div class="hecha">${esc(h.hora)} · ${esc(h.socio)} · <b>${esc(h.res)}</b> · ${mmss(h.seg)}</div>`).join('') : '') + controlOmar();
+    return;
+  }
+  nuevaLlamada('soc:' + p.cod);
+  SOC_RES = null;
+  $('#main').innerHTML = cab + `
+    <div class="card" style="margin-top:10px">
+      <div class="nombre">${esc(p.nombre || 'Cód. ' + p.cod)}</div>
+      <div class="num">+51 ${esc(p.tel.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3'))}</div>
+      <div class="meta"><span class="tag">Cód. ${esc(p.cod)}</span>${p.plan ? `<span class="tag">${esc(p.plan)}</span>` : ''}${p.fin ? `<span class="tag">vence ${fechaCorta(p.fin)} (${p.vence} d)</span>` : ''}</div>
+      ${diasSA(p.dias)}${p.ult ? `<span class="tip"> · última vez: ${esc(p.ult)}</span>` : ''}
+      ${p.antes ? `<div class="aviso">Última llamada: ${esc(p.antes)}</div>` : ''}
+      <div class="acciones" style="grid-template-columns:1fr 1fr">
+        <a class="llamar" id="sLlamar" href="tel:+51${p.tel}">📞 Llamar</a>
+        <a class="wacall" id="sWa" href="https:\/\/wa.me/51${p.tel}" target="_blank">📲 WhatsApp</a>
+      </div>
+      <div class="medidor" id="sMed"></div>
+    </div>
+    <div class="aviso" style="background:#13293d;color:#9fd3ff">💬 <b>Guion:</b> «Hola ${esc(cap((p.nombre || '').split(/[ ,]+/)[0] || ''))}, te habla ${esc(cap(s.quien))} de RURUSH 💪 Te extrañamos estos días, ¿todo bien? ¿Qué día de esta semana te esperamos para retomar?»</div>
+    <h2>¿Cómo salió?</h2>
+    <div class="estados">${SO_BOT.map((b) => `<button class="est sest" data-r="${b[0]}" data-min="${b[2]}" disabled>${b[1]}<small></small></button>`).join('')}</div>
+    <h2>Nota</h2>
+    <textarea id="sNota" placeholder="Ej.: vuelve el lunes en la tarde (usa el 🎤 del teclado)"></textarea>
+    <button class="guardar" id="sGuardar" disabled>Guardar y siguiente</button>
+    <button class="saltar" id="sSaltar">Saltar (no llamé)</button>` + controlOmar();
+  const marca = () => { llamada.intentos++; llamada.toco = Date.now(); guardarLlamada(); actualizarSocio(); };
+  $('#sLlamar').onclick = marca; $('#sWa').onclick = () => { llamada.wa = (llamada.wa || 0) + 1; marca(); };
+  document.querySelectorAll('.sest').forEach((b) => b.onclick = () => {
+    SOC_RES = b.dataset.r;
+    document.querySelectorAll('.sest').forEach((x) => x.classList.toggle('on', x === b));
+    $('#sGuardar').disabled = false;
+  });
+  $('#sSaltar').onclick = () => { SOC.lista.shift(); pintarSocios(); };
+  $('#sGuardar').onclick = guardarSocio;
+  actualizarSocio();
+}
+const cap = (t) => String(t || '').charAt(0) + String(t || '').slice(1).toLowerCase();
+function actualizarSocio() {
+  const seg = segundos(), med = $('#sMed');
+  if (med) med.innerHTML = llamada.intentos ? `<span>📞 Intentos: <b>${llamada.intentos}</b></span><span>⏱ En llamada: <b>${mmss(seg)}</b></span>`
+    : '<span>Toca 📞 Llamar para habilitar los resultados</span>';
+  document.querySelectorAll('.sest').forEach((b) => {
+    const min = Number(b.dataset.min), ok = llamada.intentos > 0 && llamada.salio == null && seg >= min;
+    b.disabled = !ok;
+    b.querySelector('small').textContent = ok ? '' : (llamada.intentos ? `🔒 mín. ${min} s` : '🔒');
+    if (!ok && SOC_RES === b.dataset.r) { SOC_RES = null; b.classList.remove('on'); $('#sGuardar').disabled = true; }
+  });
+}
+function guardarSocio() {
+  const p = SOC.lista[0];
+  if (!p || !SOC_RES) return;
+  const btn = $('#sGuardar'); if (btn.disabled) return;
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  const d = { fila: p.fila, cod: p.cod, nombre: p.nombre, tel: p.tel, dias: p.dias, resultado: SOC_RES, nota: $('#sNota').value, intentos: llamada.intentos, segundos: segundos(), como: COMO };
+  google.script.run
+    .withSuccessHandler(() => {
+      toast('✓ ' + (p.nombre || p.cod) + ': ' + SOC_RES);
+      SOC.hechas.push({ socio: p.nombre, res: SOC_RES, seg: d.segundos, hora: new Date().toTimeString().slice(0, 5) });
+      SOC.hoy++; SOC.lista.shift(); SOC.pendientes = Math.max(0, SOC.pendientes - 1);
+      try { localStorage.removeItem('rr_llamada'); } catch (e) {}
+      if (SOC.hoy >= SOC.meta) SOC.lista = [];
+      pintarSocios();
+      if (ASESORA === 'OMAR') google.script.run.withSuccessHandler((r) => { SOC_CTL = r; if (VISTA === 'socios') pintarSocios(); }).so_resumen(LLAVE);
+    })
+    .withFailureHandler((e) => { btn.disabled = false; btn.textContent = 'Guardar y siguiente'; toast(e.message || String(e), true); })
+    .so_guardar(LLAVE, d);
+}
+
 /* ---------- 💰 Cobros pendientes (pestaña "2. COLA RENOVAR" de VENTAS RETENCIÓN) ---------- */
 let VISTA = 'llamadas', cobros = null, cargandoCobros = false;
 // última lista de cobros guardada en el celular: la pestaña abre al instante y se actualiza por detrás
@@ -387,6 +485,7 @@ function cambiarVista(v) {
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.dataset.v === v));
   $('#vistaLlamadas').style.display = v === 'llamadas' ? '' : 'none';
   if (v === 'llamadas') { if (mostrando) pintar(); else $('#main').innerHTML = '<div class="vacio">Cargando tu cola…</div>'; return; }
+  if (v === 'socios') { if (SOC) pintarSocios(); else $('#main').innerHTML = '<div class="vacio">Cargando tus socios…</div>'; traerSocios(); return; }
   if (cobros) pintarCobros(); else $('#main').innerHTML = '<div class="vacio">Cargando tus cobros…</div>';
   traerCobros();
 }
@@ -498,7 +597,7 @@ function pintarSocio(s) {
   };
 }
 
-$('#recargar').onclick = () => { if (VISTA === 'cobros') return traerCobros(); mostrando = false; cola = []; idx = 0; $('#main').innerHTML = '<div class="vacio">Cargando…</div>'; traer(true); };
+$('#recargar').onclick = () => { if (VISTA === 'cobros') return traerCobros(); if (VISTA === 'socios') { SOC = null; $('#main').innerHTML = '<div class="vacio">Cargando tus socios…</div>'; return traerSocios(); } mostrando = false; cola = []; idx = 0; $('#main').innerHTML = '<div class="vacio">Cargando…</div>'; traer(true); };
 // Selector de base: cada base tiene su propia cola
 $('#base').innerHTML = BASES.map((b) => `<option ${b === BASE ? 'selected' : ''}>${esc(b)}</option>`).join('');
 $('#base').onchange = () => {
