@@ -33,6 +33,7 @@ const SO_RES = {
 };
 
 function so_tel(v) { const d = String(v || "").replace(/\D/g, ""); return d.length >= 9 ? d.slice(-9) : ""; }
+function so_ent_(v) { const n = so_num(v); return n == null ? null : Math.round(n); }   // "82.666…" → 83
 function so_num(v) { if (v === "" || v == null) return null; const n = Number(v); return isFinite(n) ? n : null; }
 function so_hoja() { return cob_libro().getSheetByName(SO_HOJA); }
 function so_filas_() {
@@ -80,7 +81,7 @@ function so_lista(llave, como) {
     const cod = String(f[SO.cod] || "").trim(), tel = so_tel(f[SO.cel]);
     if (!cod || !tel) return;
     if (cob_norm(f[SO.ase] || f[SO.aseOrig]) !== quien) return;
-    const vence = so_num(f[SO.vence]), dias = so_num(f[SO.dias]);
+    const vence = so_ent_(f[SO.vence]), dias = so_ent_(f[SO.dias]);
     if (vence == null || vence < 0) return;                 // plan vencido: eso es renovación, no este seguimiento
     const fin = cob_iso(f[SO.fin]);
     if (fin && fin < hoy) return;                           // "VENCE DÍAS" a veces no se recalcula
