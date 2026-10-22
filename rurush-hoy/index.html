@@ -46,6 +46,8 @@
   const api = (o) => fetch(q(o)).then((r) => r.json());
 
   function abrir() {
+    guardado('rr_hoy_ok', '1');
+    if (document.querySelector('iframe')) return;
     caja.remove();
     const f = document.createElement('iframe');
     f.src = q();
@@ -64,10 +66,21 @@
     };
   }
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  // ⚡ Si este celular ya estaba activado, la app abre de inmediato y la verificación corre en paralelo
+  // (el servidor igual exige llave + celular activado para entregar la app).
+  function noActivado(r) {
+    try { localStorage.removeItem('rr_hoy_ok'); } catch (e) {}
+    const f = document.querySelector('iframe'); if (f) f.remove();
+    if (!document.getElementById('caja')) document.body.appendChild(caja);
+    r.error ? (caja.textContent = r.error) : pedirPin();
+  }
   if (!K) caja.textContent = 'Falta la llave en el link. Ábrelo con el link que sale en hoy_verLink.';
-  else api({ accion: 'estado' })
-    .then((r) => r.ok ? abrir() : (r.error ? (caja.textContent = r.error) : pedirPin()))
-    .catch(() => { caja.textContent = 'Sin conexión con Google. Toca para reintentar.'; caja.onclick = () => location.reload(); });
+  else {
+    if (guardado('rr_hoy_ok')) abrir();
+    api({ accion: 'estado' })
+      .then((r) => r.ok ? abrir() : noActivado(r))
+      .catch(() => { if (document.querySelector('iframe')) return; caja.textContent = 'Sin conexión con Google. Toca para reintentar.'; caja.onclick = () => location.reload(); });
+  }
 </script>
 </body>
 </html>

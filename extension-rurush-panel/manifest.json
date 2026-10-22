@@ -1,0 +1,88 @@
+{
+  "manifest_version": 3,
+  "name": "RURUSH Fitness Club — Panel Operativo",
+  "short_name": "RURUSH",
+  "version": "1.28.0",
+  "description": "Panel de ventas y retencion de RURUSH: ficha del socio, plantillas en WhatsApp Web, etiquetado en Pipedrive y dashboard del dia.",
+  "permissions": [
+    "storage",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://web.whatsapp.com/*",
+    "https://webapiappsfit-cliente.azurewebsites.net/*",
+    "https://appsfit.azurewebsites.net/*",
+    "https://api.pipedrive.com/*",
+    "https://script.google.com/*",
+    "https://script.googleusercontent.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "RURUSH — Dashboard del dia",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://web.whatsapp.com/*"
+      ],
+      "js": [
+        "content/wa-interno.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://web.whatsapp.com/*"
+      ],
+      "js": [
+        "lib/ui.js",
+        "lib/templates.js",
+        "content/wa.js"
+      ],
+      "css": [
+        "content/panel.css"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://appsfit.azurewebsites.net/*"
+      ],
+      "js": [
+        "lib/ui.js",
+        "content/appsfit.js"
+      ],
+      "css": [
+        "content/panel.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icons/logo-blanco.png",
+        "assets/*.jpg"
+      ],
+      "matches": [
+        "https://web.whatsapp.com/*",
+        "https://appsfit.azurewebsites.net/*"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,804 @@
+<!doctype html>
+<html lang="es"><head><base target="_top"><meta charset="utf-8">
+<style>
+  :root {
+    --rojo:#C8101A; --rojo-hover:#a60d16; --rojo-suave:#fdecec; --rojo-texto:#b3121b;
+    --negro:#141414; --texto:#1c1c1e; --sub:#62626a; --tenue:#8e8e96;
+    --fondo:#f4f4f5; --sup:#ffffff; --borde:#e4e4e7; --borde-f:#d4d4d8; --gris-suave:#f1f1f3;
+    --verde:#1a7f37; --verde-suave:#e6f4ea; --ambar:#9a5b00; --ambar-suave:#fff3dc; --ambar-borde:#f0c46c;
+    --r:10px; --r-s:8px; --sombra:0 1px 2px rgba(16,16,20,.04), 0 1px 3px rgba(16,16,20,.06);
+  }
+  * { box-sizing:border-box; margin:0; padding:0 }
+  body { font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; font-size:14px; line-height:1.4; background:var(--fondo); color:var(--texto); -webkit-font-smoothing:antialiased }
+  button, input, select { font:inherit; color:inherit }
+  .ic { width:16px; height:16px; flex-shrink:0; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; vertical-align:-3px }
+  :focus-visible { outline:2px solid var(--rojo); outline-offset:2px }
+  .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0) }
+
+  /* ---- marco ---- */
+  .app { display:flex; min-height:100vh }
+  .side { width:236px; background:var(--negro); color:#fff; padding:22px 14px; position:sticky; top:0; height:100vh; flex-shrink:0; display:flex; flex-direction:column }
+  .side .logo { height:38px; align-self:flex-start; margin:0 6px }
+  .who { margin:20px 0 18px; padding:11px 12px; background:#1f1f22; border-radius:var(--r); font-size:12px; color:#a1a1aa; display:flex; gap:10px; align-items:center }
+  .who .av { width:34px; height:34px; border-radius:50%; background:#2c2c30; display:grid; place-items:center; color:#fff; font-weight:700; font-size:14px; flex-shrink:0 }
+  .who b { color:#fff; font-size:14px; display:block; font-weight:650 }
+  .nav { display:flex; flex-direction:column; gap:2px }
+  .nav button { display:flex; align-items:center; gap:10px; width:100%; padding:10px 12px; border-radius:var(--r-s); color:#d4d4d8; font-size:14px; font-weight:550; background:none; border:0; cursor:pointer; text-align:left; min-height:40px }
+  .nav button:hover { background:#232326; color:#fff } .nav button.on { background:var(--rojo); color:#fff }
+  .nav button .n { margin-left:auto; background:#ffffff1f; border-radius:99px; padding:1px 8px; font-size:12px; font-weight:600 }
+  .side .pie { margin-top:auto; font-size:11.5px; color:#71717a; display:flex; gap:6px; line-height:1.45 }
+  .main { flex:1; min-width:0; padding:26px 30px 40px }
+
+  /* ---- cabecera ---- */
+  .top { display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:18px }
+  h1 { font-size:24px; font-weight:750; letter-spacing:-.01em }
+  .fecha { color:var(--sub); font-size:14px; margin-top:2px }
+  .acciones { display:flex; gap:8px; align-items:center; flex-wrap:wrap }
+  .act { color:var(--tenue); font-size:12.5px }
+
+  /* ---- botones ---- */
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:40px; padding:0 16px; border-radius:var(--r-s); border:1px solid transparent; font-weight:650; font-size:14px; cursor:pointer; white-space:nowrap; transition:background .12s }
+  .btn.pri { background:var(--rojo); color:#fff } .btn.pri:hover { background:var(--rojo-hover) }
+  .btn.sec { background:var(--sup); border-color:var(--borde-f); color:var(--texto) } .btn.sec:hover { border-color:#a1a1aa }
+  .btn.osc { background:var(--negro); color:#fff } .btn.osc:hover { background:#2a2a2e }
+  .btn.peq { min-height:34px; padding:0 12px; font-size:13px }
+  .btn:disabled { opacity:.55; cursor:not-allowed }
+
+  /* ---- indicadores ---- */
+  .kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:20px }
+  .k { background:var(--sup); border:1px solid var(--borde); border-radius:var(--r); padding:14px 18px; box-shadow:var(--sombra) }
+  .k small { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--sub); font-weight:600 }
+  .k b { display:block; font-size:32px; font-weight:750; line-height:1.15; margin-top:4px; font-variant-numeric:tabular-nums }
+  .k .pie { font-size:12px; color:var(--tenue) }
+  .k.tarea { border-color:var(--rojo); box-shadow:inset 4px 0 0 var(--rojo), var(--sombra) } .k.tarea b { color:var(--rojo-texto) }
+  .k.tarea.cero { border-color:var(--borde); box-shadow:var(--sombra) } .k.tarea.cero b { color:var(--verde) }
+
+  /* ---- distribución ---- */
+  .cuerpo { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:18px; align-items:start }
+  .cuerpo.nutri { grid-template-columns:minmax(0,1fr) minmax(340px,500px) }
+  .panel { background:var(--sup); border:1px solid var(--borde); border-radius:var(--r); box-shadow:var(--sombra) }
+  .panel-h { display:flex; align-items:center; gap:8px; padding:14px 16px; border-bottom:1px solid var(--borde); font-weight:700; font-size:15px }
+  .panel-h .ic { color:var(--sub) }
+  .panel-b { padding:14px 16px }
+
+  /* ---- barra de filtros ---- */
+  .barra { display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:12px 14px; border-bottom:1px solid var(--borde) }
+  .tabs { display:flex; gap:4px; background:var(--gris-suave); padding:3px; border-radius:var(--r-s) }
+  .tabs button { border:0; background:none; padding:0 12px; min-height:34px; border-radius:6px; font-size:13.5px; font-weight:600; color:var(--sub); cursor:pointer; white-space:nowrap }
+  .tabs button.on { background:var(--sup); color:var(--texto); box-shadow:0 1px 2px rgba(0,0,0,.08) }
+  .tabs .c { color:var(--tenue); font-weight:600; margin-left:2px }
+  .buscar { position:relative; flex:1 1 200px; min-width:160px }
+  .buscar .ic { position:absolute; left:11px; top:50%; transform:translateY(-50%); color:var(--tenue) }
+  .campo { width:100%; min-height:38px; padding:0 12px; border:1px solid var(--borde-f); border-radius:var(--r-s); background:var(--sup); font-size:14px }
+  .buscar .campo { padding-left:34px }
+  select.campo { padding-right:30px; cursor:pointer }
+  .filtros { display:flex; gap:8px; flex-wrap:wrap }
+  .filtros select { width:auto; min-width:150px }
+  .limpiar { border:0; background:none; color:var(--rojo-texto); font-weight:600; font-size:13px; cursor:pointer; padding:6px }
+
+  /* ---- agenda ---- */
+  .agenda { container:agenda / inline-size }
+  .cols, .fila { display:grid; grid-template-columns:56px minmax(130px,1.3fr) minmax(90px,.7fr) 190px minmax(140px,1fr) 108px; gap:12px; align-items:center }
+  .cols { padding:9px 16px 9px 20px; font-size:11.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--tenue); border-bottom:1px solid var(--borde) }
+  .item { border-bottom:1px solid var(--borde); position:relative }
+  .item:last-child { border-bottom:0 }
+  .item::before { content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:#c4c4c9 }
+  .item.ok::before { background:var(--verde) } .item.no::before { background:#e58b8f }
+  .item.abierto { background:#fafafa }
+  .fila { padding:12px 16px 12px 20px; min-height:66px }
+  .hora { font-size:17px; font-weight:700; font-variant-numeric:tabular-nums; line-height:1.1 }
+  .hora small { display:block; font-size:12px; color:var(--tenue); font-weight:500 }
+  .nom { font-size:15.5px; font-weight:650; overflow-wrap:anywhere }
+  .sec2 { font-size:13px; color:var(--sub); margin-top:2px; display:flex; gap:6px; align-items:center; flex-wrap:wrap }
+  .sec2 .ic { width:13px; height:13px; color:var(--tenue) }
+  .ase { font-weight:600 }
+  .via { display:inline-block; margin-top:3px; font-size:12px; font-weight:600; color:var(--sub); background:var(--gris-suave); border-radius:5px; padding:1px 7px; white-space:nowrap }
+
+  .seg { display:inline-flex; border:1px solid var(--borde-f); border-radius:var(--r-s); overflow:hidden; background:var(--sup) }
+  .seg button { border:0; background:none; min-height:36px; padding:0 10px; font-size:13.5px; font-weight:600; color:var(--sub); cursor:pointer; display:inline-flex; align-items:center; gap:5px; white-space:nowrap }
+  .seg button + button { border-left:1px solid var(--borde-f) }
+  .seg button:hover:not(:disabled) { background:var(--gris-suave); color:var(--texto) }
+  .seg button.si { background:var(--verde); color:#fff } .seg button.no { background:var(--rojo-suave); color:var(--rojo-texto) }
+  .seg button.ambar { background:var(--ambar-suave); color:var(--ambar) } .seg button.neg { background:var(--negro); color:#fff }
+  .seg button:disabled { cursor:wait }
+  .nota { font-size:12px; color:var(--tenue); margin-top:4px }
+  .nota.ok { color:var(--verde) }
+
+  .chips { display:flex; gap:5px; flex-wrap:wrap }
+  .chip { display:inline-flex; align-items:center; gap:4px; font-size:12.5px; font-weight:600; padding:2px 9px; border-radius:99px; border:1px solid transparent; white-space:nowrap }
+  .chip .ic { width:13px; height:13px }
+  .chip.ok { background:var(--verde-suave); color:var(--verde) }
+  .chip.seg { background:var(--ambar-suave); color:var(--ambar) }
+  .chip.neutro { background:var(--gris-suave); color:var(--sub) }
+  .chip.falta { background:var(--sup); color:var(--ambar); border:1px dashed var(--ambar-borde) }
+  .chip.plan { background:var(--sup); color:var(--texto); border-color:var(--borde-f) }
+  .vacio-t { color:var(--tenue); font-size:13px }
+
+  .exp { display:inline-flex; align-items:center; gap:5px; min-height:34px; padding:0 10px; border-radius:var(--r-s); border:1px solid var(--borde-f); background:var(--sup); font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap }
+  .exp:hover:not(:disabled) { border-color:#a1a1aa } .exp:disabled { opacity:.45; cursor:not-allowed }
+  .exp.pend { border-color:var(--ambar-borde); color:var(--ambar); background:var(--ambar-suave) }
+  .exp .ic { transition:transform .15s } .exp[aria-expanded="true"] .ic { transform:rotate(180deg) }
+  .guardando { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:var(--sub) }
+
+  .detalle { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, max-content)); justify-content:start; gap:14px 22px; align-items:end; padding:4px 16px 16px 88px }
+  .detalle label { display:block; font-size:12px; font-weight:650; color:var(--sub); margin-bottom:5px }
+  .detalle .cerrar { align-self:end } .detalle select.campo { min-width:170px }
+  .detalle select.falta { border:1px dashed var(--ambar-borde); background:var(--ambar-suave); color:var(--ambar) }
+  .ayuda { font-size:12.5px; color:var(--tenue); min-height:38px; display:flex; align-items:center }
+
+  /* ---- nutrición ---- */
+  .nut { display:grid; grid-template-columns:52px 1fr; gap:4px 10px; align-items:center; padding:11px 0; border-bottom:1px solid var(--borde) }
+  .nut:last-child { border-bottom:0 }
+  .nut .hora { font-size:14.5px } .nut .nom { font-size:14px }
+  .nut .seg { grid-column:2 } .nut .seg button { min-height:32px; font-size:13px }
+  .nut-acc { display:flex; flex-direction:column; gap:8px; padding:14px 16px; border-top:1px solid var(--borde) }
+
+  /* ---- estados ---- */
+  .vacio { padding:40px 20px; text-align:center; color:var(--sub) }
+  .vacio .ic { width:28px; height:28px; color:var(--tenue); margin-bottom:8px }
+  .vacio b { display:block; color:var(--texto); font-size:15px; margin-bottom:4px }
+  .esq { height:66px; border-bottom:1px solid var(--borde); padding:14px 20px; display:grid; grid-template-columns:72px 1fr 1fr 1fr; gap:14px }
+  .esq i { display:block; height:14px; border-radius:6px; background:linear-gradient(90deg,#ececee 25%,#f6f6f7 50%,#ececee 75%); background-size:200% 100%; animation:brillo 1.2s infinite }
+  @keyframes brillo { to { background-position:-200% 0 } }
+  .spin { width:14px; height:14px; border:2px solid var(--borde-f); border-top-color:var(--rojo); border-radius:50%; animation:gira .7s linear infinite; display:inline-block }
+  @keyframes gira { to { transform:rotate(360deg) } }
+  .aviso { font-size:12.5px; color:var(--tenue); margin-top:12px; display:flex; gap:6px; align-items:flex-start }
+  .toast { position:fixed; bottom:22px; left:50%; transform:translateX(-50%); background:var(--negro); color:#fff; padding:11px 16px; border-radius:var(--r); font-size:14px; font-weight:550; display:none; align-items:center; gap:8px; z-index:9; max-width:min(600px, calc(100% - 32px)); box-shadow:0 8px 24px rgba(0,0,0,.18) }
+  .toast.ok .ic { color:#4ade80 } .toast.err { background:#7f1d1d } .toast.err .ic { color:#fecaca }
+  .carga { padding:80px 20px; text-align:center; color:var(--sub); display:flex; flex-direction:column; align-items:center; gap:12px }
+
+  /* ---- formularios ---- */
+  .form label { display:block; font-size:12.5px; font-weight:650; color:var(--sub); margin:14px 0 5px }
+  .form label:first-of-type { margin-top:0 }
+  .form .dos { display:flex; gap:10px } .form .dos > * { flex:1 }
+  .form .btn { margin-top:18px; width:100% }
+  .login { max-width:380px; margin:12vh auto; background:var(--sup); border-radius:14px; padding:30px 28px; text-align:center; border:1px solid var(--borde); box-shadow:var(--sombra); border-top:4px solid var(--rojo) }
+  .login img { height:54px; margin-bottom:14px } .login h2 { font-size:20px }
+  .login .pin { width:100%; padding:12px; font-size:22px; letter-spacing:8px; text-align:center; border:1px solid var(--borde-f); border-radius:var(--r-s); margin-top:16px }
+  .login .btn { width:100%; margin-top:12px }
+
+  /* ---- agendar nutrición (base de socios) ---- */
+  .paso { padding:14px 16px; border-bottom:1px solid var(--borde) }
+  .paso h4 { font-size:13.5px; font-weight:700; margin-bottom:10px; display:flex; gap:8px; align-items:center }
+  .num { width:20px; height:20px; border-radius:50%; background:var(--negro); color:#fff; font-size:11.5px; display:grid; place-items:center; flex-shrink:0 }
+  .busca-n { display:flex; gap:8px } .busca-n .buscar { flex:1 }
+  .nlista { display:flex; flex-direction:column; gap:8px; margin-top:12px }
+  .ficha { display:flex; gap:10px; padding:11px 12px; border:1px solid var(--borde-f); border-radius:var(--r-s); cursor:pointer; background:var(--sup); text-align:left; width:100%; align-items:flex-start }
+  .ficha:hover { border-color:#a1a1aa } .ficha.on { border-color:var(--negro); box-shadow:0 0 0 1px var(--negro) }
+  .radio { width:18px; height:18px; border-radius:50%; border:2px solid var(--borde-f); flex-shrink:0; margin-top:2px; background:var(--sup) }
+  .ficha.on .radio { border:5px solid var(--negro) }
+  .ficha .nom { font-size:14.5px } .ficha .chips { margin-top:4px }
+  .ficha .prox { margin-top:6px; font-size:12.5px; color:var(--ambar); display:flex; gap:5px; align-items:center }
+  .nuevo-f { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px }
+  .nuevo-f .ancho { grid-column:1 / -1 }
+  .nuevo-f label, .paso label.lb { display:block; font-size:12.5px; font-weight:650; color:var(--sub); margin-bottom:5px }
+  .par { margin-top:8px; font-size:12.5px; color:var(--sub) } .par button { margin:4px 6px 0 0 }
+  .opcs { display:flex; flex-wrap:wrap; gap:6px }
+  .opc { min-height:42px; min-width:64px; padding:4px 12px; border:1px solid var(--borde-f); border-radius:var(--r-s); background:var(--sup); font-weight:650; font-size:13.5px; cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1.2 }
+  .opc small { font-weight:500; color:var(--tenue); font-size:11.5px } .opc:hover:not(:disabled) { border-color:#a1a1aa }
+  .opc.on { background:var(--negro); color:#fff; border-color:var(--negro) } .opc.on small { color:#d4d4d8 }
+  .opc:disabled { opacity:.4; cursor:not-allowed }
+  .pie-n { padding:14px 16px; display:flex; flex-direction:column; gap:10px }
+  .resumen { font-size:13.5px; color:var(--sub) } .resumen b { color:var(--texto) }
+  .wa { white-space:pre-wrap; background:var(--gris-suave); border-radius:var(--r-s); padding:12px; font-size:13.5px; margin:12px 0 }
+  .listo-n { display:flex; gap:12px; align-items:center } .listo-n .ic { width:34px; height:34px; color:var(--verde); background:var(--verde-suave); border-radius:50%; padding:7px }
+
+  /* ---- métricas ---- */
+  .rango { display:flex; gap:6px; align-items:center; flex-wrap:wrap }
+  .rango input { min-height:36px; padding:0 10px; border:1px solid var(--borde-f); border-radius:var(--r-s); background:var(--sup) }
+  .rango .btn.sel { background:var(--negro); color:#fff; border-color:var(--negro) }
+  .embudo { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:16px }
+  .emb em { font-style:normal; color:var(--rojo-texto); font-weight:700; font-size:15px; margin-left:4px }
+  .bar { height:6px; background:var(--gris-suave); border-radius:9px; margin-top:10px; overflow:hidden } .bar i { display:block; height:100%; background:var(--rojo) }
+  .rejilla { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-bottom:14px }
+  .tw { overflow-x:auto }
+  table.t { width:100%; border-collapse:collapse; font-size:13.5px }
+  .t th { text-align:right; font-size:11.5px; letter-spacing:.04em; color:var(--tenue); padding:8px 10px; border-bottom:1px solid var(--borde); font-weight:700; text-transform:uppercase; white-space:nowrap }
+  .t th:first-child, .t td:first-child { text-align:left } .t td { text-align:right; padding:9px 10px; border-bottom:1px solid var(--borde); font-variant-numeric:tabular-nums } .t td:first-child { font-weight:600 }
+  .t tr:last-child td { border-bottom:0 }
+  .sem { display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:600; padding:1px 8px; border-radius:99px; margin-left:6px }
+  .sem.v { background:var(--verde-suave); color:var(--verde) } .sem.a { background:var(--ambar-suave); color:var(--ambar) } .sem.r { background:var(--rojo-suave); color:var(--rojo-texto) }
+  .corr { font-size:13.5px; padding:9px 0; border-bottom:1px solid var(--borde) } .corr:last-child { border-bottom:0 } .corr small { color:var(--tenue) }
+
+  /* ---- pantallas medianas y celular ---- */
+  @media (max-width:1180px) { .cuerpo, .cuerpo.nutri { grid-template-columns:minmax(0,1fr) } .cuerpo.nutri #nform { order:-1 } }
+  /* la agenda se acomoda a SU ancho (no al de la pantalla) */
+  @container agenda (max-width:799px) {
+    .cols { display:none }
+    .fila { grid-template-columns:56px minmax(0,1fr) auto auto; grid-template-areas:"hora persona asis acc" "hora ase res res"; gap:8px 16px }
+    .c-hora { grid-area:hora; align-self:start } .c-per { grid-area:persona } .c-asis { grid-area:asis } .c-acc { grid-area:acc; justify-self:end }
+    .c-ase { grid-area:ase; display:flex; gap:8px; align-items:center } .c-ase .via { margin-top:0 } .c-res { grid-area:res; display:flex; gap:10px; align-items:center; flex-wrap:wrap }
+    .c-res .sec2 { margin-top:0 }
+    .detalle .cerrar { grid-column:1 / -1; justify-self:start }
+  }
+  @container agenda (max-width:599px) {
+    .fila { grid-template-columns:auto 1fr auto; grid-template-areas:"hora persona acc" "ase ase ase" "asis asis asis" "res res res"; gap:8px 12px; padding:14px 14px 14px 18px }
+    .c-res { display:block } .c-res .sec2 { margin-top:4px }
+    .c-asis .seg { display:flex } .c-asis .seg button { flex:1; justify-content:center; min-height:42px }
+    .detalle { grid-template-columns:minmax(0,1fr); padding:0 14px 16px 18px }
+    .detalle .seg { display:flex } .detalle .seg button { flex:1; justify-content:center; min-height:42px }
+    .detalle .cerrar { justify-self:stretch } .detalle .cerrar .btn { width:100% }
+  }
+  @media (max-width:980px) {
+    .app { flex-direction:column }
+    .side { width:auto; height:auto; position:static; padding:12px 16px; flex-direction:row; flex-wrap:wrap; align-items:center; gap:10px }
+    .side .logo { height:30px; margin:0 }
+    .who { margin:0 0 0 auto; padding:6px 10px; background:transparent }
+    .who .av { width:28px; height:28px; font-size:12px }
+    .nav { flex-direction:row; overflow-x:auto; width:100%; gap:4px; padding-bottom:2px; scrollbar-width:none }
+    .nav button { width:auto; flex-shrink:0; min-height:40px }
+    .side .pie { display:none }
+    .main { padding:18px 16px 32px }
+    .kpis, .embudo { grid-template-columns:repeat(2,minmax(0,1fr)) }
+    .rejilla { grid-template-columns:minmax(0,1fr) }
+    .barra { padding:12px }
+    .tabs { width:100%; display:grid; grid-template-columns:repeat(3,1fr) } .tabs button { white-space:normal; line-height:1.2; padding:6px; font-size:13px }
+    .filtros { width:100%; display:grid; grid-template-columns:1fr } .filtros select { width:100% }
+    h1 { font-size:21px }
+    .top .acciones { width:100% } .top .acciones .btn.pri { flex:1 }
+  }
+</style></head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-ticket" viewBox="0 0 24 24"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2M13 17v2M13 11v2"/></symbol>
+  <symbol id="i-reloj" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="i-nutri" viewBox="0 0 24 24"><path d="M12 20.94c1.5 0 2.75 1.06 4 1.06 3 0 6-8 6-12.22A4.91 4.91 0 0 0 17 5c-2.22 0-4 1.44-5 2-1-.56-2.78-2-5-2a4.9 4.9 0 0 0-5 4.78C2 14 5 22 8 22c1.25 0 2.5-1.06 4-1.06Z"/><path d="M10 2c1 .5 2 2 2 5"/></symbol>
+  <symbol id="i-mas" viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"/></symbol>
+  <symbol id="i-graf" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></symbol>
+  <symbol id="i-ok" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-abajo" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-buscar" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-candado" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-alerta" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-tel" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></symbol>
+  <symbol id="i-act" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></symbol>
+  <symbol id="i-personas" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-pesa" viewBox="0 0 24 24"><path d="M6.5 6.5h11M6.5 17.5h11M3 9v6M21 9v6M6.5 5v14M17.5 5v14"/></symbol>
+  <symbol id="i-canal" viewBox="0 0 24 24"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></symbol>
+  <symbol id="i-tarjeta" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></symbol>
+  <symbol id="i-pend" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></symbol>
+</svg>
+<div id="raiz"><div class="carga"><span class="spin"></span>Cargando…</div></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+const LLAVE = <?= llave ?>;   // Apps Script ya lo escribe como texto JS (con comillas)
+const LOGO = 'https://raw.githubusercontent.com/omarfrzbussines/omar/main/marca/logo_rurush.png';
+let PC = ''; try { PC = localStorage.getItem('fp_pc') || ''; if (!PC) { PC = Array.from(crypto.getRandomValues(new Uint8Array(12))).map((b) => b.toString(36).padStart(2, '0')).join('').slice(0, 24); localStorage.setItem('fp_pc', PC); } } catch (e) {}
+let D = null, M = null, mErr = '', rango = 'mes', vista = 'hoy', filtro = 'todos', cupos = null;
+let q = '', fAse = '', fEst = '', errCarga = '', actualizado = '';
+const abiertos = new Set(), enCurso = new Set();
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const ic = (n, extra) => `<svg class="ic" ${extra || ''} aria-hidden="true"><use href="#i-${n}"/></svg>`;
+const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const cap = (s) => String(s || '').charAt(0).toUpperCase() + String(s || '').slice(1).toLowerCase();
+const fechaLarga = (f) => { const d = new Date(f + 'T12:00:00Z'); return cap(DIAS[d.getUTCDay()]) + ' ' + d.getUTCDate() + ' de ' + MESES[d.getUTCMonth()]; };
+const fechaCorta = (f) => { const d = new Date(f + 'T12:00:00Z'); return cap(DIAS[d.getUTCDay()].slice(0, 3)) + ' ' + d.getUTCDate(); };
+const h12 = (h) => { const [a, m] = h.split(':').map(Number); return { h: (a % 12 || 12) + ':' + String(m).padStart(2, '0'), s: a < 12 ? 'am' : 'pm' }; };
+const VIAS = { APC: 'Chat', APL: 'Llamada', APV: 'Visita' };
+const ayerDe = (f) => new Date(Date.parse(f + 'T12:00:00Z') - 864e5).toISOString().slice(0, 10);
+const manDe = (f) => new Date(Date.parse(f + 'T12:00:00Z') + 864e5).toISOString().slice(0, 10);
+
+function toast(t, tipo, ms) {
+  const e = $('#toast');
+  e.className = 'toast ' + (tipo || '');
+  e.innerHTML = (tipo === 'ok' ? ic('ok') : tipo === 'err' ? ic('alerta') : '') + '<span>' + esc(t) + '</span>';
+  e.style.display = 'flex'; clearTimeout(e._t); e._t = setTimeout(() => (e.style.display = 'none'), ms || (tipo === 'err' ? 6500 : 3000));
+}
+function llamar(fn, ...args) {
+  return new Promise((ok, mal) => google.script.run.withSuccessHandler(ok).withFailureHandler((e) => mal(e))[fn](LLAVE, PC, ...args));
+}
+
+/* ---------- acceso ---------- */
+function login(nombre) {
+  $('#raiz').innerHTML = `<form class="login" id="flogin"><img src="${LOGO}" alt="RURUSH Fitness Club"><h2>Hola ${esc(nombre)}</h2>
+    <p class="aviso" style="justify-content:center">Es la primera vez que abres la app en esta computadora. Escribe tu PIN (te lo da Omar).</p>
+    <label class="sr" for="pin">PIN</label><input id="pin" class="pin" maxlength="4" inputmode="numeric" autocomplete="off" autofocus>
+    <button class="btn pri" id="entrar" type="submit">Entrar</button></form>`;
+  $('#flogin').onsubmit = async (ev) => {
+    ev.preventDefault();
+    const b = $('#entrar'); if (b.disabled) return;
+    b.disabled = true; b.innerHTML = '<span class="spin"></span> Verificando…';
+    try { const r = await llamar('fp_activar', $('#pin').value); if (!r.ok) { toast(r.error, 'err'); b.disabled = false; b.textContent = 'Entrar'; return; } cargar(); }
+    catch (e) { toast(e.message, 'err'); b.disabled = false; b.textContent = 'Entrar'; }
+  };
+}
+
+async function inicio() {
+  try {
+    const r = await llamar('fp_estado');
+    if (!r.asesora) { $('#raiz').innerHTML = '<div class="carga">' + ic('alerta') + esc(r.error || 'Link no válido.') + '</div>'; return; }
+    if (!r.ok) return login(r.asesora);
+    cargar();
+  } catch (e) { $('#raiz').innerHTML = '<div class="carga">' + ic('alerta') + esc(e.message) + '</div>'; }
+}
+
+async function cargar(silencioso) {
+  if (!silencioso && !D) pintarCarga();
+  try {
+    D = await llamar('fp_datos'); errCarga = '';
+    actualizado = new Date().toLocaleTimeString('es-PE', { hour: 'numeric', minute: '2-digit' });
+    if (silencioso && $('#lista')) refrescar(); else pintar();
+    if (!NU && !NUcargando) cargarNU();   // deja lista la base de nutrición para que el formulario abra al instante
+  } catch (e) {
+    if (/PC_NO_AUTORIZADA/.test(e.message)) return inicio();
+    if (!D) { errCarga = e.message; pintarErrorCarga(); } else toast(e.message, 'err');
+  }
+}
+function pintarCarga() {
+  $('#raiz').innerHTML = `<div class="app"><div class="side"><img class="logo" src="${LOGO}" alt="RURUSH"></div><div class="main">
+    <div class="top"><div><h1>Free Pass de hoy</h1><div class="fecha">Cargando…</div></div></div>
+    <div class="panel">${'<div class="esq"><i></i><i></i><i></i><i></i></div>'.repeat(6)}</div></div></div>`;
+}
+function pintarErrorCarga() {
+  $('#raiz').innerHTML = `<div class="carga">${ic('alerta')}<b>No se pudieron cargar los free pass</b><span>${esc(errCarga)}</span>
+    <button class="btn sec" data-act="reintentar">${ic('act')} Reintentar</button></div>`;
+}
+
+/* ---------- listas y estados ---------- */
+const porMarcar = (x) => !x.vino || (x.vino === 'SI' && (!x.coach || !x.cierre));
+const nomCoach = (id) => ((D.coaches.find((c) => c.id === id) || {}).label || '');
+const nomPres = (id) => (((D.presentadores || []).find((c) => c.id === id) || {}).label || '');
+const listaVista = () => (vista === 'hoy' ? D.hoyL : vista === 'ayer' ? D.ayer : vista === 'manana' ? D.manana : []);
+const todas = () => [].concat(D.hoyL, D.ayer, D.manana);
+const ESTADOS = [
+  ['pend', 'Asistencia pendiente', (x) => !x.vino], ['asis', 'Asistió', (x) => x.vino === 'SI'], ['noasis', 'No asistió', (x) => x.vino === 'NO'],
+  ['insc', 'Inscrito', (x) => x.vino === 'SI' && x.cierre === 'SI'], ['seg', 'Seguimiento', (x) => x.vino === 'SI' && x.cierre === 'SEG'],
+  ['noins', 'No se inscribió', (x) => x.vino === 'SI' && x.cierre === 'NO'], ['fres', 'Falta resultado', (x) => x.vino === 'SI' && !x.cierre],
+  ['fcoach', 'Falta coach', (x) => x.vino === 'SI' && !x.coach], ['fpres', 'Falta quién presentó', (x) => x.vino === 'SI' && (D.presentadores || []).length > 0 && !x.presento], ['fplan', 'Falta registrar plan', (x) => x.vino === 'SI' && x.cierre === 'SI' && !x.plan]
+];
+function filtrada() {
+  let l = listaVista();
+  if (filtro === 'pend') l = l.filter(porMarcar); else if (filtro === 'reg') l = l.filter((x) => x.vino);
+  const t = q.trim().toLowerCase(), dig = t.replace(/\D/g, '');
+  if (t) l = l.filter((x) => String(x.nombre).toLowerCase().includes(t) || (dig.length >= 3 && String(x.tel).replace(/\D/g, '').includes(dig)));
+  if (fAse) l = l.filter((x) => x.asesora === fAse);
+  if (fEst) { const e = ESTADOS.find((y) => y[0] === fEst); if (e) l = l.filter(e[2]); }
+  return l;
+}
+
+/* ---------- pantalla ---------- */
+function pintar() {
+  const titulo = { hoy: 'Free Pass de hoy', ayer: 'Pendientes de ayer', manana: 'Free Pass de mañana', nutri: 'Nutrición', agendar: 'Agendar', metricas: 'Métricas' }[vista];
+  const fechaV = vista === 'ayer' ? ayerDe(D.hoy) : vista === 'manana' ? manDe(D.hoy) : D.hoy;
+  const nav = (id, i, t, n) => `<button class="${vista === id ? 'on' : ''}" data-act="nav" data-v="${id}" ${vista === id ? 'aria-current="page"' : ''}>${ic(i)}<span>${t}</span>${n != null ? `<span class="n">${n}</span>` : ''}</button>`;
+  const agenda = ['hoy', 'ayer', 'manana'].includes(vista);
+  let cont;
+  if (vista === 'metricas') cont = pantallaMetricas();
+  else {
+    const btnAg = vista !== 'agendar' ? `<button class="btn pri" data-act="nav" data-v="agendar">${ic('mas')} Agendar Free Pass</button>` : '';
+    cont = `<div class="top"><div><h1>${titulo}</h1><div class="fecha">${fechaLarga(fechaV)} · RURUSH Fitness Club</div></div>
+      <div class="acciones">${agenda ? `<span class="act" id="actz">Actualizado ${esc(actualizado)}</span><button class="btn sec peq" data-act="refrescar" title="Actualizar ahora">${ic('act')}<span class="sr">Actualizar</span></button>` : ''}${btnAg}</div></div>`;
+    if (agenda) {
+      cont += `<div class="kpis" id="kpis"></div>
+        <div class="cuerpo"><section class="panel agenda" aria-label="Agenda">
+          <div class="barra"><div class="tabs" id="tabs" role="tablist"></div>
+            <div class="buscar">${ic('buscar')}<label class="sr" for="q">Buscar</label><input id="q" class="campo" type="search" placeholder="Buscar por nombre o celular" value="${esc(q)}" autocomplete="off"></div>
+            <div class="filtros"><label class="sr" for="fAse">Asesora</label><select id="fAse" class="campo">${opcionesAse()}</select>
+              <label class="sr" for="fEst">Estado</label><select id="fEst" class="campo"><option value="">Todos los estados</option>${ESTADOS.map((e) => `<option value="${e[0]}" ${fEst === e[0] ? 'selected' : ''}>${e[1]}</option>`).join('')}</select></div></div>
+          <div class="cols" aria-hidden="true"><span>Hora</span><span>Persona</span><span>Asesora · origen</span><span>Asistencia</span><span>Resultado</span><span>Acciones</span></div>
+          <div id="lista"></div></section>
+          <aside class="panel" aria-label="Nutrición"><div class="panel-h">${ic('nutri')} Nutrición hoy · Diego</div><div class="panel-b" id="nutriLista" style="padding-top:2px;padding-bottom:2px"></div>
+            <div class="nut-acc"><button class="btn osc" data-act="nav" data-v="nutri">${ic('mas')} Agendar nutrición</button></div></aside></div>
+        <p class="aviso">${ic('candado')} Cada marca queda en el registro con hora y asesora. Si se corrige después, se guarda la corrección y Omar recibe aviso.</p>`;
+    } else if (vista === 'nutri') {
+      cont += `<div class="cuerpo nutri"><section class="panel"><div class="panel-h">${ic('nutri')} Citas de hoy · Diego</div><div class="panel-b" id="nutriLista"></div></section><div id="nform"></div></div>`;
+    } else cont += `<div style="max-width:560px">${formAgendar('fp')}</div>`;
+  }
+  $('#raiz').innerHTML = `<div class="app"><nav class="side" aria-label="Menú"><img class="logo" src="${LOGO}" alt="RURUSH Fitness Club">
+      <div class="who"><span class="av">${esc(String(D.quien).charAt(0))}</span><div>Sesión<b>${esc(cap(D.quien))}</b>${ic('candado', 'style="width:12px;height:12px"')} PC autorizada</div></div>
+      <div class="nav">${nav('hoy', 'ticket', 'Free Pass hoy', D.hoyL.length)}${nav('ayer', 'reloj', 'Pendientes de ayer', D.ayer.length)}${nav('manana', 'cal', 'Mañana', D.manana.length)}${nav('nutri', 'nutri', 'Nutrición', D.nutri.length)}${nav('agendar', 'mas', 'Agendar')}${D.esOmar ? nav('metricas', 'graf', 'Métricas') : ''}</div>
+      <div class="pie">${ic('candado', 'style="width:13px;height:13px;margin-top:1px"')}<span>Solo se ve lo de hoy · sin descargas · todo queda registrado</span></div></nav>
+    <main class="main">${cont}</main></div>`;
+  refrescar();
+  const f = $('#fagenda'); if (f) armarForm(f);
+  if ($('#nform')) pintarNform();
+}
+function opcionesAse() {
+  const ases = [...new Set(listaVista().map((x) => x.asesora).filter(Boolean))].sort();
+  if (fAse && !ases.includes(fAse)) ases.unshift(fAse);
+  return `<option value="">Todas las asesoras</option>` + ases.map((a) => `<option value="${esc(a)}" ${fAse === a ? 'selected' : ''}>${esc(cap(a))}</option>`).join('');
+}
+
+// Actualiza solo lo que cambia (no toca la búsqueda ni los filtros mientras se escribe)
+function refrescar() {
+  const foco = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.k : '';
+  const h = D.hoyL, pm = h.filter(porMarcar).length;
+  if ($('#kpis')) $('#kpis').innerHTML = `
+    <div class="k"><small>${ic('ticket')} Agendados</small><b>${h.length}</b><span class="pie">free pass de hoy</span></div>
+    <div class="k"><small>${ic('ok')} Asistieron</small><b>${h.filter((x) => x.vino === 'SI').length}</b><span class="pie">de ${h.length} agendados</span></div>
+    <div class="k"><small>${ic('personas')} Inscritos</small><b>${h.filter((x) => x.cierre === 'SI').length}</b><span class="pie">se inscribieron hoy</span></div>
+    <div class="k tarea ${pm ? '' : 'cero'}"><small>${ic('pend')} Por marcar</small><b>${pm}</b><span class="pie">${pm ? 'pendientes de registrar' : 'todo registrado'}</span></div>`;
+  if ($('#tabs')) {
+    const l = listaVista();
+    const tab = (id, t, n) => `<button role="tab" aria-selected="${filtro === id}" class="${filtro === id ? 'on' : ''}" data-act="tab" data-f="${id}" data-k="tab-${id}">${t} <span class="c">${n}</span></button>`;
+    $('#tabs').innerHTML = tab('todos', 'Todos', l.length) + tab('pend', 'Por marcar', l.filter(porMarcar).length) + tab('reg', 'Asistencia registrada', l.filter((x) => x.vino).length);
+  }
+  if ($('#lista')) {
+    const base = listaVista(), vis = filtrada(), hayFiltro = q || fAse || fEst;
+    $('#lista').innerHTML = vis.length ? vis.map(fila).join('')
+      : base.length ? `<div class="vacio">${ic('buscar')}<b>Ningún free pass coincide</b>${hayFiltro ? `Prueba con otro nombre o estado. <button class="limpiar" data-act="limpiar">Limpiar filtros</button>` : 'No hay registros en esta pestaña.'}</div>`
+      : `<div class="vacio">${ic('cal')}<b>${vista === 'ayer' ? 'No quedó nada pendiente de ayer' : vista === 'manana' ? 'Aún no hay free pass para mañana' : 'No hay free pass agendados para hoy'}</b>Cuando se agende uno, aparecerá aquí.</div>`;
+  }
+  if ($('#nutriLista')) $('#nutriLista').innerHTML = listaNutri();
+  if ($('#actz')) $('#actz').textContent = 'Actualizado ' + actualizado;
+  if (foco) { const e = document.querySelector('[data-k="' + foco + '"]'); if (e) e.focus(); }
+}
+
+function fila(x) {
+  const t = h12(x.hora), ocupado = enCurso.has('f' + x.id), dis = ocupado ? 'disabled' : '';
+  const estado = x.vino === 'SI' ? 'ok' : x.vino === 'NO' ? 'no' : 'pend';
+  const abierto = abiertos.has(x.id) && x.vino === 'SI' && vista !== 'manana';
+  const hayPres = (D.presentadores || []).length > 0;
+  const falta = x.vino === 'SI' && (!x.coach || !x.cierre || (hayPres && !x.presento) || (x.cierre === 'SI' && !x.plan));
+  let asis, res, acc;
+  if (vista === 'manana') {
+    asis = `<span class="chip neutro">${ic('cal')} Programado</span><div class="nota">Se marca el día de la clase</div>`;
+    res = '<span class="vacio-t">—</span>'; acc = '';
+  } else {
+    asis = `<div class="seg" role="group" aria-label="Asistencia de ${esc(x.nombre)}">
+        <button data-act="marcar" data-id="${x.id}" data-m="VINO" data-v="SI" data-k="v-${x.id}-SI" aria-pressed="${x.vino === 'SI'}" class="${x.vino === 'SI' ? 'si' : ''}" ${dis}>${ic('ok')} Asistió</button>
+        <button data-act="marcar" data-id="${x.id}" data-m="VINO" data-v="NO" data-k="v-${x.id}-NO" aria-pressed="${x.vino === 'NO'}" class="${x.vino === 'NO' ? 'no' : ''}" ${dis}>${ic('x')} No asistió</button></div>
+      <div class="nota ${x.vino ? 'ok' : ''}">${x.vino ? (x.marca ? 'Registrado · ' + esc(x.marca) : 'Registrado') : 'Asistencia pendiente'}</div>`;
+    if (x.vino !== 'SI') res = `<span class="vacio-t">${x.vino === 'NO' ? 'Sin resultado (no asistió)' : 'Se registra si asistió'}</span>`;
+    else {
+      const r = x.cierre === 'SI' ? `<span class="chip ok">${ic('ok')} Inscrito</span>${x.plan ? `<span class="chip plan">${esc(x.plan)}</span>` : `<span class="chip falta">${ic('alerta')} Falta registrar plan</span>`}`
+        : x.cierre === 'SEG' ? `<span class="chip seg">${ic('reloj')} Seguimiento</span>`
+        : x.cierre === 'NO' ? `<span class="chip neutro">No se inscribió</span>` : `<span class="chip falta">${ic('alerta')} Falta resultado</span>`;
+      const c = nomCoach(x.coach);
+      const pr = nomPres(x.presento);
+      res = `<div class="chips">${r}</div><div class="sec2">${ic('pesa')} ${c ? 'Coach ' + esc(cap(c)) : '<span style="color:var(--ambar)">Falta coach</span>'}</div>` +
+        (hayPres ? `<div class="sec2">${ic('personas')} ${pr ? 'Presentó ' + esc(cap(pr)) : '<span style="color:var(--ambar)">Falta quién presentó</span>'}</div>` : '');
+    }
+    acc = ocupado ? `<span class="guardando"><span class="spin"></span> Guardando…</span>`
+      : `<button class="exp ${falta ? 'pend' : ''}" data-act="exp" data-id="${x.id}" data-k="exp-${x.id}" aria-expanded="${abierto}" aria-controls="det-${x.id}" ${x.vino === 'SI' ? '' : 'disabled title="Primero registra la asistencia"'}>${falta ? 'Completar' : 'Editar'} ${ic('abajo')}</button>`;
+  }
+  const det = abierto ? `<div class="detalle" id="det-${x.id}">
+      <div><label for="co-${x.id}">Coach que atendió</label><select id="co-${x.id}" class="campo ${x.coach ? '' : 'falta'}" data-act="marcarSel" data-id="${x.id}" data-m="COACH" data-k="co-${x.id}" ${dis}><option value="">Elegir coach…</option>${D.coaches.map((c) => `<option value="${c.id}" ${x.coach === c.id ? 'selected' : ''}>${esc(c.label)}</option>`).join('')}</select></div>
+      ${hayPres ? `<div><label for="pr-${x.id}">Presentó el plan</label><select id="pr-${x.id}" class="campo ${x.presento ? '' : 'falta'}" data-act="marcarSel" data-id="${x.id}" data-m="PRESENTO" data-k="pr-${x.id}" ${dis}><option value="">Elegir…</option>${D.presentadores.map((c) => `<option value="${c.id}" ${x.presento === c.id ? 'selected' : ''}>${esc(cap(c.label))}</option>`).join('')}</select></div>` : ''}
+      <div><label>¿Se inscribió?</label><div class="seg" role="group" aria-label="Resultado comercial">
+        <button data-act="marcar" data-id="${x.id}" data-m="CIERRE" data-v="SI" data-k="ci-${x.id}-SI" aria-pressed="${x.cierre === 'SI'}" class="${x.cierre === 'SI' ? 'si' : ''}" ${dis}>Sí</button>
+        <button data-act="marcar" data-id="${x.id}" data-m="CIERRE" data-v="NO" data-k="ci-${x.id}-NO" aria-pressed="${x.cierre === 'NO'}" class="${x.cierre === 'NO' ? 'neg' : ''}" ${dis}>No</button>
+        <button data-act="marcar" data-id="${x.id}" data-m="CIERRE" data-v="SEG" data-k="ci-${x.id}-SEG" aria-pressed="${x.cierre === 'SEG'}" class="${x.cierre === 'SEG' ? 'ambar' : ''}" ${dis}>Seguimiento</button></div></div>
+      <div>${x.cierre === 'SI' ? `<label for="pl-${x.id}">Plan</label><select id="pl-${x.id}" class="campo ${x.plan ? '' : 'falta'}" data-act="marcarSel" data-id="${x.id}" data-m="PLAN" data-k="pl-${x.id}" ${dis}><option value="">Elegir plan…</option>${D.planes.map((p) => `<option ${x.plan === p ? 'selected' : ''}>${esc(p)}</option>`).join('')}</select>` : `<label>Plan</label><div class="ayuda">Se elige si se inscribió</div>`}</div>
+      <div class="cerrar"><button class="btn sec peq" data-act="exp" data-id="${x.id}" data-k="cerrar-${x.id}">Listo</button></div></div>` : '';
+  return `<div class="item ${estado} ${abierto ? 'abierto' : ''}"><div class="fila">
+      <div class="c-hora hora">${t.h}<small>${t.s}${vista !== 'hoy' ? ' · ' + fechaCorta(x.fecha) : ''}</small></div>
+      <div class="c-per"><div class="nom">${esc(x.nombre)}</div>${x.tel ? `<div class="sec2">${ic('tel')} ${esc(x.tel)}</div>` : ''}</div>
+      <div class="c-ase"><div class="ase">${esc(cap(x.asesora) || '—')}</div>${x.via ? `<span class="via">${VIAS[x.via] || ''} · ${esc(x.via)}</span>` : ''}</div>
+      <div class="c-asis">${asis}</div><div class="c-res">${res}</div><div class="c-acc">${acc}</div></div>${det}</div>`;
+}
+
+function listaNutri() {
+  const n = D.nutri;
+  if (!n.length) return `<div class="vacio" style="padding:22px 6px">${ic('nutri')}<b>Sin citas hoy</b>No hay evaluaciones de nutrición agendadas.</div>`;
+  return n.map((x) => {
+    const t = h12(x.hora), dis = enCurso.has('n' + x.id) ? 'disabled' : '';
+    return `<div class="nut"><div class="hora">${t.h}<small>${t.s}</small></div><div class="nom">${esc(x.nombre.split(' / ')[0])}</div>
+      <div class="seg" role="group" aria-label="Asistencia a nutrición">
+        <button data-act="marcar" data-n="1" data-id="${x.id}" data-m="ASISTIO" data-v="SI" data-k="n-${x.id}-SI" aria-pressed="${x.asistio === 'SI'}" class="${x.asistio === 'SI' ? 'si' : ''}" ${dis}>${ic('ok')} Asistió</button>
+        <button data-act="marcar" data-n="1" data-id="${x.id}" data-m="ASISTIO" data-v="NO" data-k="n-${x.id}-NO" aria-pressed="${x.asistio === 'NO'}" class="${x.asistio === 'NO' ? 'no' : ''}" ${dis}>${ic('x')} No vino</button></div></div>`;
+  }).join('');
+}
+
+/* ---------- guardar (un envío a la vez por cita) ---------- */
+async function marcar(id, campo, valor, esNutri) {
+  if (!valor) return;
+  const k = (esNutri ? 'n' : 'f') + id;
+  if (enCurso.has(k)) return;
+  const x = esNutri ? D.nutri.find((y) => y.id === id) : todas().find((y) => y.id === id);
+  if (!x) return;
+  const actual = { VINO: x.vino, COACH: x.coach, PRESENTO: x.presento, CIERRE: x.cierre, PLAN: x.plan, ASISTIO: x.asistio }[campo];
+  if (actual === valor) return;   // ya está así: no se manda de nuevo
+  enCurso.add(k); refrescar();
+  try {
+    const r = await llamar('fp_marcar', { id: x.id, personId: x.personId, nombre: x.nombre, fecha: x.fecha, hora: x.hora, asunto: x.asunto }, campo, valor);
+    if (campo === 'VINO') { x.vino = valor; x.marca = r.marca; if (valor === 'SI' && (!x.coach || !x.cierre)) abiertos.add(id); if (valor === 'NO') abiertos.delete(id); }
+    if (campo === 'COACH') { x.coach = valor; x.coachNombre = nomCoach(valor); }
+    if (campo === 'PRESENTO') x.presento = valor;
+    if (campo === 'CIERRE') x.cierre = valor;
+    if (campo === 'PLAN') x.plan = valor;
+    if (campo === 'ASISTIO') x.asistio = valor;
+    toast('Guardado', 'ok');
+  } catch (e) { toast(e.message, 'err'); }
+  finally { enCurso.delete(k); refrescar(); }
+}
+
+/* ---------- eventos (un solo lugar) ---------- */
+document.addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-act]');
+  if (!b || b.disabled || b.tagName === 'SELECT') return;
+  const a = b.dataset.act;
+  if (a === 'nav') { vista = b.dataset.v; filtro = 'todos'; fAse = ''; fEst = ''; q = ''; if (vista === 'metricas') cargarMetricas(); else pintar(); window.scrollTo(0, 0); }
+  else if (a === 'tab') { filtro = b.dataset.f; refrescar(); }
+  else if (a === 'marcar') marcar(Number(b.dataset.id), b.dataset.m, b.dataset.v, !!b.dataset.n);
+  else if (a === 'exp') { const id = Number(b.dataset.id); abiertos.has(id) ? abiertos.delete(id) : abiertos.add(id); refrescar(); const e = document.querySelector('[data-k="exp-' + id + '"]'); if (e && !abiertos.has(id)) e.focus(); }
+  else if (a === 'limpiar') { q = ''; fAse = ''; fEst = ''; $('#q').value = ''; $('#fAse').value = ''; $('#fEst').value = ''; refrescar(); }
+  else if (a === 'refrescar') { b.disabled = true; cargar(true).then(() => { b.disabled = false; toast('Lista actualizada', 'ok'); }); }
+  else if (a === 'reintentar') cargar();
+  else if (a === 'rango') { rango = b.dataset.r; cargarMetricas(); }
+  else if (a === 'nuSel') elegirN(b.dataset.pid);
+  else if (a === 'nuDia') diaN(b.dataset.f);
+  else if (a === 'nuHora') { S.hora = b.dataset.h; pintarNform(); }
+  else if (a === 'nuAgendar') agendarN();
+  else if (a === 'nuOtra') { nuReset(); pintarNform(); }
+  else if (a === 'nuCopiar') copiarN();
+  else if (a === 'nuReintentar') { NUerr = ''; pintarNform(); cargarNU(true); }
+  else if (a === 'nuPar') { const x = S.par.find((y) => y.pid === b.dataset.pid); if (x) { S.extra = S.extra.filter((y) => y.pid !== x.pid).concat([{ pid: x.pid, nombre: x.nombre, tels: x.tels, estado: '', evaluaciones: null, prox: null }]); elegirN(x.pid); } }
+});
+document.addEventListener('submit', (ev) => { if (ev.target.id === 'nBuscarF') { ev.preventDefault(); buscarN(); } });
+document.addEventListener('change', (ev) => {
+  const s = ev.target;
+  if (s.id === 'nTelSel') { S.tel = s.value; return; }
+  if (s.dataset.act === 'marcarSel') marcar(Number(s.dataset.id), s.dataset.m, s.value, false);
+  else if (s.id === 'fAse') { fAse = s.value; refrescar(); }
+  else if (s.id === 'fEst') { fEst = s.value; refrescar(); }
+});
+document.addEventListener('input', (ev) => {
+  const t = ev.target;
+  if (t.id === 'q') { q = t.value; refrescar(); }
+  else if (t.id === 'nq') { S.q = t.value; if (/^9\d{8}$/.test(t.value.replace(/\D/g, '')) && t.value.replace(/\D/g, '').length === 9) buscarN(); }   // celular completo: busca solo
+  else if (t.id === 'nNom') { S.nuevo.nombre = t.value; pieN(); }
+  else if (t.id === 'nTel') { S.nuevo.tel = t.value; pieN(); }
+  else if (t.id === 'nDni') S.nuevo.dni = t.value;
+  else if (t.id === 'nTel2') { S.tel = t.value.replace(/\D/g, ''); pieN(); }
+});
+document.addEventListener('focusout', (ev) => { if (ev.target.id === 'nNom' || ev.target.id === 'nDni') parecidosN(); });
+document.addEventListener('keydown', (ev) => {
+  if (ev.key === '/' && $('#q') && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) { ev.preventDefault(); $('#q').focus(); }
+  if (ev.key === 'Escape' && document.activeElement && document.activeElement.id === 'q' && q) { q = ''; ev.target.value = ''; refrescar(); }
+});
+
+/* ---------- métricas (solo Omar) ---------- */
+const isoMas = (f, n) => new Date(Date.parse(f + 'T12:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+function fechasRango(r) {
+  const h = D.hoy, d = new Date(h + 'T12:00:00Z');
+  if (r === 'hoy') return [h, h];
+  if (r === 'semana') return [isoMas(h, -((d.getUTCDay() + 6) % 7)), h];
+  if (r === 'mes') return [h.slice(0, 8) + '01', h];
+  if (r === 'mesant') { const fin = isoMas(h.slice(0, 8) + '01', -1); return [fin.slice(0, 8) + '01', fin]; }
+  return [($('#mDesde') || {}).value || h.slice(0, 8) + '01', ($('#mHasta') || {}).value || h];
+}
+const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
+function sem(p, n) { if (!n) return ''; const s = M.semaforo; const c = p >= s.verde ? ['v', 'Bien'] : p < s.rojo ? ['r', 'Bajo'] : ['a', 'Medio']; return `<span class="sem ${c[0]}">${c[1]}</span>`; }
+function pantallaMetricas() {
+  const [de, ha] = M ? [M.desde, M.hasta] : fechasRango(rango);
+  const bt = (id, t) => `<button class="btn sec peq ${rango === id ? 'sel' : ''}" data-act="rango" data-r="${id}" aria-pressed="${rango === id}">${t}</button>`;
+  const cab = `<div class="top"><div><h1>Métricas Free Pass</h1><div class="fecha">${fechaCorta(de)} ${MESES[+de.slice(5, 7) - 1]} → ${fechaCorta(ha)} ${MESES[+ha.slice(5, 7) - 1]} · solo tú ves esto</div></div>
+    <div class="rango">${bt('hoy', 'Hoy')}${bt('semana', 'Esta semana')}${bt('mes', 'Este mes')}${bt('mesant', 'Mes pasado')}
+    <label class="sr" for="mDesde">Desde</label><input type="date" id="mDesde" value="${de}" max="${D.hoy}"> <span aria-hidden="true">→</span> <label class="sr" for="mHasta">Hasta</label><input type="date" id="mHasta" value="${ha}" max="${D.hoy}">${bt('otro', 'Ver')}</div></div>`;
+  if (mErr) return cab + `<div class="panel vacio">${ic('alerta')}<b>No se pudieron calcular</b>${esc(mErr)}</div>`;
+  if (!M) return cab + '<div class="carga"><span class="spin"></span>Calculando métricas… (un mes completo puede tardar unos segundos)</div>';
+  const t = M.total;
+  const fila = (x, conAgend) => { const pc = pct(x.inscr, x.vino); return `<tr><td>${esc(cap(x.nombre))}</td>${conAgend ? `<td>${x.agend}</td>` : ''}<td>${x.vino}</td>${conAgend ? `<td>${pct(x.vino, x.agend)}%</td>` : ''}<td>${x.inscr}</td><td>${pc}%${sem(pc, x.vino)}</td></tr>`; };
+  const tablaA = (i, titulo, lista, conAgend, col) => `<div class="panel"><div class="panel-h">${ic(i)} ${titulo}</div><div class="panel-b tw"><table class="t"><tr><th>${col}</th>${conAgend ? '<th>Agend.</th>' : ''}<th>${conAgend ? 'Asistió' : 'Clases'}</th>${conAgend ? '<th>% asist.</th>' : ''}<th>Inscr.</th><th>% cierre</th></tr>
+    ${lista.length ? lista.map((x) => fila(x, conAgend)).join('') : '<tr><td colspan="6" class="vacio-t">Sin datos</td></tr>'}</table></div></div>`;
+  const nomVia = { APC: 'Chat · APC', APL: 'Llamada · APL', APV: 'Visita · APV' };
+  const emb = (i, tit, n, p, ancho) => `<div class="k emb"><small>${ic(i)} ${tit}</small><b>${n}${p != null ? `<em>${p}%</em>` : ''}</b><div class="bar"><i style="width:${ancho}%"></i></div></div>`;
+  return cab + `<div class="embudo">${emb('ticket', 'Agendados', t.agend, null, 100)}${emb('ok', 'Asistieron', t.vino, pct(t.vino, t.agend), pct(t.vino, t.agend))}
+      ${emb('personas', 'Inscritos', t.inscr, pct(t.inscr, t.vino), pct(t.inscr, t.agend))}${emb('nutri', 'Nutrición (asistió / agendada)', M.nutri.vino + '/' + M.nutri.agend, pct(M.nutri.vino, M.nutri.agend), pct(M.nutri.vino, M.nutri.agend))}</div>
+    <div class="rejilla">${tablaA('personas', 'Por asesora', M.asesoras, true, 'Asesora')}${tablaA('pesa', 'Por coach (clases que sí se dieron)', M.coaches, false, 'Coach')}</div>
+    <div class="rejilla">${tablaA('canal', 'Por canal', M.canales.map((x) => Object.assign({}, x, { nombre: nomVia[x.nombre] || x.nombre })), true, 'Canal')}
+      <div class="panel"><div class="panel-h">${ic('tarjeta')} Planes de los inscritos</div><div class="panel-b">${M.planes.length ? `<table class="t">${M.planes.map((p) => `<tr><td>${esc(p.plan)}</td><td>${p.n}</td><td>${pct(p.n, t.inscr)}%</td></tr>`).join('')}</table>` : '<p class="vacio-t">Aún no hay inscritos en este rango.</p>'}</div></div></div>
+    <div class="panel"><div class="panel-h">${ic('alerta')} Correcciones (${M.correcciones.length})</div><div class="panel-b">${M.correcciones.length ? M.correcciones.map((c) => `<div class="corr"><small>${esc(c.cuando)}</small> · <b>${esc(c.quien)}</b> cambió <b>${esc(c.campo)}</b>: ${esc(c.antes)} → <b>${esc(c.ahora)}</b> · ${esc(c.nombre)}</div>`).join('') : '<p class="vacio-t">Nadie corrigió marcas en este rango.</p>'}</div></div>
+    <p class="aviso">Cierre: Bien ${M.semaforo.verde}% o más · Medio entre ${M.semaforo.rojo}% y ${M.semaforo.verde}% · Bajo menos de ${M.semaforo.rojo}%. Inscrito = asistió y su ficha tiene CIERRE = Sí.</p>`;
+}
+async function cargarMetricas() {
+  const [de, ha] = fechasRango(rango);
+  M = null; mErr = ''; pintar();
+  try { M = await llamar('fp_metricas', de, ha); } catch (e) { mErr = e.message; }
+  if (vista === 'metricas') pintar();
+}
+
+/* ---------- agendar nutrición con la base de socios (proyecto de Nutrición) ---------- */
+let NU = null, NUerr = '', NUcargando = false;
+const S = {};
+const DIR = 'Av. Larco 1164, Víctor Larco, al costado de Mass';
+function nuReset() { Object.assign(S, { q: '', buscando: false, res: null, sel: '', nuevo: { nombre: '', tel: '', dni: '' }, par: [], extra: [], tel: '', fecha: '', hora: '', libres: Object.assign({}, (NU && NU.libres) || {}), cargandoHoras: false, guardando: false, done: null }); }
+nuReset();
+async function cargarNU(forzar) {
+  if (NUcargando || (NU && !forzar)) return;
+  NUcargando = true;
+  try { NU = await llamar('fp_nuInicio'); NUerr = ''; if (NU.libres) S.libres = Object.assign({}, NU.libres); }
+  catch (e) { NUerr = e.message; }
+  NUcargando = false;
+  if (vista === 'nutri') pintarNform();
+}
+const fichasN = () => ((S.res && S.res.fichas) || []).concat(S.extra);
+const fichaN = () => fichasN().find((f) => f.pid === S.sel);
+const tel9 = (t) => /^9\d{8}$/.test(String(t || '').replace(/\D/g, '').slice(-9)) ? String(t).replace(/\D/g, '').slice(-9) : '';
+const ddmm = (iso) => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : '';
+
+function pintarNform() {
+  const el = $('#nform'); if (!el) return;
+  if (!NU && NUerr) { el.innerHTML = `<div class="panel vacio">${ic('alerta')}<b>No se pudo abrir la base de nutrición</b>${esc(NUerr)}<br><br><button class="btn sec" data-act="nuReintentar">${ic('act')} Reintentar</button></div>`; return; }
+  if (!NU) { el.innerHTML = `<div class="panel carga" style="padding:50px 20px"><span class="spin"></span>Abriendo la base de socios…</div>`; cargarNU(); return; }
+  if (!NU.conectado) { el.innerHTML = formAgendar('nutri'); armarForm($('#fagenda')); return; }
+  const foco = document.activeElement ? document.activeElement.id : '';
+  el.innerHTML = S.done ? listoN() : formN();
+  if (foco && $('#' + foco)) $('#' + foco).focus(); else if (!S.res && !S.done && $('#nq')) $('#nq').focus();
+}
+
+function fichaHTML(f) {
+  const est = f.sinFicha ? `<span class="chip ok">${ic('ok')} Alumno activo${f.vence ? ' · vence ' + ddmm(f.vence) : ''}</span><span class="chip neutro">Sin ficha: se crea al agendar</span>`
+    : f.estado === 'activo' ? `<span class="chip ok">${ic('ok')} Alumno activo${f.vence ? ' · vence ' + ddmm(f.vence) : ''}</span>`
+    : f.estado === 'inactivo' ? `<span class="chip neutro">Alumno inactivo</span>` : `<span class="chip neutro">Sin membresía registrada</span>`;
+  const datos = [f.dni ? 'DNI ' + esc(f.dni) : '', f.evaluaciones != null ? (f.evaluaciones ? (f.evaluaciones === 1 ? '1 evaluación' : f.evaluaciones + ' evaluaciones') + (f.ultima ? ' · última ' + ddmm(f.ultima) : '') : 'Primera evaluación') : '',
+    (f.tels || []).length ? (f.tels || []).slice(0, 2).join(' · ') : ''].filter(Boolean).join(' · ');
+  const on = S.sel === f.pid;
+  return `<button type="button" class="ficha ${on ? 'on' : ''}" role="radio" aria-checked="${on}" data-act="nuSel" data-pid="${esc(f.pid)}"><span class="radio"></span><span style="flex:1;min-width:0">
+    <span class="nom" style="display:block">${esc(f.nombre)}</span><span class="chips">${est}</span>${datos ? `<span class="sec2" style="display:block">${datos}</span>` : ''}
+    ${f.prox ? `<span class="prox">${ic('alerta')} Ya tiene cita el ${esc(fechaCorta(f.prox.fecha))} · ${h12(f.prox.hora).h} ${h12(f.prox.hora).s}: se moverá a la nueva hora</span>` : ''}</span></button>`;
+}
+
+function formN() {
+  const f = fichaN(), fs = fichasN();
+  let h = `<div class="panel"><div class="panel-h">${ic('nutri')} Agendar nutrición con Diego</div>
+    <div class="paso"><h4><span class="num">1</span> ¿Quién es?</h4>
+      <form id="nBuscarF" class="busca-n" role="search"><div class="buscar">${ic('buscar')}<label class="sr" for="nq">Buscar socio</label><input id="nq" class="campo" value="${esc(S.q)}" placeholder="Celular, código AppsFit, DNI o nombre" autocomplete="off"></div>
+      <button class="btn osc" type="submit" ${S.buscando ? 'disabled' : ''}>${S.buscando ? '<span class="spin"></span>' : 'Buscar'}</button></form>`;
+  if (S.buscando) h += `<div class="nlista">${'<div class="esq" style="grid-template-columns:1fr;height:58px;border:0"><i></i></div>'.repeat(2)}</div>`;
+  else if (S.res) {
+    h += `<div class="nlista" role="radiogroup" aria-label="Socio">${fs.length ? '' : `<p class="vacio-t">No está en Pipedrive ni en AppsFit. Crea su ficha:</p>`}${fs.map(fichaHTML).join('')}
+      <button type="button" class="ficha ${S.sel === 'nuevo' ? 'on' : ''}" role="radio" aria-checked="${S.sel === 'nuevo'}" data-act="nuSel" data-pid="nuevo"><span class="radio"></span><span><span class="nom">${ic('mas')} Es nuevo: crear ficha</span></span></button></div>`;
+    if (S.sel === 'nuevo') h += `<div class="nuevo-f"><div class="ancho"><label for="nNom">Nombre y apellido</label><input id="nNom" class="campo" value="${esc(S.nuevo.nombre)}" autocomplete="off"></div>
+        <div><label for="nTel">Celular</label><input id="nTel" class="campo" value="${esc(S.nuevo.tel)}" inputmode="numeric" maxlength="12" placeholder="9XXXXXXXX" autocomplete="off"></div>
+        <div><label for="nDni">DNI (opcional)</label><input id="nDni" class="campo" value="${esc(S.nuevo.dni)}" inputmode="numeric" maxlength="9" autocomplete="off"></div>
+        <div class="ancho par" id="nPar">${parHTML()}</div></div>`;
+    else if (f && (f.tels || []).length > 1) h += `<div style="margin-top:10px"><label class="lb" for="nTelSel">Celular para la cita</label><select id="nTelSel" class="campo">${f.tels.map((t) => `<option ${S.tel === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div>`;
+    else if (f && !(f.tels || []).length) h += `<div style="margin-top:10px"><label class="lb" for="nTel2">Celular para la cita</label><input id="nTel2" class="campo" value="${esc(S.tel)}" inputmode="numeric" maxlength="12" placeholder="9XXXXXXXX"></div>`;
+  } else h += `<p class="aviso" style="margin-top:8px">Con el celular completo busca solo. También sirve el código de AppsFit (ej. 1025).</p>`;
+  h += `</div>`;
+  if (S.sel) {
+    const lib = S.libres[S.fecha];
+    h += `<div class="paso"><h4><span class="num">2</span> ¿Cuándo? <span class="act" style="font-weight:500">martes y miércoles</span></h4>
+      <div class="opcs" role="group" aria-label="Día">${NU.fechas.map((d) => { const l = S.libres[d]; return `<button type="button" class="opc ${S.fecha === d ? 'on' : ''}" data-act="nuDia" data-f="${d}" aria-pressed="${S.fecha === d}" ${l && !l.length ? 'disabled' : ''}>${fechaCorta(d)}<small>${l ? (l.length ? l.length + ' libres' : 'lleno') : MESES[+d.slice(5, 7) - 1].slice(0, 3)}</small></button>`; }).join('')}</div>
+      ${S.fecha ? `<div style="margin-top:12px"><label class="lb">Hora libre</label>${S.cargandoHoras ? '<span class="guardando"><span class="spin"></span> Viendo horas…</span>'
+        : lib && lib.length ? `<div class="opcs" role="group" aria-label="Hora">${lib.map((x) => `<button type="button" class="opc ${S.hora === x ? 'on' : ''}" data-act="nuHora" data-h="${x}" aria-pressed="${S.hora === x}">${h12(x).h} ${h12(x).s}</button>`).join('')}</div>` : '<p class="vacio-t">No quedan horas ese día.</p>'}</div>` : ''}</div>
+      <div class="pie-n" id="nPie">${pieHTML()}</div>`;
+  }
+  return h + `</div>`;
+}
+function listoN() {
+  const f = fichaN(), dir = S.sel === 'nuevo' ? 'nuevo' : '';
+  const r = S.done;
+  return `<div class="panel"><div class="panel-b"><div class="listo-n">${ic('ok')}<div><b style="font-size:16px">${r.movida ? 'Cita cambiada' : 'Reserva confirmada'}</b><div class="resumen">${esc(r.msg || '')}</div></div></div>
+    <label class="lb" style="margin-top:16px;display:block;font-size:12.5px;font-weight:650;color:var(--sub)">Mensaje para el socio (WhatsApp)</label><div class="wa" id="nWa">${esc(waTxt(r))}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn pri" data-act="nuCopiar">Copiar mensaje</button><button class="btn sec" data-act="nuOtra">${ic('mas')} Agendar otra</button></div></div></div>`;
+}
+function waTxt(r) {
+  const n = cap(String(r.nombre || '').trim().split(/\s+/)[0]);
+  return '¡Hola ' + n + '! 👋 Tu evaluación nutricional en Rurush quedó agendada:\n📅 ' + fechaLarga(r.fecha) + '\n🕒 ' + h12(r.hora).h + ' ' + h12(r.hora).s + '\n📍 ' + DIR +
+    '\n\nTe esperamos 5 minutos antes. Si no puedes venir, avísanos para cambiar la hora. 💪';
+}
+function datosN() {   // lo que se manda a agendar, o el motivo de por qué aún no se puede
+  const f = fichaN();
+  if (!S.sel) return { falta: 'Elige al socio' };
+  let q;
+  if (S.sel === 'nuevo') {
+    if (String(S.nuevo.nombre).trim().split(/\s+/).filter((w) => w.length >= 2).length < 2) return { falta: 'Escribe nombre y apellido' };
+    if (!tel9(S.nuevo.tel)) return { falta: 'Escribe el celular (9 dígitos)' };
+    q = { nombre: S.nuevo.nombre.trim(), tel: tel9(S.nuevo.tel), dni: String(S.nuevo.dni || '').replace(/\D/g, '') };
+  } else {
+    if (!f) return { falta: 'Elige al socio' };
+    if (!tel9(S.tel)) return { falta: 'Falta el celular' };
+    q = { pid: f.pid, nombre: f.nombre, tel: tel9(S.tel) };
+    if (f.prox) q.mover = f.prox.act;
+  }
+  if (!S.fecha) return { falta: 'Elige el día' };
+  if (!S.hora) return { falta: 'Elige la hora' };
+  return { q: Object.assign(q, { fecha: S.fecha, hora: S.hora }) };
+}
+function pieHTML() {
+  const d = datosN(), f = fichaN(), nom = S.sel === 'nuevo' ? S.nuevo.nombre : f ? f.nombre : '';
+  const res = d.q ? `<b>${esc(nom)}</b> · ${fechaLarga(S.fecha)} · ${h12(S.hora).h} ${h12(S.hora).s}` : esc(d.falta);
+  return `<div class="resumen">${res}</div><button class="btn pri" data-act="nuAgendar" ${d.q && !S.guardando ? '' : 'disabled'}>${S.guardando ? '<span class="spin"></span> Agendando…' : ic(f && f.prox ? 'act' : 'mas') + (f && f.prox ? ' Mover cita' : ' Agendar nutrición')}</button>`;
+}
+function pieN() { const p = $('#nPie'); if (p) p.innerHTML = pieHTML(); }
+function parHTML() {
+  return S.par.length ? `Parecidos en Pipedrive (para no duplicar):<br>${S.par.map((x) => `<button type="button" class="btn sec peq" data-act="nuPar" data-pid="${esc(x.pid)}">Usar ${esc(x.nombre)}${x.tels.length ? ' · ' + esc(x.tels[0]) : ''}</button>`).join('')}` : '';
+}
+
+async function buscarN() {
+  const q0 = S.q.trim();
+  if (!q0 || S.buscando) return;
+  Object.assign(S, { buscando: true, res: null, sel: '', extra: [], par: [], tel: '' });
+  pintarNform();
+  try {
+    S.res = await llamar('fp_nuBuscar', q0);
+    const fs = S.res.fichas;
+    if (fs.length === 1) elegirN(fs[0].pid, true);
+    else if (!fs.length) { S.sel = 'nuevo'; S.nuevo = { nombre: S.res.modo === 'nombre' ? q0 : '', tel: S.res.tel || '', dni: S.res.dni || '' }; }
+  } catch (e) { toast(e.message, 'err'); }
+  S.buscando = false;
+  pintarNform();
+  if (S.sel === 'nuevo' && $('#nNom')) $('#nNom').focus();
+}
+function elegirN(pid, sinPintar) {
+  S.sel = pid;
+  const f = fichaN();
+  if (f) S.tel = S.res && S.res.tel && (f.tels || []).includes(S.res.tel) ? S.res.tel : ((f.tels || [])[0] || '');
+  if (pid === 'nuevo' && S.res && !S.nuevo.tel) S.nuevo.tel = S.res.tel || '';
+  if (!sinPintar) pintarNform();
+}
+async function diaN(f) {
+  S.fecha = f; S.hora = '';
+  if (!S.libres[f]) {
+    S.cargandoHoras = true; pintarNform();
+    try { S.libres[f] = await llamar('fp_nuLibres', f); } catch (e) { toast(e.message, 'err'); }
+    S.cargandoHoras = false;
+  }
+  pintarNform();
+}
+async function parecidosN() {
+  const n = String(S.nuevo.nombre || '').trim(), d = String(S.nuevo.dni || '').replace(/\D/g, '');
+  const k = n + '|' + d;
+  if (S.parK === k || (n.length < 5 && d.length < 8)) return;
+  S.parK = k;
+  try { S.par = await llamar('fp_nuParecidos', n, d); } catch (e) { S.par = []; }
+  const el = $('#nPar'); if (el) el.innerHTML = parHTML();
+}
+async function agendarN() {
+  if (S.guardando) return;
+  const d = datosN(); if (!d.q) return toast(d.falta, 'err');
+  S.guardando = true; pieN();
+  try {
+    const r = await llamar('fp_nuAgendar', d.q);
+    S.done = Object.assign({ movida: !!d.q.mover, nombre: d.q.nombre, fecha: d.q.fecha, hora: d.q.hora }, r);
+    toast(r.msg || 'Agendado', 'ok');
+    NU.libres = null; S.libres = {};
+    cargarNU(true); cargar(true);
+  } catch (e) {
+    toast(e.message, 'err', 8000);
+    if (/hora|ocupad|libre|choc/i.test(e.message)) { delete S.libres[S.fecha]; S.guardando = false; return diaN(S.fecha); }
+  }
+  S.guardando = false;
+  pintarNform();
+}
+function copiarN() {
+  const t = $('#nWa').textContent;
+  (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('Mensaje copiado', 'ok'), () => {
+    const r = document.createRange(); r.selectNodeContents($('#nWa')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); document.execCommand('copy'); toast('Mensaje copiado', 'ok');
+  });
+}
+
+/* ---------- agendar ---------- */
+function formAgendar(tipo) {
+  const horas = []; for (let m = 6 * 60; m <= 21 * 60; m += 30) horas.push(String(Math.floor(m / 60)).padStart(2, '0') + ':' + (m % 60 ? '30' : '00'));
+  return `<form class="panel form" id="fagenda" data-tipo="${tipo}" novalidate><div class="panel-h">${ic(tipo === 'nutri' ? 'nutri' : 'ticket')} ${tipo === 'nutri' ? 'Agendar nutrición con Diego' : 'Agendar Free Pass'}</div><div class="panel-b">
+    <label for="aTel">Celular</label><input id="aTel" class="campo" placeholder="9XXXXXXXX" inputmode="numeric" maxlength="12" autocomplete="off">
+    <label for="aNom">Nombre (solo si es nuevo)</label><input id="aNom" class="campo" placeholder="Nombre y apellido" autocomplete="off">
+    ${tipo === 'nutri' ? `<label for="aCupo">Cupo libre</label><select id="aCupo" class="campo"><option value="">Cargando cupos…</option></select>` :
+      `<div class="dos"><div><label for="aFecha">Fecha</label><input type="date" id="aFecha" class="campo" value="${D.hoy}" min="${D.hoy}"></div><div><label for="aHora">Hora</label><select id="aHora" class="campo">${horas.map((h) => `<option value="${h}">${h12(h).h} ${h12(h).s}</option>`).join('')}</select></div></div>
+       <label for="aVia">¿Por dónde se agendó?</label><select id="aVia" class="campo"><option value="chat">Chat (APC)</option><option value="llamada">Llamada (APL)</option><option value="visita">Visita (APV)</option></select>`}
+    <button class="btn pri" id="aOk" type="submit">${ic('mas')} ${tipo === 'nutri' ? 'Agendar nutrición' : 'Agendar clase gratis'}</button>
+    <p class="aviso">Si el número ya está en Pipedrive se usa su ficha; si no, se crea con el nombre.</p></div></form>`;
+}
+
+async function armarForm(f) {
+  const tipo = f.dataset.tipo, txt = tipo === 'nutri' ? 'Agendar nutrición' : 'Agendar clase gratis';
+  if (tipo === 'nutri') {
+    try {
+      cupos = await llamar('fp_cupos');
+      $('#aCupo').innerHTML = cupos.length ? cupos.map((c) => { const [d, h] = c.split(' '); const t = h12(h); return `<option value="${c}">${fechaCorta(d)} · ${t.h} ${t.s}</option>`; }).join('') : '<option value="">No quedan cupos</option>';
+    } catch (e) { if ($('#aCupo')) $('#aCupo').innerHTML = '<option value="">No se pudieron leer los cupos</option>'; }
+  }
+  f.onsubmit = async (ev) => {
+    ev.preventDefault();
+    const b = $('#aOk'); if (b.disabled) return;
+    const d = { tipo: tipo, tel: $('#aTel').value, nombre: $('#aNom').value };
+    if (tipo === 'nutri') { const c = $('#aCupo').value; if (!c) return toast('Elige un cupo.', 'err'); [d.fecha, d.hora] = c.split(' '); }
+    else { d.fecha = $('#aFecha').value; d.hora = $('#aHora').value; d.via = $('#aVia').value; }
+    b.disabled = true; b.innerHTML = '<span class="spin"></span> Agendando…';
+    try { const r = await llamar('fp_agendar', d); toast('Agendado: ' + r.nombre + ' · ' + r.asunto, 'ok', 5000); $('#aTel').value = ''; $('#aNom').value = ''; cargar(true); }
+    catch (e) { toast(e.message, 'err', 7000); }
+    b.disabled = false; b.innerHTML = ic('mas') + ' ' + txt;
+  };
+}
+
+inicio();
+setInterval(() => { if (D && !document.hidden && $('#lista') && !enCurso.size) cargar(true); }, 120000);
+</script></body></html>

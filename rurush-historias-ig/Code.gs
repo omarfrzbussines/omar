@@ -14,6 +14,7 @@ const MAX_ATRASO_H = 12;   // si el reloj llega más tarde que esto, no la publi
 
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('📲 Historias IG')
+    .addItem('👁️ Vista previa del mes', 'verVistaPrevia')
     .addItem('Revisar carpeta ahora', 'sincronizarCarpeta')
     .addItem('Publicar YA la fila seleccionada', 'publicarSeleccionada')
     .addItem('Publicar las que ya tocan', 'publicarPendientes')
@@ -40,9 +41,40 @@ function cicloAutomatico() {
   try {
     sincronizarCarpeta(true);
     publicarPendientes(true);
+    try { compartirParaWhatsApp_(); } catch (e) { console.warn('WhatsApp: ' + e.message); }
   } finally {
     lock.releaseLock();
   }
+}
+
+/* ---------- 📲 Estados de WhatsApp ----------
+   La extensión Rurush Difusiones publica estas mismas historias como estado de WhatsApp (columna H
+   WHATSAPP; "NO" = no publicar). Como el original queda privado (Instagram lo cierra al publicar),
+   para WhatsApp se usa una COPIA en la subcarpeta _wa, visible con el link desde 24 h antes de su
+   hora hasta 12 h después; luego la copia se borra sola. Su id va en la columna J (no tocar). */
+const WA_COL = { WA: 8, COPIA: 10 };
+function compartirParaWhatsApp_() {
+  const hoja = hoja_(), n = hoja.getLastRow() - 1;
+  if (n < 1) return;
+  if (!hoja.getRange(1, WA_COL.COPIA).getValue()) hoja.getRange(1, WA_COL.COPIA).setValue('WA COPIA (no tocar)');
+  const extra = hoja.getRange(2, WA_COL.WA, n, 3).getDisplayValues();   // H, I, J
+  const ahora = Date.now();
+  filas_(hoja).forEach((f, i) => {
+    const copia = extra[i][2], no = /^\s*NO\s*$/i.test(extra[i][0]);
+    const c = cuando_(f.fecha, f.hora);
+    const vigente = f.id && !no && c && c.getTime() - ahora <= 24 * 3600e3 && ahora - c.getTime() <= MAX_ATRASO_H * 3600e3;
+    try {
+      if (vigente && !copia) {
+        const orig = DriveApp.getFileById(f.id);
+        const cp = orig.makeCopy(orig.getName(), subcarpeta_('_wa'));
+        cp.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        hoja.getRange(f.fila, WA_COL.COPIA).setValue(cp.getId());
+      } else if (!vigente && copia) {
+        try { DriveApp.getFileById(copia).setTrashed(true); } catch (e) { /* ya no está */ }
+        hoja.getRange(f.fila, WA_COL.COPIA).setValue('');
+      }
+    } catch (e) { console.warn('WhatsApp · ' + f.archivo + ': ' + e.message); }
+  });
 }
 
 /* ---------- Carpeta → hoja ---------- */

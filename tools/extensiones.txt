@@ -2,3 +2,6 @@
 # carpeta del repo | ruta "Cargado desde" de chrome://extensions → Detalles
 # extension-rurush-fp | C:\Users\Lenovo\...\extension-rurush-fp
 # extension-rurush-difusiones | C:\Users\Lenovo\...\extension-rurush-difusiones
+extension-rurush-difusiones | C:\Users\Lenovo\Downloads\Rurush_Difusiones_v1.3.0
+extension-rurush-fp | C:\Users\Lenovo\Downloads\RurushFP
+extension-rurush-panel | C:\Users\Lenovo\Documents\Claude\Projects\RURUSH VENTAS 2026\rurush-chrome-extension

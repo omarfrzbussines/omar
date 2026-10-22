@@ -3,7 +3,7 @@
 // Módulos: recordatorio 2h, mañana, refuerzo noche anterior, no-shows (1pm, 8pm, día siguiente),
 // sábado y domingo. Ver MODULOS.
 
-const GPS = 'https://maps.app.goo.gl/8qmgUTHsMH7NHF698';
+const GPS = 'https://maps.app.goo.gl/x2K9xZYXsLtzhxuW6';
 const LIMA_OFFSET_H = -5; // Perú no tiene horario de verano
 
 const DEFAULTS = {
@@ -74,6 +74,8 @@ function firstName(full) {
   if (!n || /\d/.test(primera) || /^[@_.]/.test(primera) || /[_.]\w/.test(primera)) return '';
   return n[0].toUpperCase() + n.slice(1).toLowerCase();
 }
+// FP que agenda el bot (asunto "FP BOT …"): el nombre de Pipedrive viene del perfil de WhatsApp → saludar sin nombre.
+const nombreDe = (fp) => (/\bBOT\b/i.test(fp.subject || '') ? '' : firstName(fp.personName));
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 const ultimos9 = (x) => String(x || '').replace(/\D/g, '').slice(-9);
@@ -127,6 +129,8 @@ async function fpsEntre(token, desde, hasta) {
       out.push({
         id: a.id, subject: subj, personId: a.person_id, personName: a.person_name,
         classMs, date: lima.date, hour: lima.hour, min: lima.min,
+        addMs: a.add_time ? Date.parse(String(a.add_time).replace(' ', 'T') + 'Z') : 0,
+        asesora: asesoraDe(subj, a.owner_name),
       });
     }
     const pg = res.additional_data && res.additional_data.pagination;
@@ -134,6 +138,15 @@ async function fpsEntre(token, desde, hasta) {
     start = pg.next_start;
   }
   return out.sort((x, y) => x.classMs - y.classMs);
+}
+
+// "FP DANNA APC" → "Danna"; si el asunto no la trae, el dueño de la actividad en Pipedrive.
+const NO_ASESORA = /^(FP|FREE|PASS|APC|APL|APV|NUTRI|RURUSH)$/i;
+function asesoraDe(subject, owner) {
+  const w = String(subject || '').replace(/^(FP|FREE\s*PASS)\b/i, '').trim().split(/\s+/).find((x) => /^[A-ZÁÉÍÓÚÑ]{3,}$/i.test(x) && !NO_ASESORA.test(x));
+  const n = w || String(owner || '').trim().split(/\s+/)[0] || '';
+  const tildes = { MONICA: 'Mónica', VALERIA: 'Valeria', ALVARO: 'Álvaro' };
+  return n ? tildes[n.toUpperCase()] || n[0].toUpperCase() + n.slice(1).toLowerCase() : '';
 }
 
 function sumarDias(fecha, n) {
@@ -600,7 +613,7 @@ function analizar(fp, msgs, hoy) {
 
 // ───────────────────────── mensaje ─────────────────────────
 function mensaje(fp, confirmo) {
-  const n = firstName(fp.personName);
+  const n = nombreDe(fp);
   const h = aLas(fp.hour, fp.min);
   const hola = n ? pick([`¡Hola ${n}! 👋`, `${n}, ¡hola! 😊`, `¡Hola ${n}! 🙌`]) : pick(['¡Hola! 👋', '¡Hola! 😊']);
   let cuerpo, cierre;
@@ -634,6 +647,8 @@ const MODULOS = {
   n1:     { nombre: 'Nutrición: recordatorio 7pm',  reemplaza: 'Recordatorio nutricion 7pm', hora: [19, 0], dias: [1, 2] },
   // invita, reagenda no-shows y lee respuestas; el "cerebro" (Apps Script de la hoja NUTRICIÓN) arma la lista y agenda en Pipedrive
   n2:     { nombre: 'Nutrición: seguimiento 11:30', reemplaza: 'Seguimiento nutricion wa 1130', hora: [11, 30], dias: [1, 2, 3, 4, 5] },
+  // apenas una asesora agenda un FP (app de llamadas → Pipedrive): confirmación con foto + GPS
+  cf:     { nombre: 'Confirmación al agendar (cada 5 min)', reemplaza: '(nuevo)', cadaMin: 5, dias: [0, 1, 2, 3, 4, 5, 6] },
 };
 const ETIQUETA_FP = 'FREE PASS';
 const MAX_ETIQUETAS_CORRIDA = 15;
@@ -645,6 +660,7 @@ const DIR = 'Av. Larco 1164, Víctor Larco, al costado de Mass';
 
 function modoDe(cfg, key) {
   if (cfg.modos && cfg.modos[key]) return cfg.modos[key];
+  if (key === 'cf') return 'real';   // pedido por Omar: la confirmación sale sola desde el inicio
   if (key === 'm1') return cfg.dryRun === false ? 'real' : 'sim'; // compatibilidad con la v1.x
   return 'sim';
 }
@@ -697,14 +713,14 @@ function opciones(fp, now) {
 const hola = (n, opts) => (n ? pick(opts.map((o) => o.replace('N', n))) : '¡Hola! 😊');
 
 function msgManana(fp) {
-  const n = firstName(fp.personName);
+  const n = nombreDe(fp);
   return `${hola(n, ['¡Hola N! 😊', 'N, ¡buenos días! ☀️', '¡Buen día N! 😊'])} `
     + `${pick([`Hoy ${aLas(fp.hour, fp.min)} es tu clase de prueba GRATIS 💪`, `Te esperamos hoy ${aLas(fp.hour, fp.min)} para tu clase gratis 💪`])}\n`
     + `${pick(['¿Nos confirmas tu asistencia?', '¿Me confirmas que vienes?'])}\n\n✅ Confirmo\n🔄 Reagendar`;
 }
 
 function msgRefuerzo(fp, now) {
-  const n = firstName(fp.personName);
+  const n = nombreDe(fp);
   const dia = fp.date === sumarDias(now.date, 1) ? `Mañana ${DIAS[diaSemana(fp.date)]}` : `El ${DIAS[diaSemana(fp.date)]}`;
   return `${hola(n, ['¡Hola N! 😊', 'N, ¡hola! 👋', '¡Hola N! 🙌'])} `
     + `${pick([`${dia} ${aLas(fp.hour, fp.min)} es tu clase de prueba GRATIS 💪`, `Te recuerdo: ${dia.toLowerCase()} ${aLas(fp.hour, fp.min)} tienes tu clase gratis 🔥`])} `
@@ -712,7 +728,7 @@ function msgRefuerzo(fp, now) {
 }
 
 function msgReagendo(fp, now) {
-  const n = firstName(fp.personName);
+  const n = nombreDe(fp);
   const [a, b] = opciones(fp, now);
   return `${hola(n, ['Hola N 😊', '¡Hola N! 👋', 'N, ¡hola! 😊'])} `
     + `${pick(['Vimos que no pudiste llegar a tu clase gratis 🔥', 'Tu clase de prueba GRATIS sigue en pie 🔥', 'Aún tienes tu clase de prueba GRATIS 🔥'])}\n`
@@ -720,7 +736,7 @@ function msgReagendo(fp, now) {
 }
 
 function msgBienestar(fp) {
-  const n = firstName(fp.personName);
+  const n = nombreDe(fp);
   return pick([
     `Hola${n ? ' ' + n : ''} 💙 Espero que estés mejor. Cuando puedas, te esperamos en Rurush 💪`,
     `${n ? n + ', e' : 'E'}spero que todo esté bien 💙 Tu clase gratis te espera cuando puedas 💪`,
@@ -728,26 +744,52 @@ function msgBienestar(fp) {
 }
 
 function msgSabado(fp) {
-  const n = firstName(fp.personName);
+  const n = nombreDe(fp);
   return `¡Hola${n ? ' ' + n : ''}! 😊 No te quedes sin tu clase GRATIS 🔥 Retomémosla este lunes: rutina + nutrición + evaluación InBody hechos para ti 💪 ¿La prefieres en la mañana, en la tarde o en la noche?`;
 }
 
 function msgDomingoLunes(fp) {
-  const n = firstName(fp.personName);
+  const n = nombreDe(fp);
   return `¡Hola${n ? ' ' + n : ''}! 😊\n\n¡Te esperamos mañana Lunes! 💪 Tu clase gratuita ya está reservada.\n\n`
     + `🕒 Hora: ${fmtHora(fp.hour, fp.min)}\n📍 ${DIR}\n📍 Ubicación GPS: ${GPS}\n\n`
     + `Tu coach ya tiene preparada tu evaluación y plan de entrenamiento ✨\n\n¿Nos confirmas tu asistencia?\n\n✅ Confirmo\n🔄 Reagendar`;
 }
 
 function msgDomingoNoShow(fp) {
-  const n = firstName(fp.personName);
+  const n = nombreDe(fp);
   const h = abre(1)[0] <= fp.hour && fp.hour <= abre(1)[1] - 1 ? aLas(fp.hour, fp.min) : 'a las 6 pm';
   return `¡Hola${n ? ' ' + n : ''}! 😊 Vimos que no pudiste llegar a tu clase gratis 🔥\n\n`
     + `¿La retomamos mañana lunes ${h}? ¿O prefieres otro horario? 💪\n\n📍 ${DIR}\n📍 GPS: ${GPS}`;
 }
 
+// Confirmación al agendar: foto «cómo llegar» con este texto, y después el GPS en un mensaje aparte.
+function nombreDia(fp, now) {
+  if (fp.date === now.date) return 'Hoy';
+  if (fp.date === sumarDias(now.date, 1)) return 'Mañana';
+  const d = DIAS[diaSemana(fp.date)];
+  return d[0].toUpperCase() + d.slice(1) + ' ' + fp.date.slice(8) + '/' + fp.date.slice(5, 7);
+}
+function msgConfirmacion(fp, now) {
+  const n = nombreDe(fp);
+  return `¡Hola${n ? ' ' + n : ''}! 💪 Soy ${/\bBOT\b/i.test(fp.subject || '') ? 'el equipo' : fp.asesora || 'tu asesora'} de RURUSH Fitness Club 🔥\n`
+    + `Te confirmo tu Free Pass:\n📅 ${nombreDia(fp, now)} ${aLas(fp.hour, fp.min)}\n📍 ${DIR}\n`
+    + `🎒 Trae ropa deportiva, toalla y agua 💧\nCualquier cambio, escríbeme por aquí. ¡Te esperamos! 🙌`;
+}
+const RX_YA_CONFIRMADO = /(free\s*pass|clase de prueba|clase gratis|te esperamos|larco\s*11\d\d|maps\.app\.goo\.gl)/i;
+function decidirConfirmacion(fp, msgs, now) {
+  // si ya se le escribió la confirmación (la asesora por chat o un módulo) desde que se agendó, no repetir
+  const desde = (fp.addMs || now.ms) - 2 * 3600e3;
+  if (msgs.some((m) => m.out && RX_YA_CONFIRMADO.test(m.text || '') && (msgMs(m) == null || msgMs(m) >= desde))) {
+    return { saltar: 'ya tiene la confirmación en el chat', marcar: 'previo' };
+  }
+  const recientes = msgs.slice(-4).filter((m) => !m.out);
+  if (recientes.some((m) => RX_CANCELA.test(m.text || ''))) return { alerta: 'en el chat pide cancelar o cambiar — revisar a mano' };
+  return { enviar: msgConfirmacion(fp, now), imagen: true, extra: `🗺️ Ubicación GPS: ${GPS}` };
+}
+
 // ── decisiones por tipo ── devuelven { enviar: texto, imagen } | { saltar } | { alerta }
-function decidirRecordatorio2h(fp, msgs, now, cfg) {
+function decidirRecordatorio2h(fp, msgs, now, cfg, ctx) {
+  if (cfReciente(ctx, fp, 2)) return { saltar: 'recibió la confirmación al agendar hace menos de 2h' };
   fp.cfgWindowH = cfg.sendWindowH;
   const a = analizar(fp, msgs, now.date);
   if (a.cancelo) return { saltar: 'canceló/reagenda' };
@@ -759,6 +801,7 @@ function decidirRecordatorio2h(fp, msgs, now, cfg) {
 function decidirManana(fp, msgs, now, ctx = { sent: {} }) {
   // va aunque haya recibido el refuerzo de la noche anterior (así lo pidió Omar: noche + mañana + 2h)
   if (yaEnviado(ctx, fp.id, 'm1', 'manana')) return { saltar: 'ya recibió el recordatorio 2h' };
+  if (cfReciente(ctx, fp, 4)) return { saltar: 'recibió la confirmación al agendar hace menos de 4h' };
   if (entrantesDesde(msgs, now.ms - 48 * 3600e3).some((m) => RX_CANCELA.test(m.text))) return { saltar: 'canceló/reagenda' };
   const otra = otraHoraDesde(fp, msgs, now.ms - 48 * 3600e3);
   if (otra) return { alerta: `el chat menciona otra hora → «${otra}» — revisar a mano` };
@@ -768,8 +811,14 @@ function decidirManana(fp, msgs, now, ctx = { sent: {} }) {
   return { enviar: msgManana(fp), imagen: false };
 }
 
+// ¿se le mandó la confirmación al agendar hace poco? (para no mandarle dos mensajes seguidos)
+function cfReciente(ctx, fp, horas) {
+  const v = ctx && ctx.sent && ctx.sent[`cf:${fp.id}`];
+  return !!(v && v.estado === 'enviado' && Date.now() - Date.parse(v.at) < horas * 3600e3);
+}
+
 function decidirRefuerzo(fp, msgs, now, ctx) {
-  if (ctx.sent[`m5a:${fp.id}`]) return { saltar: 'ya recibió el recordatorio del domingo' };
+  if (cfReciente(ctx, fp, 4)) return { saltar: 'recibió la confirmación al agendar hace menos de 4h' };
   if (entrantesDesde(msgs, now.ms - 48 * 3600e3).some((m) => RX_CANCELA.test(m.text))) return { saltar: 'canceló/reagenda' };
   const otra = otraHoraDesde(fp, msgs, now.ms - 48 * 3600e3);
   if (otra) return { alerta: `el chat menciona otra hora → «${otra}» — revisar a mano` };
@@ -817,7 +866,7 @@ async function candidatosDe(key, cfg, now) {
       const fps = await fpsEntre(tok, hoy, hoy);
       const ventana = cfg.sendWindowH * 3600e3;
       return { lista: fps.filter((f) => f.classMs > now.ms && f.classMs - now.ms <= ventana), total: fps.length,
-        decidir: (fp, msgs, ctx) => decidirRecordatorio2h(fp, msgs, now, cfg) };
+        decidir: (fp, msgs, ctx) => decidirRecordatorio2h(fp, msgs, now, cfg, ctx) };
     }
     case 'manana': {
       const fps = await fpsEntre(tok, hoy, hoy);
@@ -843,6 +892,15 @@ async function candidatosDe(key, cfg, now) {
     case 'm6': {
       const fps = pasados(await fpsEntre(tok, sumarDias(hoy, -5), hoy), 60);
       return { lista: porPersona(fps), total: fps.length, fpsPorPersona: await porPersonaMapa(fps.length ? fps[0].date : hoy), decidir: (fp, msgs, ctx) => decidirNoShow(fp, msgs, now, ctx, 'sabado') };
+    }
+    case 'cf': {
+      // FP agendados en las últimas 3 h (desde que el módulo existe), con la clase todavía por venir
+      const fps = await fpsEntre(tok, hoy, sumarDias(hoy, 14));
+      const { cfDesde } = await chrome.storage.local.get('cfDesde');
+      const desde = Math.max(now.ms - 3 * 3600e3, cfDesde || now.ms);
+      if (!cfDesde) await chrome.storage.local.set({ cfDesde: now.ms });
+      const nuevos = fps.filter((f) => f.addMs >= desde && f.classMs > now.ms + 20 * 60e3);
+      return { lista: porPersona(nuevos), total: nuevos.length, decidir: (fp, msgs) => decidirConfirmacion(fp, msgs, now) };
     }
     case 'et': {
       const fps = await fpsEntre(tok, hoy, sumarDias(hoy, 14));
@@ -932,7 +990,8 @@ async function correrModulo(key, reason, programado) {
     return;
   }
   const { waActivity = 0 } = await chrome.storage.local.get('waActivity');
-  if (!manual && Date.now() - waActivity < 4 * 60e3) {
+  if (!manual && Date.now() - waActivity < (key === 'cf' ? 60e3 : 4 * 60e3)) {
+    if (key === 'cf') return;   // vuelve a mirar en 5 min
     chrome.alarms.create(`retry:${key}:${programado || ''}`, { delayInMinutes: 10 });
     await log({ level: 'info', msg: `${nombre}: WhatsApp Web en uso, reintento en 10 min.` });
     return;
@@ -1047,6 +1106,11 @@ async function correrModulo(key, reason, programado) {
 
           await marcarSent(clave, 'intento');
           const r = await ask(tab.id, { type: 'sendReminder', text: d.enviar, phone, header: chat.header, conImagen: !!d.imagen });
+          if (r && r.ok && d.extra) {
+            await sleep(2000);
+            const r2 = await ask(tab.id, { type: 'sendReminder', text: d.extra, phone, header: chat.header, conImagen: false });
+            if (!r2 || !r2.ok) resumen.alertas.push(`${etiqueta}: salió la confirmación, pero no el link GPS (${(r2 && r2.error) || 'sin respuesta'})`);
+          }
           if (r && r.ok) {
             await marcarSent(clave, 'enviado');
             await registrarToque(phone, parte, fp.id);
@@ -1069,7 +1133,7 @@ async function correrModulo(key, reason, programado) {
      } catch (e) {
       // falló WhatsApp Web o Pipedrive para esta parte: reintentar en 10 min (hasta 3h de atraso)
       resumen.alertas.push(`${parte}: ${e.message || e}`);
-      if (!manual) chrome.alarms.create(`retry:${key}:${programado || ''}`, { delayInMinutes: 10 });
+      if (!manual && key !== 'cf') chrome.alarms.create(`retry:${key}:${programado || ''}`, { delayInMinutes: 10 });
      }
     }
   } catch (e) {
@@ -1192,11 +1256,11 @@ function opcionesNutricion(vuelve) {
   return out;
 }
 function msgNutriRecordatorio(fp) {
-  const n = firstName(fp.personName);
+  const n = nombreDe(fp);
   return `Hola${n ? ' ' + n : ''}! 🥗 Te recordamos tu evaluación nutricional con Diego mañana ${DIAS[diaSemana(fp.date)]} ${aLas(fp.hour, fp.min)} en Rurush (${DIR}). ¡Te esperamos!`;
 }
 function msgNutriPausa(fp, vuelve) {
-  const n = firstName(fp.personName);
+  const n = nombreDe(fp);
   const [a, b] = opcionesNutricion(vuelve);
   return `Hola${n ? ' ' + n : ''}! 🥗 Vi que tienes una pausa activa — sin problema, reagendaremos tu evaluación con Diego para cuando regreses 💪 Te propongo:\n`
     + `• ${a} — ¿mañana (8-11am) o tarde (5-8pm)?\n• ${b} — ¿mañana (8-11am) o tarde (5-8pm)?\n¿Cuál te queda mejor? 😊`;
@@ -1452,6 +1516,21 @@ async function programar(soloFaltantes = false) {
   for (const [key, mod] of Object.entries(MODULOS)) {
     const hora = key === 'manana' ? [cfg.mananaHora, 0] : mod.hora;
     if (hora) crear(`mod:${key}`, { when: proximaLima(hora[0], hora[1]), periodInMinutes: mod.cadaMin || 1440 });
+    else if (mod.cadaMin) crear(`mod:${key}`, { delayInMinutes: 1, periodInMinutes: mod.cadaMin });
+  }
+  // Si la extensión se actualizó o recargó justo después de la hora de un módulo diario (p. ej. a las 8:03 pm),
+  // la alarma nueva queda para mañana y la de hoy se pierde: se corre ahora (lo ya enviado no se repite).
+  if (!soloFaltantes) {
+    const ahora = Date.now();
+    const { diarias = {} } = await chrome.storage.local.get('diarias');
+    const hoy = limaNow().date;
+    for (const [key, mod] of Object.entries(MODULOS)) {
+      const hora = key === 'manana' ? [cfg.mananaHora, 0] : mod.hora;
+      if (!hora || mod.cadaMin || diarias[key] === hoy) continue;
+      const t0 = proximaLima(hora[0], hora[1]) - 86400e3;
+      const dow = new Date(t0 + LIMA_OFFSET_H * 3600e3).getUTCDay();
+      if (ahora - t0 > 0 && ahora - t0 < 2 * 3600e3 && mod.dias.includes(dow)) chrome.alarms.create(`retry:${key}:${t0}`, { delayInMinutes: 1 });
+    }
   }
 }
 
@@ -1496,10 +1575,16 @@ chrome.alarms.onAlarm.addListener((a) => {
   if (tipo === 'mod' && MODULOS[key]) {
     // la alarma diaria se dispara todos los días: aquí se filtra por día de la semana (Lima)
     const dow = new Date(a.scheduledTime + LIMA_OFFSET_H * 3600e3).getUTCDay();
-    if (MODULOS[key].dias.includes(dow)) encolar(key, 'alarm', a.scheduledTime);
+    if (MODULOS[key].dias.includes(dow)) { encolar(key, 'alarm', a.scheduledTime); marcarDiaria(key); }
   }
-  if (tipo === 'retry' && MODULOS[key]) encolar(key, 'retry', Number(prog) || undefined);
+  if (tipo === 'retry' && MODULOS[key]) { encolar(key, 'retry', Number(prog) || undefined); marcarDiaria(key); }
 });
+// día (Lima) en que corrió cada módulo diario, para no repetir la recuperación de programar()
+async function marcarDiaria(key) {
+  const { diarias = {} } = await chrome.storage.local.get('diarias');
+  diarias[key] = limaNow().date;
+  await chrome.storage.local.set({ diarias });
+}
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg.type === 'runNow') { encolar(msg.mod || 'm1', 'manual').then(() => reply({ ok: true })); return true; }
@@ -1552,6 +1637,6 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
 if (typeof module !== 'undefined') {
   module.exports = { analizar, mensaje, horasMencionadas, normPhone, fmtHora, utcToLima, limpiarSent, ultimos9,
     opciones, sumarDias, diaSemana, decidirNoShow, aLas, decidirManana, decidirRefuerzo, msgReagendo, msgManana,
-    msgRefuerzo, msgSabado, msgDomingoLunes, msgDomingoNoShow, MODULOS,
+    msgRefuerzo, msgSabado, msgDomingoLunes, msgConfirmacion, msgDomingoNoShow, MODULOS,
     parseCsv, opcionesNutricion, msgNutriRecordatorio, msgNutriPausa, nuEntender };
 }

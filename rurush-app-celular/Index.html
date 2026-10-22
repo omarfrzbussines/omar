@@ -64,6 +64,15 @@
   .monto { text-align:right; flex:none; } .monto b { display:block; } .monto span { font-size:11px; color:var(--mut); }
   .monto span.atr { color:#ff8a80; font-weight:600; } .monto span.hoy { color:#ffcc00; font-weight:600; }
   .mas { display:block; width:100%; background:none; border:0; border-top:1px solid var(--line); color:var(--or); padding:11px; font-size:13px; }
+  .tag.hr { background:#16263a; color:#8fc3ff; }
+  .hrs { background:var(--card); border-radius:14px; padding:10px 12px; }
+  .hb { display:flex; align-items:center; gap:8px; font-size:13px; margin:5px 0; } .hb span { width:132px; white-space:nowrap; flex:none; color:#cfcfd4; }
+  .hb .b { flex:1; height:9px; background:var(--line); border-radius:5px; overflow:hidden; } .hb i { display:block; height:100%; background:var(--or); } .hb b { width:36px; text-align:right; }
+  .desp2 { margin:8px 0; background:var(--card); border-radius:14px; overflow:hidden; }
+  .desp2 > summary { list-style:none; cursor:pointer; padding:12px 14px; font-size:15px; } .desp2 > summary::-webkit-details-marker { display:none; }
+  .desp2 > summary::after { content:'▾'; float:right; color:var(--mut); } .desp2[open] > summary::after { content:'▴'; }
+  .desp2 > summary small { display:block; color:var(--mut); font-size:12px; margin-top:3px; }
+  .desp2 .list { border-radius:0; } .trn { display:flex; gap:6px; padding:0 14px 10px; } .trn span { flex:1; text-align:center; background:var(--line); border-radius:8px; padding:5px 0; font-size:12px; }
 </style>
 </head>
 <body>
@@ -96,13 +105,20 @@ const soles = (n) => 'S/ ' + Math.round(n).toLocaleString('es-PE');
 const pct = (a, b) => b ? Math.round(a * 100 / b) : 0;
 const wa = (tel) => tel ? `<a class="wa" href="https://wa.me/51${tel}" target="_blank">💬</a>` : '';
 
+// ⚡ Se muestra al instante lo último que se vio en este celular y se actualiza por detrás.
+let ESTADO_D = '';   // ' · actualizando…' / ' · sin conexión' mientras se muestra lo guardado
 function cargar(forzar) {
-  $('#sub').textContent = 'Actualizando…';
+  ESTADO_D = ' · actualizando…';
+  if (D) pintar(); else $('#sub').textContent = 'Actualizando…';
   google.script.run
-    .withSuccessHandler((d) => { D = d; pintar(); })
-    .withFailureHandler((e) => { $('#main').innerHTML = `<div class="err">${esc(e.message || e)}</div>`; $('#sub').textContent = 'Error'; })
+    .withSuccessHandler((d) => { D = d; ESTADO_D = ''; try { localStorage.setItem('rr_dash', JSON.stringify(d)); } catch (e) {} pintar(); })
+    .withFailureHandler((e) => {
+      if (D) { ESTADO_D = ' · sin conexión'; pintar(); return; }   // se queda con lo guardado
+      $('#main').innerHTML = `<div class="err">${esc(e.message || e)}</div>`; $('#sub').textContent = 'Error';
+    })
     .getDashboard(!!forzar);
 }
+try { const g = JSON.parse(localStorage.getItem('rr_dash') || 'null'); if (g && g.fecha) D = g; } catch (e) {}
 
 let VD = null, vdCargando = false;
 function cargarVentasDia(forzar) {
@@ -243,7 +259,7 @@ function pintarCobros() {
 function pintarChips() {
   const set = new Set();
   (D.socios || []).forEach((s) => set.add(s.asesora));
-  ['LAURA', 'MÓNICA', 'DANNA'].forEach((a) => set.add(a));
+  ['LAURA', 'MÓNICA', 'DANNA', 'CIELO'].forEach((a) => set.add(a));
   const lista = ['TODAS', ...[...set].filter((a) => a && a !== 'SIN ASIGNAR').sort()];
   $('#chips').innerHTML = lista.map((a) => `<button class="chip ${a === ase ? 'on' : ''}" data-a="${esc(a)}">${esc(a === 'TODAS' ? 'Todas' : a)}</button>`).join('');
   document.querySelectorAll('.chip').forEach((b) => b.onclick = () => { ase = b.dataset.a; pintar(); });
@@ -257,12 +273,53 @@ function lista(items, fila, vacio, max = 15) {
   return `<div class="list">${primeros}${resto ? `<div id="${id}" style="display:none">${resto}</div><button class="mas" onclick="document.getElementById('${id}').style.display='block';this.remove()">Ver ${items.length - max} más</button>` : ''}</div>`;
 }
 
-const filaSocio = (s) => {
+/* ---------- 🕐 hora habitual de cada socio (minutos desde 00:00) ---------- */
+const TURNOS = [['🌅', 'Mañana 5–9 am', 'de mañana'], ['☀️', 'Mediodía 9–3 pm', 'al mediodía'], ['🌇', 'Tarde 3–6 pm', 'de tarde'], ['🌙', 'Noche 6–10 pm', 'de noche']];
+const turno = (m) => m < 540 ? 0 : m < 900 ? 1 : m < 1080 ? 2 : 3;
+const hm = (m) => { const h = Math.floor(m / 60), mi = m % 60; return `${h % 12 || 12}:${String(mi).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`; };
+const tagHora = (s) => s.hora == null ? '' : `<span class="tag hr">${TURNOS[turno(s.hora)][0]} ${s.horaN >= 3 ? 'suele venir' : 'vino a las'} ${hm(s.hora)}</span>`;
+function repartoTurnos(socios) {
+  const con = socios.filter((s) => s.hora != null), n = [0, 0, 0, 0];
+  con.forEach((s) => n[turno(s.hora)]++);
+  const may = con.length ? n.indexOf(Math.max(...n)) : -1;
+  return { con, n, p: n.map((x) => pct(x, con.length)), may };
+}
+function seccionHoras(socios) {
+  const r = repartoTurnos(socios);
+  if (!r.con.length) return '';
+  const porHora = {};
+  r.con.forEach((s) => { const h = Math.floor(s.hora / 60); porHora[h] = (porHora[h] || 0) + 1; });
+  const pico = Object.keys(porHora).sort((a, b) => porHora[b] - porHora[a])[0];
+  const prom = Math.round(r.con.reduce((t, s) => t + s.hora, 0) / r.con.length);
+  const fiables = r.con.filter((s) => s.horaN >= 3).length;
+  return `<h2>🕐 ¿A qué hora vienen? <small>${r.con.length} socios${ase === 'TODAS' ? '' : ' de ' + esc(ase)}</small></h2><div class="hrs">
+    ${TURNOS.map((t, i) => `<div class="hb"><span>${t[0]} ${t[1]}</span><div class="b"><i style="width:${r.p[i]}%"></i></div><b>${r.p[i]}%</b></div>`).join('')}
+    <div class="sub" style="margin-top:6px">Hora pico: <b style="color:var(--tx)">${hm(pico * 60)}</b> · Promedio: <b style="color:var(--tx)">${hm(prom)}</b></div>
+    ${fiables < r.con.length / 2 ? `<div class="sub">Se va afinando solo: en ~2 semanas cada socio tendrá su hora habitual.</div>` : ''}</div>`;
+}
+let ASE_ABIERTAS = new Set();
+function seccionActivosAsesora(socios) {
+  const grupos = {};
+  socios.forEach((s) => { if (s.asesora && s.asesora !== 'SIN ASIGNAR') (grupos[s.asesora] = grupos[s.asesora] || []).push(s); });
+  const noms = Object.keys(grupos).sort((a, b) => grupos[b].length - grupos[a].length);
+  if (!noms.length) return '';
+  return `<h2>👥 Socios activos por asesora</h2>` + noms.map((a) => {
+    const g = grupos[a].slice().sort((x, y) => (x.sinVenir ?? 9999) - (y.sinVenir ?? 9999));
+    const r = repartoTurnos(g), riesgo = g.filter((s) => s.sinVenir == null || s.sinVenir > 10).length;
+    const may = r.may >= 0 ? ` · ${TURNOS[r.may][0]} la mayoría ${TURNOS[r.may][2]}` : '';
+    return `<details class="desp2" data-ase="${esc(a)}" ${ASE_ABIERTAS.has(a) || ase !== 'TODAS' ? 'open' : ''}><summary><b>${esc(a)}</b>
+      <small>${g.length} activos${may} · ${riesgo} en riesgo</small></summary>
+      ${r.con.length ? `<div class="trn">${TURNOS.map((t, i) => `<span>${t[0]} ${r.p[i]}%</span>`).join('')}</div>` : ''}
+      ${lista(g, (s) => filaSocio(s, true), 'Sin socios.', 10)}</details>`;
+  }).join('');
+}
+
+const filaSocio = (s, sinAse) => {
   const sv = s.sinVenir == null ? 'nunca vino' : s.sinVenir === 0 ? 'vino hoy' : `${s.sinVenir} días sin venir`;
   const cls = s.sinVenir == null || s.sinVenir > 10 ? 'frio' : 'ok';
   const vence = s.diasVence != null && s.diasVence <= 7 ? `<span class="tag urg">vence ${s.diasVence === 0 ? 'hoy' : 'en ' + s.diasVence + 'd'}</span>` : `<span class="tag">vence ${fm(s.vence)}</span>`;
   return `<div class="row"><div class="main"><div class="t">${esc(s.nombre)}</div>
-    <div class="d"><span class="tag ${cls}">${sv}</span>${vence}${ase === 'TODAS' ? ' · ' + esc(s.asesora) : ''}</div></div>${wa(s.tel)}</div>`;
+    <div class="d"><span class="tag ${cls}">${sv}</span>${tagHora(s)}${vence}${ase === 'TODAS' && sinAse !== true ? ' · ' + esc(s.asesora) : ''}</div></div>${wa(s.tel)}</div>`;
 };
 const filaFP = (a) => `<div class="row"><div class="hora">${esc(a.hora || '—')}</div><div class="main">
   <div class="t">${esc(a.persona)}${a.hecha ? '<span class="tag ok">asistió</span>' : ''}</div>
@@ -334,10 +391,85 @@ function seccionReferidos() {
   return h + '</details>';
 }
 
+/* ---------- 📞 Llamadas (📊 Dashboard de llamadas del Sheet de leads) ---------- */
+let LL = (() => { try { return JSON.parse(localStorage.getItem('rr_lldash') || 'null'); } catch (e) { return null; } })();
+let llCargando = false, llFresco = false, LL_MES = null, LL_DIA = '', LL_ABIERTO = false;
+const LL_NO = ['NO CONTESTO', 'APAGADO'], LL_DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+function cargarLlamadas() {
+  if (llCargando) return; llCargando = true;
+  google.script.run
+    .withSuccessHandler((r) => { LL = r; llCargando = false; llFresco = true; try { localStorage.setItem('rr_lldash', JSON.stringify(r)); } catch (e) {} if (tab === 'hoy') pintar(); })
+    .withFailureHandler((e) => { llCargando = false; llFresco = true; if (!LL) LL = { error: e.message || String(e) }; if (tab === 'hoy') pintar(); })
+    .getLlamadasDash(false);
+}
+function seccionLlamadas() {
+  if (!llFresco && !llCargando) setTimeout(cargarLlamadas, 0);
+  if (!LL) return `<h2>📞 Llamadas</h2><div class="list"><div class="vacio">Cargando…</div></div>`;
+  if (LL.error) return `<h2>📞 Llamadas</h2><div class="err">⚠️ ${esc(LL.error)}</div>`;
+  const meses = [...new Set(LL.filas.map((f) => f[0]))].sort().reverse();
+  if (LL_MES == null) LL_MES = meses.includes(D.fecha.slice(0, 7)) ? D.fecha.slice(0, 7) : (meses[0] || '');
+  // un día elegido manda sobre el mes
+  const delMes = LL.filas.filter((f) => LL_DIA ? f[11] === LL_DIA : (LL_MES === '' || f[0] === LL_MES));
+  const filas = delMes.filter((f) => ase === 'TODAS' || norm(f[1]) === norm(ase));
+  const sum = (arr) => { const t = { n: 0, c: 0, ag: 0, cl: 0, ds: 0, dn: 0 };
+    arr.forEach((f) => { t.n += f[6]; if (!LL_NO.includes(f[5])) t.c += f[6]; if (f[5] === 'AGENDADO') t.ag += f[6]; if (f[5] === 'CLIENTE') t.cl += f[6]; t.ds += f[7]; t.dn += f[8]; });
+    return t; };
+  const p = (a, b) => (b ? Math.round(a * 100 / b) : 0);
+  const T = sum(filas);
+  const barra = (label, t, max, extra) => `<div class="row"><div class="main"><div class="t">${label} <small style="color:var(--mut)">${t.n} llamadas · ${t.ag} agend.${extra || ''}</small></div>
+    <div class="bar"><i style="width:${max ? Math.round(p(t.c, t.n) * 100 / max) : 0}%"></i></div></div><div class="t">${p(t.c, t.n)}%</div></div>`;
+  let h = `<details id="llBox" class="desp" ${LL_ABIERTO ? 'open' : ''}><summary>📞 Llamadas <small>${T.n} · ${p(T.c, T.n)}% contestan${llCargando ? ' · actualizando…' : ''}</small></summary>
+    <select class="sel" id="llMes"><option value="">📅 Todos los meses</option>${meses.map((m) => `<option value="${m}" ${m === LL_MES ? 'selected' : ''}>📅 ${nomMes(m)}</option>`).join('')}</select>
+    <div style="display:flex;gap:8px;margin-top:8px"><input type="date" class="sel" id="llDia" value="${LL_DIA}" max="${D.fecha}">
+    ${LL_DIA ? '<button class="sel" id="llDiaX" style="width:auto">✕ Mes</button>' : ''}</div>
+    ${LL_DIA ? `<div class="sub">${LL.filas.some((f) => f[11]) ? `Viendo solo el ${fm(LL_DIA)}${LL_DIA === D.fecha ? ' (hoy: se actualiza cada hora)' : ''}` : '⏳ El filtro por día se activa en la próxima actualización del Sheet (máx. 1 hora).'}</div>` : ''}
+    <div class="grid">
+    <div class="kpi"><div class="n">${T.n}</div><div class="l">llamadas</div></div>
+    <div class="kpi"><div class="n">${p(T.c, T.n)}%</div><div class="l">contestan (${T.c})</div></div>
+    <div class="kpi"><div class="n">${T.ag}</div><div class="l">agendados · ${p(T.ag, T.c)}% de los que contestan</div></div>
+    <div class="kpi"><div class="n">${T.dn ? Math.round(T.ds / T.dn) : 0}</div><div class="l">seg por llamada · ${T.cl} clientes</div></div></div>`;
+  // por asesora (siempre todas, del mes elegido)
+  const porA = {}; delMes.forEach((f) => { (porA[f[1]] = porA[f[1]] || []).push(f); });
+  const as = Object.entries(porA).map(([n, arr]) => [n, sum(arr)]).sort((a, b) => b[1].n - a[1].n);
+  h += `<h2>👩 Por asesora <small>% que contesta</small></h2>` + lista(as, ([n, t]) => barra(esc(n), t, 100, ` · ${p(t.ag, t.c)}% agenda`), 'Sin llamadas en este mes.');
+  // por hora
+  const hs = []; for (let hr = 6; hr <= 22; hr++) { const t = sum(filas.filter((f) => f[4] === hr)); if (t.n) hs.push([hr, t]); }
+  const mejor = hs.filter(([, t]) => t.n >= 5).sort((a, b) => p(b[1].c, b[1].n) - p(a[1].c, a[1].n))[0];
+  const hl = (hr) => ((hr + 11) % 12 + 1) + (hr < 12 ? ' am' : ' pm');
+  h += `<h2>🕐 Por hora <small>${mejor ? 'mejor: ' + hl(mejor[0]) : ''}</small></h2>` + lista(hs, ([hr, t]) => barra(hl(hr), t, 100), 'Sin llamadas con hora.', 20);
+  // por día
+  const ds = [1, 2, 3, 4, 5, 6, 0].map((d) => [d, sum(filas.filter((f) => f[3] === d))]).filter(([, t]) => t.n);
+  h += `<h2>📅 Por día</h2>` + lista(ds, ([d, t]) => barra(LL_DIAS[d], t, 100), 'Sin datos.');
+  // por base
+  const porB = {}; filas.forEach((f) => { (porB[f[2]] = porB[f[2]] || []).push(f); });
+  const bs = Object.entries(porB).map(([n, arr]) => [n, sum(arr)]).sort((a, b) => b[1].n - a[1].n);
+  h += `<h2>📂 Por base</h2>` + lista(bs, ([n, t]) => barra(esc(n), t, 100), 'Sin datos.');
+  return h + '<div class="sub">Se actualiza cada hora desde el Sheet de leads.</div></details>';
+}
+
+/* ---------- 📣 Meta Ads por rango (Desde / Hasta) ---------- */
+let ADR = { desde: '', hasta: '', html: '', cargando: false, abierto: false };
+function cargarAdsRango() {
+  if (!ADR.desde || !ADR.hasta) return;
+  ADR.cargando = true; ADR.html = ''; ADR.abierto = true; pintar();
+  google.script.run
+    .withSuccessHandler((html) => { ADR.html = html; ADR.cargando = false; if (tab === 'sm') pintar(); })
+    .withFailureHandler((e) => { ADR.html = `<div class="err">⚠️ ${esc(e.message || e)}</div>`; ADR.cargando = false; if (tab === 'sm') pintar(); })
+    .getAdsRango(ADR.desde, ADR.hasta, false);
+}
+function seccionAdsRango() {
+  if (!ADR.desde) { ADR.desde = D.fecha.slice(0, 8) + '01'; ADR.hasta = D.fecha; }
+  return `<details id="adrBox" class="desp" ${ADR.abierto ? 'open' : ''}><summary>📣 Meta Ads por fechas <small>${fm(ADR.desde)} – ${fm(ADR.hasta)}</small></summary>
+    <div style="display:flex;gap:8px;align-items:center"><input type="date" class="sel" id="adrD" value="${ADR.desde}" max="${D.fecha}">
+    <input type="date" class="sel" id="adrH" value="${ADR.hasta}" max="${D.fecha}"></div>
+    <button class="sel" id="adrVer" style="margin-top:8px;font-weight:700">${ADR.cargando ? '⏳ Trayendo de Meta y Pipedrive… (~1 min)' : '🔎 Ver Meta Ads de este rango'}</button>
+    ${ADR.html || ''}</details>`;
+}
+
 function pintar() {
   if (!D) return;
   pintarChips();
-  $('#sub').textContent = `${D.fecha.split('-').reverse().join('/')} · actualizado ${D.generado}`;
+  $('#sub').textContent = `${D.fecha.split('-').reverse().join('/')} · actualizado ${D.generado}${ESTADO_D}`;
   const socios = (D.socios || []).filter(deAse);
   let h = (D.errores || []).map((e) => `<div class="err">⚠️ ${esc(e)}</div>`).join('');
 
@@ -360,7 +492,8 @@ function pintar() {
       <div class="kpi"><div class="n">${soles(D.ingresosHoy ? Object.keys(D.ingresosHoy).filter((n) => ase === 'TODAS' || n === norm(ase)).reduce((t, n) => t + D.ingresosHoy[n].t, 0) : ins.reduce((t, x) => t + x.pago, 0))}</div><div class="l">venta de hoy</div></div>
     </div>`;
     if (nunca) h += `<div class="sub" style="margin-bottom:10px">${nunca} socios activos nunca registraron asistencia.</div>`;
-    h += seccionIngresos() + seccionReferidos();
+    h += seccionHoras(socios) + seccionActivosAsesora(socios);
+    h += seccionIngresos() + seccionReferidos() + seccionLlamadas();
     h += `<h2>Inscritos hoy <small>${ins.length}</small></h2>` + lista(ins, (x) =>
       `<div class="row"><div class="main"><div class="t">${esc(x.nombre)}</div><div class="d">${esc(x.plan)} · ${soles(x.pago)} · ${esc(x.asesora)}</div></div>${wa(x.tel)}</div>`, 'Todavía nadie hoy.');
   }
@@ -387,6 +520,7 @@ function pintar() {
   if (tab === 'sm') {
     if (SM == null) { if (!smCargando) cargarSemanal(false); h = '<div class="cargando">Cargando informe semanal… (si es la primera vez tarda ~1 min)</div>'; }
     else h = SM;
+    h = seccionAdsRango() + h;
   }
 
   if (tab === 'ret') {
@@ -412,6 +546,13 @@ function pintar() {
   if (iF) { iF.onchange = cambioIng; iM.onchange = cambioIng; }
   const rm = $('#refMes'); if (rm) rm.onchange = () => { RF_MES = rm.value; pintar(); };
   const rb = $('#refBox'); if (rb) rb.ontoggle = () => { RF_ABIERTO = rb.open; };
+  const adD = $('#adrD'), adH = $('#adrH'), adV = $('#adrVer'), adB = $('#adrBox');
+  if (adD) { adD.onchange = () => { ADR.desde = adD.value; }; adH.onchange = () => { ADR.hasta = adH.value; }; adV.onclick = () => { if (!ADR.cargando) cargarAdsRango(); }; adB.ontoggle = () => { ADR.abierto = adB.open; }; }
+  const lm = $('#llMes'); if (lm) lm.onchange = () => { LL_MES = lm.value; LL_DIA = ''; pintar(); };
+  const ld = $('#llDia'); if (ld) ld.onchange = () => { LL_DIA = ld.value; if (LL_DIA) LL_MES = LL_DIA.slice(0, 7); pintar(); };
+  const lx = $('#llDiaX'); if (lx) lx.onclick = () => { LL_DIA = ''; pintar(); };
+  const lb = $('#llBox'); if (lb) lb.ontoggle = () => { LL_ABIERTO = lb.open; };
+  document.querySelectorAll('.desp2[data-ase]').forEach((d) => d.ontoggle = () => { if (ase !== 'TODAS') return; d.open ? ASE_ABIERTAS.add(d.dataset.ase) : ASE_ABIERTAS.delete(d.dataset.ase); });
 }
 
 document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
@@ -419,7 +560,7 @@ document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
   document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('on', x === b));
   pintar(); window.scrollTo(0, 0);
 });
-$('#refresh').onclick = () => { if (tab === 'cb') { CB = null; cargarCobros(); pintar(); return; } if (tab === 'sm') { SM = null; cargarSemanal(true); pintar(); return; } if (VD != null || tab === 'vd') { VD = null; cargarVentasDia(true); } cargar(true); if (tab === 'hoy') { cargarReferidos(true); if (ING.mes || (ING.fecha && ING.fecha !== D.fecha)) cargarIngresos(); } if (E || tab === 'eq') { E = null; cargarEquipo(false); } };
+$('#refresh').onclick = () => { if (tab === 'cb') { CB = null; cargarCobros(); pintar(); return; } if (tab === 'sm') { SM = null; cargarSemanal(true); pintar(); return; } if (VD != null || tab === 'vd') { VD = null; cargarVentasDia(true); } cargar(true); if (tab === 'hoy') { cargarReferidos(true); cargarLlamadas(); if (ING.mes || (ING.fecha && ING.fecha !== D.fecha)) cargarIngresos(); } if (E || tab === 'eq') { E = null; cargarEquipo(false); } };
 cargar(false);
 </script>
 </body>

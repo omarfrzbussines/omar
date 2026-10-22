@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Arial, sans-serif; background: #111; color: #fff; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: #c00000; }
+  header h1 { margin: 0; font-size: 18px; text-transform: capitalize; }
+  header button { background: #111; color: #fff; border: 0; border-radius: 4px; padding: 6px 12px; font-size: 14px; cursor: pointer; }
+  header button:disabled { opacity: .4; cursor: default; }
+  #resumen { font-size: 13px; }
+  .semana, .cab { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 0 8px; }
+  .cab div { text-align: center; font-weight: bold; font-size: 12px; padding: 6px 0; color: #ff6666; }
+  .dia { background: #1d1d1d; border-radius: 4px; min-height: 120px; padding: 4px; margin-bottom: 4px; }
+  .dia.fuera { background: #151515; color: #555; }
+  .dia.hoy { outline: 2px solid #c00000; }
+  .num { font-size: 12px; font-weight: bold; margin-bottom: 3px; }
+  .hs { display: flex; gap: 4px; flex-wrap: wrap; }
+  .h { width: 74px; cursor: pointer; text-decoration: none; color: #fff; }
+  .h img { width: 100%; aspect-ratio: 9/16; object-fit: cover; border-radius: 3px; display: block; background: #333; }
+  .h .sin { width: 100%; aspect-ratio: 9/16; border-radius: 3px; background: #333; font-size: 9px; padding: 3px; overflow: hidden; word-break: break-all; }
+  .h .pie { font-size: 10px; text-align: center; margin-top: 2px; white-space: nowrap; }
+  .ok img { opacity: .55; }
+  .err img, .venc img { outline: 2px solid #ff3333; }
+  #cargando { padding: 40px; text-align: center; color: #aaa; }
+  #grande { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; align-items: center; justify-content: center; flex-direction: column; }
+  #grande img { max-height: 88vh; border-radius: 6px; }
+  #grande p { margin: 6px 0 0; font-size: 13px; }
+  #grande a { color: #ff6666; }
+</style>
+</head>
+<body>
+<header>
+  <button id="ant" onclick="mover(-1)">◀</button>
+  <div style="text-align:center"><h1 id="titulo">…</h1><div id="resumen"></div></div>
+  <button id="sig" onclick="mover(1)">▶</button>
+</header>
+<div class="cab"><div>LUN</div><div>MAR</div><div>MIÉ</div><div>JUE</div><div>VIE</div><div>SÁB</div><div>DOM</div></div>
+<div id="cal"><div id="cargando">Cargando miniaturas…</div></div>
+<div id="grande" onclick="this.style.display='none'"><img id="gImg"><p id="gTxt"></p></div>
+
+<script>
+  var MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  window._gen = 0;
+  var hoy = new Date(); var anio = hoy.getFullYear(); var mes = hoy.getMonth() + 1;
+
+  function mover(d) { mes += d; if (mes < 1) { mes = 12; anio--; } if (mes > 12) { mes = 1; anio++; } cargar(); }
+
+  function cargar() {
+    document.getElementById('titulo').textContent = MESES[mes - 1] + ' ' + anio;
+    document.getElementById('resumen').textContent = '';
+    document.getElementById('cal').innerHTML = '<div id="cargando">Cargando miniaturas…</div>';
+    document.getElementById('ant').disabled = document.getElementById('sig').disabled = true;
+    google.script.run.withSuccessHandler(pintar).withFailureHandler(function (e) {
+      document.getElementById('cal').innerHTML = '<div id="cargando">No se pudo cargar: ' + esc(e.message) + '</div>';
+      document.getElementById('ant').disabled = document.getElementById('sig').disabled = false;
+    }).vistaDatos(anio, mes);
+  }
+
+  function esc(s) { return String(s || '').replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
+
+  function icono(estado) {
+    if (estado.indexOf('PUBLICADA') === 0) return ['✅', 'ok'];
+    if (estado.indexOf('ERROR') === 0) return ['❌', 'err'];
+    if (estado.indexOf('VENCIDA') === 0) return ['⚠️', 'venc'];
+    if (estado.indexOf('PROCESANDO') === 0) return ['⏳', ''];
+    return ['🕒', ''];
+  }
+
+  function pintar(d) {
+    document.getElementById('ant').disabled = document.getElementById('sig').disabled = false;
+    var porDia = {}, pub = 0;
+    d.historias.forEach(function (h) { (porDia[h.fecha] = porDia[h.fecha] || []).push(h); if (h.estado.indexOf('PUBLICADA') === 0) pub++; });
+    document.getElementById('resumen').textContent = d.historias.length + ' historias · ✅ ' + pub + ' publicadas · 🕒 ' + (d.historias.length - pub) + ' por salir';
+    var primero = new Date(d.anio, d.mes - 1, 1);
+    var inicio = new Date(primero); inicio.setDate(1 - ((primero.getDay() + 6) % 7));   // lunes de la 1ra semana
+    var diasMes = new Date(d.anio, d.mes, 0).getDate();
+    var semanas = Math.ceil(((primero.getDay() + 6) % 7 + diasMes) / 7);
+    var html = '';
+    for (var s = 0; s < semanas; s++) {
+      html += '<div class="semana">';
+      for (var i = 0; i < 7; i++) {
+        var f = new Date(inicio); f.setDate(inicio.getDate() + s * 7 + i);
+        var clave = f.getFullYear() + '-' + ('0' + (f.getMonth() + 1)).slice(-2) + '-' + ('0' + f.getDate()).slice(-2);
+        var fuera = f.getMonth() !== d.mes - 1;
+        html += '<div class="dia' + (fuera ? ' fuera' : '') + (clave === d.hoy ? ' hoy' : '') + '"><div class="num">' + f.getDate() + '</div><div class="hs">';
+        (fuera ? [] : (porDia[clave] || [])).forEach(function (h) {
+          var ic = icono(h.estado);
+          var cuerpo = '<img id="m_' + h.fila + '" alt="">';
+          html += '<a class="h ' + ic[1] + '" title="' + esc(h.archivo) + '" onclick="ver(' + "'" + h.id + "'" + ')" data-id="' + h.id + '">' + cuerpo +
+                  '<div class="pie">' + esc(h.hora || '--:--') + ' ' + ic[0] + '</div></a>';
+        });
+        html += '</div></div>';
+      }
+      html += '</div>';
+    }
+    document.getElementById('cal').innerHTML = html;
+    window._hist = d.historias;
+    var gen = ++window._gen;
+    d.historias.forEach(function (h) {   // cada miniatura llega por su cuenta, en paralelo
+      google.script.run.withSuccessHandler(function (url) {
+        if (gen !== window._gen) return;
+        h.img = url;
+        var el = document.getElementById('m_' + h.fila);
+        if (!el) return;
+        if (url) el.src = url; else el.outerHTML = '<div class="sin">' + esc(h.archivo) + '</div>';
+      }).vistaMini(h.id);
+    });
+  }
+
+  function ver(id) {
+    var h = (window._hist || []).filter(function (x) { return x.id === id; })[0];
+    if (!h) return;
+    var g = document.getElementById('gImg');
+    g.src = h.img || '';
+    google.script.run.withSuccessHandler(function (url) { if (url) g.src = url; }).vistaGrande(h.id);
+    document.getElementById('gTxt').innerHTML = esc(h.fecha + ' ' + h.hora + ' · ' + h.archivo + ' · ' + (h.estado || 'por salir')) +
+      ' · <a href="https://drive.google.com/file/d/' + h.id + '/view" target="_blank" onclick="event.stopPropagation()">abrir original</a>';
+    document.getElementById('grande').style.display = 'flex';
+  }
+
+  cargar();
+</script>
+</body>
+</html>

@@ -9,7 +9,7 @@
  * (doGet de LlamadasAPI la redirige aquí). Los links salen de app_crearLlaves().
  */
 
-const APP_ASESORAS = ["MONICA", "DANNA", "LAURA"];
+const APP_ASESORAS = ["MONICA", "DANNA", "LAURA", "CIELO"];
 // Link de prueba de Omar: ve una cola real pero NO guarda nada ni reserva personas a las asesoras.
 const APP_PRUEBA = "OMAR";
 // Bases que se pueden llamar desde el celular (en este orden aparecen en el selector).
@@ -102,6 +102,22 @@ function app_verLinks() {
   });
   app_props().setProperty("APP_LLAVES", JSON.stringify(llaves));
 }
+/** Desde el celular de Omar (botón 🔗 Links): el link de cada asesora (crea el que falte) y si ya activó su celular. */
+function app_links(llave) {
+  if (app_asesora(llave) !== APP_PRUEBA) throw new Error("Solo para Omar.");
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const llaves = JSON.parse(app_props().getProperty("APP_LLAVES") || "{}"), cel = app_celulares();
+    const out = APP_ASESORAS.map(function (a) {
+      let k = Object.keys(llaves).filter(function (x) { return llaves[x] === a; })[0];
+      if (!k) { k = Utilities.getUuid().replace(/-/g, "").slice(0, 20); llaves[k] = a; }
+      return { asesora: a, link: "https://omarfrzbussines.github.io/omar/rurush-llamadas/?k=" + k, celular: cel[a] ? cel[a].desde + " · " + cel[a].modelo : "" };
+    });
+    app_props().setProperty("APP_LLAVES", JSON.stringify(llaves));
+    return out;
+  } finally { lock.releaseLock(); }
+}
 /** Ejecutar desde el editor para ver qué celular tiene cada asesora. */
 function app_verCelulares() {
   const c = app_celulares();
@@ -178,6 +194,10 @@ function app_getCola(llave, base, excluir, sinApi, como) {
 function app_getCola_(llave, base, excluir, api, como) {
   const t0 = Date.now();
   const quien = app_asesora(llave);
+  try { dash_instalarSiFalta(); } catch (e) { console.error("dashboard: " + e); }   // 📊 una sola vez
+  try { desc_instalarSiFalta(); } catch (e) { console.error("descartados: " + e); }
+  let desc = {};
+  try { desc = desc_mapa(); } catch (e) { console.error("descartados: " + e); }
   // El link de prueba puede ver la cola de una asesora ("ver como"), sin reservarle a nadie.
   const asesora = quien === APP_PRUEBA && APP_ASESORAS.indexOf(como) >= 0 ? como : quien;
   if (APP_BASES.indexOf(base) < 0) throw new Error("Base no habilitada: " + base);
@@ -200,7 +220,7 @@ function app_getCola_(llave, base, excluir, api, como) {
     for (let i = datos.length - 1; i >= 0; i--) {
       const fila = datos[i], nFila = ini + i;
       const tel = ll_limpiarTel(fila[est.numero]);
-      if (!tel || yaTengo[nFila]) continue;
+      if (!tel || yaTengo[nFila] || tel in desc) continue;   // 🚫 descartado en cualquier base (Descartados.gs)
       const libre = ll_rondaLibre(est, fila);
       if (libre < 0) continue;
       // filtro barato con la última llamada hecha, antes de armar el historial
@@ -243,7 +263,7 @@ function app_getCola_(llave, base, excluir, api, como) {
   const programada = {};
   luego.todas.forEach(function (p) { programada[p.base + ":" + p.fila] = true; });
   const primero = [];
-  luego.ahora.forEach(function (p) { try { const x = app_luegoItem_(p, api); if (x) primero.push(x); } catch (e) { console.error("luego item: " + e); } });
+  luego.ahora.forEach(function (p) { try { const x = app_luegoItem_(p, api); if (x && !(ll_limpiarTel(x.numero) in desc)) primero.push(x); } catch (e) { console.error("luego item: " + e); } });
   const cola = primero.concat(nuevos.concat(seguimiento).filter(function (x) { return !programada[base + ":" + x.fila]; })).slice(0, APP_TAM_COLA);
   // ¿ya es socio? (BASE DE SOCIOS). Si falla, la cola sale igual, sin el aviso.
   let socios = {};
@@ -256,7 +276,8 @@ function app_getCola_(llave, base, excluir, api, como) {
   return {
     asesora: asesora, cola: cola, hoy: app_contadorHoy(asesora), estados: APP_ESTADOS.concat([APP_LUEGO]), horas: LL_HORAS,
     programadas: luego.despues,
-    pendientes: null, leidas: leidas, ms: Date.now() - t0, api: api
+    pendientes: null, leidas: leidas, ms: Date.now() - t0, api: api,
+    descartados: quien === APP_PRUEBA ? Object.keys(desc).length : null
   };
 }
 

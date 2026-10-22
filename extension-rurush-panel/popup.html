@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>RURUSH — Hoy</title>
+<style>
+:root{--rojo:#C00000;--rojo-osc:#8B0000;--luz:#FF3333;--negro:#1A0606;--linea:rgba(255,255,255,.12)}
+*{box-sizing:border-box;margin:0}
+body{width:380px;max-height:580px;overflow-y:auto;background:var(--negro);color:#fff;
+     font-family:Montserrat,"Segoe UI",system-ui,sans-serif;font-size:13px}
+header{display:flex;align-items:center;gap:10px;padding:14px;
+       background:linear-gradient(135deg,var(--rojo),var(--rojo-osc))}
+header img{width:28px;height:28px}
+header b{font-weight:900;letter-spacing:.1em;font-size:13px}
+header small{margin-left:auto;opacity:.8;font-size:11px}
+main{padding:14px}
+h4{font-size:10px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;
+   color:var(--luz);margin:0 0 8px}
+.destacado{background:linear-gradient(135deg,rgba(192,0,0,.22),rgba(255,255,255,.04));
+  border:1px solid rgba(255,51,51,.35);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+.destacado .dn{font-size:34px;font-weight:900;line-height:1}
+.destacado .dn span{font-size:18px;opacity:.5;font-weight:700}
+.destacado .dl{font-size:11.5px;color:rgba(255,255,255,.8);margin-top:2px}
+.destacado .dl b{color:var(--luz)}
+.destacado .dsub{font-size:10.5px;color:rgba(255,255,255,.5);margin-top:7px}
+.barra{height:7px;background:rgba(0,0,0,.45);border-radius:99px;overflow:hidden;margin-top:9px}
+.barra i{display:block;height:100%;background:linear-gradient(90deg,var(--rojo),var(--luz))}
+.kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:16px}
+.kpi{background:rgba(255,255,255,.06);border:1px solid var(--linea);border-left:3px solid var(--rojo);
+     border-radius:10px;padding:10px 12px}
+.kpi .n{font-size:24px;font-weight:900;line-height:1.1}
+.kpi .l{font-size:10px;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:.08em;margin-top:2px}
+.sec{margin-bottom:16px}
+.item{display:flex;gap:8px;padding:7px 10px;background:rgba(255,255,255,.05);
+      border-radius:8px;margin-bottom:4px;align-items:center}
+.item .h{font-weight:900;color:var(--luz);min-width:44px;font-size:12px}
+.item .p{flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .e{font-size:14px}
+.vacio{font-size:11px;color:rgba(255,255,255,.45);padding:6px 0}
+.err{font-size:11px;color:#ff6b6b;line-height:1.5;margin-bottom:8px}
+.filtro{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.filtro label{font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;
+  color:rgba(255,255,255,.5)}
+.filtro select{flex:1;background:rgba(255,255,255,.08);border:1px solid var(--linea);color:#fff;
+  border-radius:8px;padding:7px 9px;font-family:inherit;font-size:12px;font-weight:700}
+/* Sin esto la lista sale blanca sobre blanco: el sistema dibuja el desplegable y
+   las opciones heredan el texto blanco del select pero no su fondo. */
+.filtro select option{background:var(--negro);color:#fff}
+.filtro select option:checked{background:var(--rojo);color:#fff}
+.item .wa{background:rgba(255,255,255,.1);border:0;color:#fff;border-radius:6px;padding:4px 7px;
+  font-size:11px;cursor:pointer;font-family:inherit;line-height:1.2}
+.item .wa:hover{background:#25D366;color:#06281a}
+.nota{font-size:10px;color:rgba(255,255,255,.4);margin:-10px 0 12px}
+.vta{background:rgba(255,255,255,.05);border-radius:8px;padding:8px 10px;margin-bottom:5px}
+.vta-top{display:flex;align-items:baseline;gap:8px}
+.vta-top b{font-size:12.5px;font-weight:900;flex:1}
+.vta-top .pc{font-size:13px;font-weight:900;color:var(--luz)}
+.vta-sub{font-size:11px;color:rgba(255,255,255,.6);margin-top:1px}
+.vta-sub b{color:#fff;font-weight:700}
+.vta .barra{height:5px;margin-top:6px}
+.vta .alerta{color:#ffb020;cursor:help}
+footer{padding:0 14px 14px;display:flex;gap:6px}
+button{flex:1;background:rgba(255,255,255,.1);border:0;color:#fff;border-radius:8px;
+       padding:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit}
+button:hover{background:var(--rojo)}
+</style>
+</head>
+<body>
+<header>
+  <img src="icons/logo-blanco.png" alt="">
+  <b>RURUSH</b>
+  <small id="fecha"></small>
+</header>
+<main>
+  <div class="filtro">
+    <label for="ase">Asesora</label>
+    <select id="ase"><option value="">Todas</option></select>
+  </div>
+  <div id="app"><p class="vacio">Cargando datos del día…</p></div>
+</main>
+<footer>
+  <button id="refrescar">🔄 Refrescar</button>
+  <button id="opciones">⚙️ Opciones</button>
+</footer>
+<script src="popup.js"></script>
+</body>
+</html>

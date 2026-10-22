@@ -177,5 +177,9 @@ if (Test-Path $extF) {
 $ext = @(); if ($antes -ne $despues) { $ext = git diff --name-only $antes $despues | Where-Object { $_ -like "extension-*" } | ForEach-Object { $_.Split("/")[0] } | Sort-Object -Unique }
 Linea "`n🧩 Extensiones de Chrome:" Cyan
 if ($ext.Count) { $ext | ForEach-Object { Linea "   🔄 «$_» cambió: se recarga sola en unos minutos (o toca ⟳ en chrome://extensions)" Yellow } } else { Linea "   Ninguna cambió." }
+# 📲 El cuadro de ventas ahora lo manda la extensión Rurush Difusiones: se quitan las tareas viejas de la PC
+foreach ($t in @("RURUSH Cuadro manana", "RURUSH Cuadro noche")) {
+  if (Get-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue) { Unregister-ScheduledTask -TaskName $t -Confirm:$false; Linea "   🗑️ Tarea $t quitada (ahora lo envía la extensión)" DarkGray }
+}
 Linea "`nListo." Cyan
 if ($Auto) { Stop-Transcript | Out-Null }

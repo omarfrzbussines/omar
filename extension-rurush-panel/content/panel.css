@@ -1,0 +1,183 @@
+/* RURUSH — panel operativo. Paleta oficial: #C00000 / #8B0000 / #1A0606 */
+#rurush-panel, #rurush-tab {
+  --rr-rojo: #C00000;
+  --rr-rojo-osc: #8B0000;
+  --rr-rojo-luz: #FF3333;
+  --rr-negro: #1A0606;
+  --rr-linea: rgba(255,255,255,.12);
+  font-family: Montserrat, "Segoe UI", system-ui, sans-serif;
+  box-sizing: border-box;
+}
+#rurush-panel *, #rurush-tab * { box-sizing: border-box; }
+
+#rurush-tab {
+  position: fixed; top: 96px; right: 0; z-index: 2147483000;
+  background: var(--rr-rojo); color: #fff; border: 0;
+  padding: 12px 8px; border-radius: 8px 0 0 8px; cursor: pointer;
+  font-weight: 900; font-size: 12px; letter-spacing: .12em;
+  writing-mode: vertical-rl; box-shadow: -2px 0 14px rgba(192,0,0,.45);
+}
+#rurush-tab:hover { background: var(--rr-rojo-luz); }
+
+#rurush-panel {
+  position: fixed; top: 0; right: 0; height: 100vh; width: 360px; z-index: 2147483001;
+  background: var(--rr-negro); color: #fff; display: flex; flex-direction: column;
+  box-shadow: -8px 0 32px rgba(0,0,0,.6); transform: translateX(100%);
+  transition: transform .22s ease; font-size: 13px;
+}
+#rurush-panel.abierto { transform: translateX(0); }
+
+.rr-head {
+  display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+  background: linear-gradient(135deg, var(--rr-rojo) 0%, var(--rr-rojo-osc) 100%);
+}
+.rr-head img { width: 26px; height: 26px; }
+.rr-head b { font-weight: 900; letter-spacing: .1em; font-size: 13px; }
+.rr-head button { margin-left: auto; background: none; border: 0; color: #fff; font-size: 20px; cursor: pointer; line-height: 1; }
+
+.rr-body { flex: 1; overflow-y: auto; padding: 4px 14px 24px; }
+.rr-body::-webkit-scrollbar { width: 8px; }
+.rr-body::-webkit-scrollbar-thumb { background: var(--rr-rojo-osc); border-radius: 4px; }
+
+.rr-sec { margin-bottom: 16px; }
+.rr-sec > h4 {
+  margin: 0 0 8px; font-size: 10px; font-weight: 900; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--rr-rojo-luz);
+}
+.rr-card { background: rgba(255,255,255,.06); border: 1px solid var(--rr-linea); border-radius: 10px; padding: 10px 12px; }
+.rr-card.socio { border-left: 3px solid #29d366; }
+.rr-card.lead  { border-left: 3px solid var(--rr-rojo-luz); }
+.rr-card.alerta{ border-left: 3px solid #ffb020; }
+
+.rr-fila { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; }
+.rr-fila span:first-child { color: rgba(255,255,255,.55); font-size: 11px; }
+.rr-fila span:last-child { font-weight: 600; text-align: right; }
+.rr-nombre { font-weight: 900; font-size: 15px; margin-bottom: 6px; }
+
+.rr-input, .rr-select {
+  width: 100%; background: rgba(0,0,0,.35); border: 1px solid var(--rr-linea);
+  color: #fff; border-radius: 8px; padding: 7px 9px; font-size: 12px; font-family: inherit;
+}
+.rr-input:focus, .rr-select:focus { outline: none; border-color: var(--rr-rojo-luz); }
+
+/* La lista desplegable la dibuja el sistema, no la pagina: hereda el texto blanco
+   del <select> pero la pinta sobre fondo blanco, y las opciones quedan invisibles
+   salvo la resaltada. Hay que darle color propio a cada <option>. */
+.rr-select option, .rr-input option { background: var(--rr-negro); color: #fff; }
+.rr-select option:checked { background: var(--rr-rojo); color: #fff; }
+.rr-campos { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px; }
+.rr-campos label { font-size: 10px; color: rgba(255,255,255,.5); display: block; margin-bottom: 2px; }
+
+.rr-btn {
+  background: var(--rr-rojo); color: #fff; border: 0; border-radius: 8px;
+  padding: 8px 10px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit;
+}
+.rr-btn:hover { background: var(--rr-rojo-luz); }
+.rr-btn.sec { background: rgba(255,255,255,.1); }
+.rr-btn.sec:hover { background: rgba(255,255,255,.2); }
+.rr-btn:disabled { opacity: .45; cursor: not-allowed; }
+.rr-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.rr-tpl { border: 1px solid var(--rr-linea); border-radius: 10px; margin-bottom: 6px; overflow: hidden; }
+.rr-tpl > summary {
+  padding: 8px 10px; cursor: pointer; font-weight: 700; font-size: 12px;
+  list-style: none; display: flex; align-items: center; gap: 6px;
+}
+.rr-tpl > summary::-webkit-details-marker { display: none; }
+.rr-tpl > summary:hover { background: rgba(255,255,255,.05); }
+.rr-tpl .pill {
+  margin-left: auto; font-size: 9px; font-weight: 900; letter-spacing: .08em;
+  background: var(--rr-rojo-osc); padding: 2px 6px; border-radius: 99px; text-transform: uppercase;
+}
+.rr-tpl-body { padding: 0 10px 10px; }
+.rr-tpl-nota { font-size: 10px; color: #ffb020; margin: 0 0 6px; line-height: 1.4; }
+.rr-preview {
+  background: rgba(0,0,0,.4); border-radius: 8px; padding: 8px; font-size: 11.5px;
+  white-space: pre-wrap; line-height: 1.45; margin-bottom: 8px; max-height: 190px; overflow-y: auto;
+}
+
+.rr-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.rr-chip {
+  background: rgba(255,255,255,.08); border: 1px solid var(--rr-linea); color: #fff;
+  border-radius: 99px; padding: 5px 10px; font-size: 11px; cursor: pointer; font-family: inherit;
+}
+.rr-chip:hover { background: var(--rr-rojo); border-color: var(--rr-rojo); }
+.rr-chip.ok { background: #1d7a3f; border-color: #1d7a3f; }
+
+.rr-aviso { font-size: 11px; color: rgba(255,255,255,.55); line-height: 1.5; }
+.rr-error { color: #ff6b6b; font-size: 11px; line-height: 1.5; }
+.rr-toast {
+  position: fixed; bottom: 24px; right: 380px; z-index: 2147483002;
+  background: var(--rr-negro); color: #fff; border-left: 3px solid var(--rr-rojo-luz);
+  padding: 10px 14px; border-radius: 8px; font-size: 12px; font-family: Montserrat, system-ui, sans-serif;
+  box-shadow: 0 8px 28px rgba(0,0,0,.5);
+}
+
+.rr-sep { height:1px; background:var(--rr-linea); margin:8px 0; }
+.rr-barra { height:5px; background:rgba(0,0,0,.45); border-radius:99px; overflow:hidden; margin:2px 0 6px; }
+.rr-barra i { display:block; height:100%; background:linear-gradient(90deg,var(--rr-rojo),var(--rr-rojo-luz)); }
+
+/* --- añadidos de la revisión --- */
+.rr-lbl { display:block; font-size:10px; color:rgba(255,255,255,.5); margin:10px 0 3px; }
+.rr-campos .rr-lbl { margin-top:0; }
+.rr-campos .rr-ancho { grid-column: 1 / -1; }
+.rr-tenue { opacity:.55; font-weight:400; }
+.rr-ambar { color:#ffb020; }
+.rr-sub { margin-top:10px !important; }
+.rr-btns .rr-btn { flex:0 0 auto; }
+#rurush-panel textarea.rr-input { resize:vertical; font-family:inherit; }
+.rr-chip:disabled, .rr-btn:disabled { opacity:.5; cursor:wait; }
+.rr-elegir { width:100%; text-align:left; margin-bottom:4px; }
+
+/* --- agendar --- */
+.rr-tabs { display:flex; gap:4px; margin-bottom:10px; }
+.rr-tab {
+  flex:1; background:rgba(255,255,255,.07); border:1px solid var(--rr-linea); color:#fff;
+  border-radius:8px; padding:7px 8px; font-size:11.5px; font-weight:700;
+  cursor:pointer; font-family:inherit;
+}
+.rr-tab:hover { background:rgba(255,255,255,.14); }
+.rr-tab.activo { background:var(--rr-rojo); border-color:var(--rr-rojo); }
+.rr-panel-tab.oculto { display:none; }
+#rurush-panel input[type="date"] { color-scheme: dark; }
+
+/* --- secciones plegables --- */
+.rr-acc { border-bottom:1px solid var(--rr-linea); }
+.rr-acc > summary {
+  display:flex; align-items:center; gap:8px; cursor:pointer; list-style:none;
+  padding:11px 2px; font-size:10.5px; font-weight:900; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--rr-rojo-luz);
+}
+.rr-acc > summary::-webkit-details-marker { display:none; }
+.rr-acc > summary:hover { color:#fff; }
+.rr-flecha { transition:transform .15s ease; display:inline-block; font-size:11px; }
+.rr-acc[open] > .rr-flecha, .rr-acc[open] > summary .rr-flecha { transform:rotate(90deg); }
+.rr-acc-tit { flex:none; }
+.rr-acc-nota {
+  margin-left:auto; font-size:10px; font-weight:600; letter-spacing:.02em;
+  text-transform:none; color:rgba(255,255,255,.45); text-align:right;
+}
+.rr-acc > .rr-sec { margin:0 0 12px; }
+.rr-acc .rr-sec > h4:first-child { margin-top:0; }
+
+/* --- con el panel abierto, la página se encoge en vez de quedar tapada --- */
+:root { --rr-ancho: 360px; }
+html.rr-con-panel #app,
+html.rr-con-panel > body > #app { width: calc(100% - var(--rr-ancho)) !important; }
+html.rr-con-panel body { max-width: 100vw; }
+/* Apps Fit y cualquier sitio sin #app: se empuja el body */
+html.rr-con-panel:not(:has(#app)) body { padding-right: var(--rr-ancho) !important; box-sizing: border-box; }
+
+/* --- llamadas --- */
+
+/* Resumen de "ver todas las plantillas": se lee como un encabezado más, no como
+   un acordeón distinto. */
+#rurush-panel .rr-sub-sum{
+  list-style:none; cursor:pointer; font-size:10px; font-weight:900;
+  letter-spacing:.14em; text-transform:uppercase; color:rgba(255,255,255,.45);
+  padding:8px 0 6px;
+}
+#rurush-panel .rr-sub-sum::-webkit-details-marker{display:none}
+#rurush-panel .rr-sub-sum::before{content:"▸ "}
+#rurush-panel #rr-tpl-todas[open] .rr-sub-sum::before{content:"▾ "}
+#rurush-panel .rr-sub-sum:hover{color:var(--luz,#FF3333)}

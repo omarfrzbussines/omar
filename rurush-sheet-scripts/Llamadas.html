@@ -49,7 +49,20 @@
   .toast { white-space:pre-line; position:fixed; left:16px; right:16px; bottom:16px; background:#2c2c2e; color:#fff; padding:12px 14px; border-radius:12px; font-size:14px; display:none; z-index:20; }
   .toast.err { background:#5c1f1f; }
   .vacio { text-align:center; color:var(--mut); padding:60px 10px; }
-  .tabs { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:10px; }
+  .tabs { display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:6px; margin-top:10px; }
+  .dmsg { white-space:pre-wrap; font-size:14px; color:var(--mut); margin:8px 0 10px; max-height:7.5em; overflow:hidden; }
+  .dif .wacall { padding:13px 6px; }
+  .prog { height:8px; background:var(--line); border-radius:9px; overflow:hidden; margin-top:8px; } .prog i { display:block; height:100%; background:var(--grn); }
+  .stipos { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .stipo { background:var(--card); border:1px solid var(--line); color:var(--tx); border-radius:14px; padding:10px 12px; text-align:left; font-family:inherit; }
+  .stipo span { font-size:14px; font-weight:600; } .stipo b { display:block; font-size:22px; margin-top:2px; } .stipo small { display:block; color:var(--mut); font-size:12px; margin-top:6px; }
+  .stipo.on { border-color:var(--ice); background:#13293d; }
+  .slista { display:grid; gap:8px; margin-top:10px; }
+  .sitem { background:var(--card); border:1px solid var(--line); color:var(--tx); border-radius:14px; padding:12px; text-align:left; font-family:inherit; font-size:15px; display:grid; gap:6px; }
+  .sitem small { color:#e8c66a; font-size:12px; }
+  .hecha { font-size:13px; color:var(--mut); padding:6px 0; border-bottom:1px solid var(--line); }
+  table.ctl { width:100%; border-collapse:collapse; font-size:13px; } .ctl th, .ctl td { padding:7px 4px; border-bottom:1px solid var(--line); text-align:right; } .ctl th:first-child, .ctl td:first-child { text-align:left; } .ctl th { color:var(--mut); font-weight:600; font-size:11px; }
+  .ctl .mal { color:var(--red); font-weight:700; }
   .tab { background:var(--card); color:var(--mut); border:1px solid var(--line); border-radius:10px; padding:9px; font-size:15px; font-weight:600; }
   .tab.on { background:#2a1414; border-color:var(--red); color:#fff; }
   .totales { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
@@ -73,6 +86,9 @@
   .chips { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
   .chips button { background:var(--line); color:var(--tx); border:0; border-radius:10px; padding:9px 12px; font-size:14px; }
   .m.prog { background:#3a2e10; color:#ffd666; } .m.prog b { color:#ffd666; }
+  .confirmar { display:flex; gap:8px; align-items:center; background:#12391f; color:#7ee2a0; border-radius:12px; padding:10px 12px; margin-bottom:12px; font-size:14px; }
+  .confirmar a { flex:1; text-align:center; background:#25d366; color:#062b12; border-radius:10px; padding:10px; font-weight:700; text-decoration:none; }
+  .confirmar button { background:none; border:0; color:#7ee2a0; font-size:18px; padding:4px 8px; }
   .aviso { background:#3a2e10; color:#ffd666; border-radius:10px; padding:10px; font-size:13px; margin-top:10px; }
 </style>
 </head>
@@ -82,7 +98,7 @@
     <div><h1><b>RURUSH</b> Llamadas</h1><div class="sub" id="sub">Hola <?= asesora ?></div></div>
     <button class="btn-s" id="recargar">🔄</button>
   </div>
-  <div class="tabs"><button class="tab on" data-v="llamadas">📞 Llamadas</button><button class="tab" data-v="cobros">💰 Cobros</button></div>
+  <div class="tabs"><button class="tab on" data-v="llamadas">📞 Llamadas</button><button class="tab" data-v="socios">🏋️ Socios</button><button class="tab" data-v="cobros">💰 Cobros</button><button class="tab" data-v="dif" id="tabDif" style="display:none">📣 Difus.</button></div>
   <div id="vistaLlamadas"><select class="bases" id="base"></select>
   <div class="marcador" id="marcador"></div></div>
 </header>
@@ -172,7 +188,7 @@ function traer(reset) {
         cola = cola.concat(r.cola.filter((x) => !ya[x.base + ':' + x.fila]));
       }
       guardarLocal();
-      $('#sub').textContent = `Hola ${ASESORA} · cargó en ${((Date.now() - t0) / 1000).toFixed(1)} s${r.api === false ? ' · lectura lenta (falta servicio Sheets)' : ''}`;
+      $('#sub').textContent = `Hola ${ASESORA} · cargó en ${((Date.now() - t0) / 1000).toFixed(1)} s${r.api === false ? ' · lectura lenta (falta servicio Sheets)' : ''}${r.descartados != null ? ` · 🚫 ${r.descartados} descartados ocultos` : ''}`;
       if (!cobros && !cargandoCobros) setTimeout(traerCobros, 500);   // deja lista la pestaña Cobros
       pintarMarcador();
       if (VISTA === 'llamadas' && (!mostrando || !actual())) { mostrando = true; pintar(); }
@@ -184,14 +200,19 @@ function traer(reset) {
 const actual = () => cola[idx];
 
 // Tiempo mínimo en el marcador para poder marcar cada resultado (igual que en el servidor).
-const MIN_SEG = { 'APAGADO': 0, 'NO CONTESTO': 15, 'CORTO': 15, 'CONTESTO': 30, 'AGENDADO': 30, 'CLIENTE': 30, 'DESCARTADO': 30, 'Otra Ciudad': 30, 'LLAMAR LUEGO': 10 };
+// "llamar luego": si quien lo programó no llamó a tiempo (30 min), pasa a cualquier asesora → se dice claro
+const quienLuego = (a) => (String(a || '').toUpperCase() === ASESORA ? 'Lo programaste tú'
+  : `Lo programó ${esc(a)} y no llamó a tiempo → <b>te toca a ti</b>`);
+const MIN_SEG = { 'APAGADO': 0, 'NO CONTESTO': 15, 'CORTO': 15, 'CONTESTO': 30, 'AGENDADO': 30, 'CLIENTE': 30, 'DESCARTADO': 10, 'Otra Ciudad': 30, 'LLAMAR LUEGO': 10 };
 let llamada = { fila: null, intentos: 0, fueraMs: 0, salio: null, toco: 0, wa: 0 };
 const segundos = () => Math.round(llamada.fueraMs / 1000);
 const mmss = (s) => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
-function guardarLlamada() { try { localStorage.setItem('rr_llamada', JSON.stringify(llamada)); } catch (e) {} }
+// Llamadas y 🏋️ Socios guardan su llamada en curso por separado (cambiar de pestaña no borra la otra).
+const llKey = (fila) => 'rr_llamada' + (String(fila).startsWith('soc:') ? '_soc' : '');
+function guardarLlamada() { try { localStorage.setItem(llKey(llamada.fila), JSON.stringify(llamada)); } catch (e) {} }
 function nuevaLlamada(fila) {
   try {
-    const g = JSON.parse(localStorage.getItem('rr_llamada') || 'null');
+    const g = JSON.parse(localStorage.getItem(llKey(fila)) || 'null');
     if (g && g.fila === fila) { llamada = g; if (llamada.salio) { llamada.fueraMs += Date.now() - llamada.salio; llamada.salio = null; } return; }
   } catch (e) {}
   llamada = { fila, intentos: 0, fueraMs: 0, salio: null, toco: 0, wa: 0 };
@@ -201,7 +222,7 @@ function salioDeLaApp() {
   if (llamada.salio == null && llamada.toco && Date.now() - llamada.toco < 20000) { llamada.salio = Date.now(); guardarLlamada(); }
 }
 function volvioALaApp() {
-  if (llamada.salio != null) { llamada.fueraMs += Date.now() - llamada.salio; llamada.salio = null; guardarLlamada(); actualizarBotones(); }
+  if (llamada.salio != null) { llamada.fueraMs += Date.now() - llamada.salio; llamada.salio = null; guardarLlamada(); actualizarBotones(); if (VISTA === 'socios') actualizarSocio(); }
 }
 document.addEventListener('visibilitychange', () => (document.hidden ? salioDeLaApp() : volvioALaApp()));
 window.addEventListener('blur', salioDeLaApp);
@@ -213,7 +234,7 @@ function actualizarBotones() {
   if (med) med.innerHTML = llamada.intentos
     ? `<span>📞 Intentos: <b>${llamada.intentos}</b></span><span>⏱ En llamada: <b>${mmss(seg)}</b></span>`
     : '<span>Toca 📞 Llamar o 📲 WhatsApp para habilitar los resultados</span>';
-  document.querySelectorAll('.est').forEach((b) => {
+  document.querySelectorAll('.est:not(.sest)').forEach((b) => {
     const min = MIN_SEG[b.dataset.e] || 0;
     const ok = llamada.intentos > 0 && llamada.salio == null && seg >= min;
     b.disabled = !ok;
@@ -248,9 +269,9 @@ function pintar() {
     : '';
   const fp = true ? `<div id="fpbox" style="display:none"><h2>Fecha y hora del Free Pass</h2>
       <div class="fila2"><input type="date" id="fpf"><select id="fph"><option value="">Hora</option>${HORAS.map((h) => `<option>${h}</option>`).join('')}</select></div></div>` : '';
-  $('#main').innerHTML = `
+  $('#main').innerHTML = bannerConfirmar() + `
     <div class="card${p.luego ? ' esLuego' : ''}">
-      ${p.luego ? `<div class="luego">🔔 <b>LLAMAR AHORA</b> · pidió ${esc(p.luego.texto)}${p.luego.nota ? `<br>📝 ${esc(p.luego.nota)}` : ''}<br>Lo atendió ${esc(p.luego.asesora)}</div>` : ''}
+      ${p.luego ? `<div class="luego">🔔 <b>LLAMAR AHORA</b> · pidió que lo llamen el ${esc(p.luego.texto)}${p.luego.nota ? `<br>📝 ${esc(p.luego.nota)}` : ''}<br>${quienLuego(p.luego.asesora)}</div>` : ''}
       <div class="nombre">${esc(esNum || !p.nombre ? 'Sin nombre' : p.nombre)}</div>
       <div class="num">+51 ${esc(p.numero.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3'))}</div>
       <div class="meta"><span class="tag">${p.ronda}ª llamada</span>${p.dia ? `<span class="tag">lead del ${esc(p.dia)}</span>` : ''}${p.origen ? `<span class="tag">${esc(p.origen)}</span>` : ''}</div>
@@ -298,7 +319,29 @@ function pintar() {
   actualizarBotones();
   if ($('#esSocio')) $('#esSocio').onclick = () => { estado = 'CLIENTE'; guardar(); };
   $('#saltar').onclick = () => { idx++; pintar(); revisarCola(); guardarLocal(); };
+  if ($('#confWa')) { $('#confWa').onclick = () => { setTimeout(() => { CONFIRMAR = null; const b = document.querySelector('.confirmar'); if (b) b.remove(); }, 800); }; $('#confX').onclick = () => { CONFIRMAR = null; document.querySelector('.confirmar').remove(); }; }
   window.scrollTo(0, 0);
+}
+
+// 📲 Confirmación del Free Pass desde el WhatsApp de la asesora (además, la línea principal manda la suya).
+let CONFIRMAR = null;
+const DIAS_SEM = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+const GPS_RURUSH = 'https:\/\/maps.app.goo.gl/x2K9xZYXsLtzhxuW6';
+function textoConfirmacion(c) {
+  const iso = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const hoyD = new Date(), man = new Date(Date.now() + 864e5);
+  const f = new Date(c.fecha + 'T12:00:00');
+  const dia = c.fecha === iso(hoyD) ? 'Hoy' : c.fecha === iso(man) ? 'Mañana' : DIAS_SEM[f.getDay()] + ' ' + c.fecha.slice(8) + '/' + c.fecha.slice(5, 7);
+  const primero = String(c.nombre || '').trim().split(/\s+/)[0] || '';
+  const n = /^[a-záéíóúñ]{2,}$/i.test(primero) ? primero[0].toUpperCase() + primero.slice(1).toLowerCase() : '';
+  const yo = ({ MONICA: 'Mónica', ALVARO: 'Álvaro' })[ASESORA] || ASESORA[0] + ASESORA.slice(1).toLowerCase();
+  return `¡Hola${n ? ' ' + n : ''}! 💪 Soy ${yo} de RURUSH Fitness Club 🔥\nTe confirmo tu Free Pass:\n📅 ${dia}${c.hora ? ' a las ' + c.hora : ''}\n`
+    + `📍 Av. Larco 1164, Víctor Larco, al costado de Mass\n🎒 Trae ropa deportiva, toalla y agua 💧\n🗺️ ${GPS_RURUSH}\n¡Te esperamos! 🙌`;
+}
+function bannerConfirmar() {
+  if (!CONFIRMAR) return '';
+  const url = 'https:\/\/wa.me/51' + CONFIRMAR.numero + '?text=' + encodeURIComponent(textoConfirmacion(CONFIRMAR));
+  return `<div class="confirmar"><span>✅ Agendado</span><a href="${url}" target="_blank" id="confWa">📲 Confirmar a ${esc(String(CONFIRMAR.nombre || '').split(' ')[0] || 'cliente')}</a><button id="confX">✕</button></div>`;
 }
 
 // Guardado en segundo plano: la asesora pasa a la siguiente sin esperar.
@@ -317,6 +360,7 @@ function guardar() {
   try { localStorage.removeItem('rr_llamada'); } catch (err) {}
   const k = e === 'LLAMAR LUEGO' ? 'CONTESTO' : e;   // en el Sheet queda como CONTESTO
   hoy[k] = (hoy[k] || 0) + 1; enVuelo[k] = (enVuelo[k] || 0) + 1; pintarMarcador();
+  CONFIRMAR = e === 'AGENDADO' && fpf ? { numero: p.numero, nombre: p.nombre, fecha: fpf, hora: fph } : null;
   idx++; pintar(); revisarCola(); guardarLocal();
   google.script.run
     .withSuccessHandler((r) => {
@@ -341,6 +385,185 @@ setInterval(() => {
 
 function revisarCola() { if (cola.length - idx <= 5) traer(false); }
 
+/* ---------- 🏋️ Socios activos: 😴 no vienen (+5 d, meta: toda su lista, mín. 7) · 💪 sí vienen (meta 3) ---------- */
+// La asesora elige a quién llamar. Solo se registra si llamó desde la app: el tiempo fuera de la app tras tocar 📞 es la duración.
+const SO_BOT = {
+  no: [['VIENE', '✅ Viene', 30], ['DA EXCUSAS', '🤷 Da excusas', 30], ['NO INTERESA', '❌ No le interesa', 30], ['NO CONTESTÓ', '📵 No contestó', 15]],
+  si: [['CONTENTO', '😊 Contento', 30], ['QUEJA', '🗣️ Queja o sugerencia', 30], ['REFERIDO', '👥 Dio referido', 30], ['NO CONTESTÓ', '📵 No contestó', 15]]
+};
+const SO_TXT = { no: '😴 No vienen', si: '💪 Sí vienen' };
+let SOC = null, SOC_RES = null, SOC_PIDE = 0, SOC_CTL = null, SOC_TIPO = 'no', SOC_SEL = null, SOC_BUSCA = '';
+function traerSocios() {
+  const n = ++SOC_PIDE, como = COMO;
+  google.script.run
+    .withSuccessHandler((r) => {
+      if (n !== SOC_PIDE || como !== COMO) return;            // llegó una respuesta vieja (otro "Ver como" o 🔄)
+      SOC = r;
+      if (VISTA !== 'socios' || SOC_SEL) return;              // si está con un socio abierto, no se le cambia la pantalla
+      const y = window.scrollY; pintarListaSoc(); window.scrollTo(0, y);
+    })
+    .withFailureHandler((e) => { if (n !== SOC_PIDE) return; if (/CELULAR_NO_AUTORIZADO/.test(e.message || e)) return google.script.run.withSuccessHandler(pantallaPin).app_estadoCelular(LLAVE); toast(e.message || String(e), true); if (VISTA === 'socios' && !SOC) $('#main').innerHTML = `<div class="vacio">⚠️ ${esc(e.message || e)}</div>`; })
+    .so_lista(LLAVE, COMO);
+  if (ASESORA === 'OMAR') traerControl();
+}
+function traerControl() { google.script.run.withSuccessHandler((r) => { SOC_CTL = r; if (VISTA === 'socios' && SOC && !SOC_SEL) { const y = window.scrollY; pintarListaSoc(); window.scrollTo(0, y); } }).so_resumen(LLAVE); }
+function controlOmar() {
+  if (!SOC_CTL) return '';
+  if (!SOC_CTL.length) return '<h2>📊 Control de llamadas a socios</h2><div class="tip">Todavía no hay llamadas registradas.</div>';
+  const fila = (a, t) => `<tr><td>${esc(a)}</td><td>${t.no}</td><td>${t.si}</td><td>${t.contesto}</td><td>${t.prom ? mmss(t.prom) : '—'}</td><td>${t.viene}</td><td>${t.volvio}</td><td class="${t.cortas ? 'mal' : ''}">${t.cortas}</td></tr>`;
+  const tabla = (titulo, k) => `<h2>${titulo}</h2><table class="ctl"><tr><th>ASESORA</th><th>😴</th><th>💪</th><th>CONTEST.</th><th>DUR. PROM.</th><th>VIENE</th><th>VOLVIÓ</th><th>⚠️ CORTAS</th></tr>${SOC_CTL.map((x) => fila(x.asesora, x[k])).join('')}</table>`;
+  return tabla('📊 Hoy', 'hoy') + tabla('📊 Últimos 7 días', 'sem') + '<div class="tip">😴 no vienen (meta: toda su lista, mín. 7) · 💪 sí vienen (meta 3). VOLVIÓ = un 😴 que vino al gym después de la llamada. ⚠️ CORTAS = contestadas de menos de 45 s.</div>';
+}
+const cap = (t) => String(t || '').charAt(0).toUpperCase() + String(t || '').slice(1).toLowerCase();
+function pintarSocios() { if (SOC_SEL) return pintarSocioLlamar(SOC_SEL); pintarListaSoc(); }
+function pintarListaSoc() {
+  const s = SOC;
+  const meta = (t) => { const n = s.hoy[t], m = s.meta[t];
+    return `<button class="stipo ${SOC_TIPO === t ? 'on' : ''}" data-t="${t}"><span>${SO_TXT[t]}</span><b>${n} / ${m}${n >= m ? ' ✅' : ''}</b>
+      <div class="prog"><i style="width:${Math.min(100, n / m * 100)}%"></i></div><small>${s.listas[t].length} por llamar</small></button>`; };
+  const q = cob_q(SOC_BUSCA), l = s.listas[SOC_TIPO].filter((p) => !q || cob_q(p.nombre + ' ' + p.cod + ' ' + p.tel).includes(q));
+  const item = (p) => `<button class="sitem" data-c="${esc(p.cod)}"><b>${esc(p.nombre || 'Cód. ' + p.cod)}</b>
+    <span>${diasSA(p.dias)} <span class="tag">${esc(p.plan || '—')}</span> ${p.fin ? `<span class="tag">vence ${fechaCorta(p.fin)}</span>` : ''}</span>
+    ${p.antes ? `<small>Última llamada: ${esc(p.antes)}</small>` : ''}</button>`;
+  const hechas = s.hechas.filter((h) => h.tipo === SOC_TIPO);
+  $('#main').innerHTML = `<div class="stipos">${meta('no')}${meta('si')}</div>
+    <div class="tip" style="margin:8px 2px">${SOC_TIPO === 'no' ? 'Activos que no vienen hace más de 5 días: llama a todos para que vuelvan.' : 'Activos que sí vienen: que sigan, renueven y te den referidos.'} Toca a quién vas a llamar.</div>
+    <input id="sBusca" placeholder="🔍 Buscar por nombre, código o celular" value="${esc(SOC_BUSCA)}">
+    <div class="slista">${l.map(item).join('') || `<div class="vacio" style="padding:30px 10px">${q ? 'Nadie con ese nombre.' : '🎉 No hay socios por llamar en esta lista.'}</div>`}</div>
+    ${hechas.length ? '<h2>Hechas hoy</h2>' + hechas.map((h) => `<div class="hecha">${esc(h.hora)} · ${esc(h.socio)} · <b>${esc(h.res)}</b> · ${mmss(h.seg)}</div>`).join('') : ''}` + controlOmar();
+  document.querySelectorAll('.stipo').forEach((b) => b.onclick = () => { SOC_TIPO = b.dataset.t; SOC_BUSCA = ''; pintarListaSoc(); });
+  document.querySelectorAll('.sitem').forEach((b) => b.onclick = () => { SOC_SEL = s.listas[SOC_TIPO].find((p) => p.cod === b.dataset.c); pintarSocioLlamar(SOC_SEL); window.scrollTo(0, 0); });
+  const bu = $('#sBusca'); bu.oninput = () => { SOC_BUSCA = bu.value; const pos = bu.selectionStart; pintarListaSoc(); const n = $('#sBusca'); n.focus(); n.setSelectionRange(pos, pos); };
+}
+function pintarSocioLlamar(p) {
+  nuevaLlamada('soc:' + p.cod);
+  SOC_RES = null;
+  const nom = esc(cap((p.nombre || '').split(/[ ,]+/)[0] || '')), yo = esc(cap(SOC.quien));
+  const guion = p.tipo === 'no'
+    ? `«Hola ${nom}, te habla ${yo} de RURUSH 💪 Te extrañamos estos días, ¿todo bien? ¿Qué día de esta semana te esperamos para retomar?»`
+    : `«Hola ${nom}, te habla ${yo} de RURUSH 💪 Te vemos constante, ¡felicitaciones! ¿Cómo te sientes con tus entrenamientos? ¿Algo que podamos mejorar? ¿Algún amigo o familiar que quiera entrenar contigo?»`;
+  $('#main').innerHTML = `<button class="saltar" id="sVolver" style="text-align:left;margin:0 0 6px;padding:6px 0">← Volver a la lista (${SO_TXT[p.tipo]})</button>
+    <div class="card">
+      <div class="nombre">${esc(p.nombre || 'Cód. ' + p.cod)}</div>
+      <div class="num">+51 ${esc(p.tel.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3'))}</div>
+      <div class="meta"><span class="tag">Cód. ${esc(p.cod)}</span>${p.plan ? `<span class="tag">${esc(p.plan)}</span>` : ''}${p.fin ? `<span class="tag">vence ${fechaCorta(p.fin)} (${p.vence} d)</span>` : ''}</div>
+      ${diasSA(p.dias)}${p.ult ? `<span class="tip"> · última vez: ${esc(p.ult)}</span>` : ''}
+      ${p.antes ? `<div class="aviso">Última llamada: ${esc(p.antes)}</div>` : ''}
+      <div class="acciones" style="grid-template-columns:1fr 1fr">
+        <a class="llamar" id="sLlamar" href="tel:+51${p.tel}">📞 Llamar</a>
+        <a class="wacall" id="sWa" href="https:\/\/wa.me/51${p.tel}" target="_blank">📲 WhatsApp</a>
+      </div>
+      <div class="medidor" id="sMed"></div>
+    </div>
+    <div class="aviso" style="background:#13293d;color:#9fd3ff">💬 <b>Guion:</b> ${guion}</div>
+    <h2>¿Cómo salió?</h2>
+    <div class="estados">${SO_BOT[p.tipo].map((b) => `<button class="est sest" data-r="${b[0]}" data-min="${b[2]}" disabled>${b[1]}<small></small></button>`).join('')}</div>
+    <h2>Nota</h2>
+    <textarea id="sNota" placeholder="${p.tipo === 'no' ? 'Ej.: vuelve el lunes en la tarde' : 'Ej.: pide más clases de noche / refirió a su hermana 9xx…'} (usa el 🎤 del teclado)"></textarea>
+    <button class="guardar" id="sGuardar" disabled>Guardar y volver a la lista</button>`;
+  const marca = () => { llamada.intentos++; llamada.toco = Date.now(); guardarLlamada(); actualizarSocio(); };
+  $('#sLlamar').onclick = marca; $('#sWa').onclick = () => { llamada.wa = (llamada.wa || 0) + 1; marca(); };
+  document.querySelectorAll('.sest').forEach((b) => b.onclick = () => {
+    SOC_RES = b.dataset.r;
+    document.querySelectorAll('.sest').forEach((x) => x.classList.toggle('on', x === b));
+    $('#sGuardar').disabled = false;
+  });
+  $('#sVolver').onclick = () => { SOC_SEL = null; pintarListaSoc(); };
+  $('#sGuardar').onclick = guardarSocio;
+  actualizarSocio();
+}
+function actualizarSocio() {
+  if (!SOC_SEL) return;
+  const seg = segundos(), med = $('#sMed');
+  if (med) med.innerHTML = llamada.intentos ? `<span>📞 Intentos: <b>${llamada.intentos}</b></span><span>⏱ En llamada: <b>${mmss(seg)}</b></span>`
+    : '<span>Toca 📞 Llamar para habilitar los resultados</span>';
+  document.querySelectorAll('.sest').forEach((b) => {
+    const min = Number(b.dataset.min), ok = llamada.intentos > 0 && llamada.salio == null && seg >= min;
+    b.disabled = !ok;
+    b.querySelector('small').textContent = ok ? '' : (llamada.intentos ? `🔒 mín. ${min} s` : '🔒');
+    if (!ok && SOC_RES === b.dataset.r) { SOC_RES = null; b.classList.remove('on'); $('#sGuardar').disabled = true; }
+  });
+}
+function guardarSocio() {
+  const p = SOC_SEL;
+  if (!p || !SOC_RES) return;
+  const btn = $('#sGuardar'); if (btn.disabled) return;
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  const d = { fila: p.fila, cod: p.cod, nombre: p.nombre, tel: p.tel, dias: p.dias, tipo: p.tipo, resultado: SOC_RES, nota: $('#sNota').value, intentos: llamada.intentos, segundos: segundos(), como: COMO };
+  google.script.run
+    .withSuccessHandler(() => {
+      toast('✓ ' + (p.nombre || p.cod) + ': ' + SOC_RES);
+      SOC.hechas.push({ socio: p.nombre, res: SOC_RES, seg: d.segundos, hora: new Date().toTimeString().slice(0, 5), tipo: p.tipo });
+      SOC.hoy[p.tipo]++; SOC.listas[p.tipo] = SOC.listas[p.tipo].filter((x) => x.tel !== p.tel);
+      try { localStorage.removeItem('rr_llamada_soc'); } catch (e) {}
+      SOC_SEL = null; pintarListaSoc(); window.scrollTo(0, 0);
+      if (ASESORA === 'OMAR') traerControl();
+    })
+    .withFailureHandler((e) => { btn.disabled = false; btn.textContent = 'Guardar y volver a la lista'; toast(e.message || String(e), true); })
+    .so_guardar(LLAVE, d);
+}
+const cob_q = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+/* ---------- 📣 Difusiones (solo DANNA, desde su WhatsApp 977): se marca sola al volver de WhatsApp ---------- */
+let DIF = null, DIF_PIDE = 0, DIF_ENV = null, DIF_ULT = null;   // DIF_ENV = envío en curso · DIF_ULT = último marcado (para Deshacer)
+try { DIF_ENV = JSON.parse(localStorage.getItem('rr_dif_env') || 'null'); } catch (e) {}
+const guardarDifEnv = () => { try { DIF_ENV ? localStorage.setItem('rr_dif_env', JSON.stringify(DIF_ENV)) : localStorage.removeItem('rr_dif_env'); } catch (e) {} };
+if (ASESORA === 'DANNA' || ASESORA === 'OMAR') $('#tabDif').style.display = '';
+function traerDif() {
+  const n = ++DIF_PIDE, como = COMO;
+  google.script.run
+    .withSuccessHandler((r) => { if (n !== DIF_PIDE || como !== COMO) return; DIF = r; if (VISTA === 'dif') { const y = window.scrollY; pintarDif(); window.scrollTo(0, y); } })
+    .withFailureHandler((e) => { if (n !== DIF_PIDE) return; if (/CELULAR_NO_AUTORIZADO/.test(e.message || e)) return google.script.run.withSuccessHandler(pantallaPin).app_estadoCelular(LLAVE); if (VISTA === 'dif') $('#main').innerHTML = `<div class="vacio">⚠️ ${esc(e.message || e)}</div>`; })
+    .df_lista(LLAVE, COMO);
+}
+function pintarDif() {
+  const d = DIF;
+  const cab = `<div class="card" style="padding:12px 14px"><div style="display:flex;justify-content:space-between"><b>📣 Difusiones de hoy</b><b>${d.hoy} / ${d.tope}${d.hoy >= d.tope ? ' ✅' : ''}</b></div>
+    <div class="prog"><i style="width:${Math.min(100, d.hoy / d.tope * 100)}%"></i></div>
+    <div class="tip">Toca 📲 Enviar → se abre tu WhatsApp con el mensaje listo → envíalo y vuelve aquí: se marca solo. Quedan ${d.pendientes} en tus tandas.</div></div>`;
+  const deshacer = DIF_ULT ? `<div class="aviso" style="display:flex;justify-content:space-between;align-items:center;gap:8px">✓ Marcado enviado: ${esc(DIF_ULT.nombre || DIF_ULT.celular)}<button class="saltar" id="dDes" style="width:auto;margin:0;padding:4px 8px;color:#ffd27a">Deshacer</button></div>` : '';
+  const item = (it, i) => `<div class="card dif" style="margin-top:10px">
+      <div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(it.nombre || it.celular)}</b><span class="tag">${esc(it.tab.replace(/^\W+/, ''))}</span></div>
+      <div class="dmsg">${esc(it.mensaje)}</div>
+      <a class="wacall" data-i="${i}" href="https:\/\/wa.me/${it.celular}?text=${encodeURIComponent(it.mensaje)}" target="_blank">📲 Enviar por WhatsApp</a></div>`;
+  $('#main').innerHTML = cab + deshacer + (d.items.length ? d.items.map(item).join('')
+    : `<div class="vacio" style="padding:40px 10px">${d.hoy >= d.tope ? '✅ ¡Listo por hoy! Hiciste tus ' + d.tope + ' difusiones.' : '🎉 No tienes difusiones pendientes.'}</div>`);
+  document.querySelectorAll('.dif .wacall').forEach((a) => a.onclick = () => {
+    DIF_ENV = { it: d.items[Number(a.dataset.i)], t: Date.now(), salio: null, fuera: 0 }; guardarDifEnv();
+  });
+  if ($('#dDes')) $('#dDes').onclick = deshacerDif;
+}
+// Salió a WhatsApp y volvió: si estuvo fuera 4 s o más, se marca enviado.
+function difSalio() { if (DIF_ENV && DIF_ENV.salio == null && Date.now() - DIF_ENV.t < 20000) { DIF_ENV.salio = Date.now(); guardarDifEnv(); } }
+function difVolvio() {
+  if (!DIF_ENV || DIF_ENV.salio == null) return;
+  DIF_ENV.fuera += Date.now() - DIF_ENV.salio; DIF_ENV.salio = null;
+  const e = DIF_ENV; DIF_ENV = null; guardarDifEnv();
+  if (e.fuera < 4000) return toast('No se marcó: volviste muy rápido. Si no se abrió WhatsApp, toca 📲 Enviar otra vez.', true);
+  marcarDif(e.it, Math.round(e.fuera / 1000));
+}
+document.addEventListener('visibilitychange', () => (document.hidden ? difSalio() : difVolvio()));
+window.addEventListener('blur', difSalio);
+window.addEventListener('focus', difVolvio);
+function marcarDif(it, seg) {
+  if (DIF) { DIF.items = DIF.items.filter((x) => !(x.tab === it.tab && x.fila === it.fila)); DIF.hoy++; DIF.pendientes = Math.max(0, DIF.pendientes - 1); }
+  if (VISTA === 'dif' && DIF) pintarDif();
+  google.script.run
+    .withSuccessHandler((r) => { DIF_ULT = Object.assign({}, it, { antes: r.antes, logFila: r.logFila }); toast('✓ ' + (it.nombre || it.celular) + ': enviado'); if (VISTA === 'dif') pintarDif(); traerDif(); })
+    .withFailureHandler((err) => { toast(err.message || String(err), true); traerDif(); })
+    .df_marcar(LLAVE, { tab: it.tab, fila: it.fila, celular: it.celular, seg, como: COMO });
+}
+function deshacerDif() {
+  const u = DIF_ULT; if (!u) return;
+  DIF_ULT = null; if (VISTA === 'dif') pintarDif();
+  google.script.run
+    .withSuccessHandler(() => { toast('↩️ ' + (u.nombre || u.celular) + ' vuelve a pendientes'); traerDif(); })
+    .withFailureHandler((err) => toast(err.message || String(err), true))
+    .df_deshacer(LLAVE, { tab: u.tab, fila: u.fila, celular: u.celular, antes: u.antes, logFila: u.logFila, como: COMO });
+}
+// Si la app se recargó mientras estaba en WhatsApp, al abrir se termina de marcar.
+if (DIF_ENV) { if (DIF_ENV.salio != null && Date.now() - DIF_ENV.salio < 30 * 60000) difVolvio(); else { DIF_ENV = null; guardarDifEnv(); } }
+
 /* ---------- 💰 Cobros pendientes (pestaña "2. COLA RENOVAR" de VENTAS RETENCIÓN) ---------- */
 let VISTA = 'llamadas', cobros = null, cargandoCobros = false;
 // última lista de cobros guardada en el celular: la pestaña abre al instante y se actualiza por detrás
@@ -358,6 +581,8 @@ function cambiarVista(v) {
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.dataset.v === v));
   $('#vistaLlamadas').style.display = v === 'llamadas' ? '' : 'none';
   if (v === 'llamadas') { if (mostrando) pintar(); else $('#main').innerHTML = '<div class="vacio">Cargando tu cola…</div>'; return; }
+  if (v === 'dif') { if (DIF) pintarDif(); else $('#main').innerHTML = '<div class="vacio">Cargando tus difusiones…</div>'; traerDif(); return; }
+  if (v === 'socios') { if (SOC) pintarSocios(); else $('#main').innerHTML = '<div class="vacio">Cargando tus socios…</div>'; traerSocios(); return; }
   if (cobros) pintarCobros(); else $('#main').innerHTML = '<div class="vacio">Cargando tus cobros…</div>';
   traerCobros();
 }
@@ -469,7 +694,7 @@ function pintarSocio(s) {
   };
 }
 
-$('#recargar').onclick = () => { if (VISTA === 'cobros') return traerCobros(); mostrando = false; cola = []; idx = 0; $('#main').innerHTML = '<div class="vacio">Cargando…</div>'; traer(true); };
+$('#recargar').onclick = () => { if (VISTA === 'cobros') return traerCobros(); if (VISTA === 'dif') { DIF = null; $('#main').innerHTML = '<div class="vacio">Cargando tus difusiones…</div>'; return traerDif(); } if (VISTA === 'socios') { SOC = null; $('#main').innerHTML = '<div class="vacio">Cargando tus socios…</div>'; return traerSocios(); } mostrando = false; cola = []; idx = 0; $('#main').innerHTML = '<div class="vacio">Cargando…</div>'; traer(true); };
 // Selector de base: cada base tiene su propia cola
 $('#base').innerHTML = BASES.map((b) => `<option ${b === BASE ? 'selected' : ''}>${esc(b)}</option>`).join('');
 $('#base').onchange = () => {
@@ -486,10 +711,46 @@ if (ASESORA === 'OMAR') {
   b.style.cssText = 'background:#5a3a00;color:#ffd27a;padding:6px 10px;font-size:13px;display:flex;gap:8px;align-items:center;flex-wrap:wrap';
   b.innerHTML = '<span>🧪 OMAR · se guarda de verdad (asesor OMAR)</span>' +
     '<select id="como" style="background:#2a1d00;color:#ffd27a;border:1px solid #8a6400;border-radius:6px;padding:3px">' +
-    '<option value="">Ver como: yo</option><option>MONICA</option><option>DANNA</option><option>LAURA</option></select>' +
-    '<button id="errores" style="background:#8a6400;color:#fff;border:0;border-radius:6px;padding:4px 8px">🛠 Errores</button>';
+    '<option value="">Ver como: yo</option><option>MONICA</option><option>DANNA</option><option>LAURA</option><option>CIELO</option></select>' +
+    '<button id="links" style="background:#8a6400;color:#fff;border:0;border-radius:6px;padding:4px 8px">🔗 Links</button>' +
+    '<button id="errores" style="background:#8a6400;color:#fff;border:0;border-radius:6px;padding:4px 8px">🛠 Errores</button>' +
+    '<button id="dashYa" style="background:#8a6400;color:#fff;border:0;border-radius:6px;padding:4px 8px">📊 Rehacer dashboard</button>';
   document.body.prepend(b);
-  $('#como').onchange = () => { COMO = $('#como').value; mostrando = false; cola = []; idx = 0; $('#main').innerHTML = '<div class="vacio">Cargando la cola' + (COMO ? ' de ' + esc(COMO) : '') + '…</div>'; traer(true); };
+  $('#dashYa').onclick = () => {
+    toast('📊 Rehaciendo el dashboard… (~1 min)');
+    google.script.run
+      .withSuccessHandler((s) => toast(`📊 Dashboard listo en ${s} s. Toca 🔄 en RURUSH Hoy.`))
+      .withFailureHandler((e) => toast('📊 Error: ' + (e.message || e), true))
+      .app_dashAhora(LLAVE);
+  };
+  $('#como').onchange = () => {
+    COMO = $('#como').value; mostrando = false; cola = []; idx = 0; trayendo = false;
+    SOC = null; SOC_SEL = null; SOC_BUSCA = ''; cobros = null; DIF = null; DIF_ULT = null;
+    const de = COMO ? ' de ' + esc(COMO) : '';
+    if (VISTA === 'socios') { $('#main').innerHTML = '<div class="vacio">Cargando los socios' + de + '…</div>'; traerSocios(); }
+    else if (VISTA === 'dif') { $('#main').innerHTML = '<div class="vacio">Cargando las difusiones' + de + '…</div>'; traerDif(); }
+    else if (VISTA === 'cobros') { $('#main').innerHTML = '<div class="vacio">Cargando los cobros' + de + '…</div>'; traerCobros(); }
+    else $('#main').innerHTML = '<div class="vacio">Cargando la cola' + de + '…</div>';
+    traer(true);
+  };
+  $('#links').onclick = () => {
+    $('#main').innerHTML = '<div class="vacio">Cargando links…</div>';
+    google.script.run
+      .withSuccessHandler((l) => {
+        $('#main').innerHTML = '<h2>🔗 Links de las asesoras</h2>' + l.map((x, i) =>
+          `<div class="card" style="margin-bottom:8px"><div class="num"><b>${esc(x.asesora)}</b> · ${x.celular ? '📱 activado ' + esc(x.celular) : '⚪ falta activar su celular (pide tu PIN)'}</div>
+          <div class="tip" style="word-break:break-all;margin:6px 0">${esc(x.link)}</div>
+          <button class="guardar" data-i="${i}">📋 Copiar link</button></div>`).join('') +
+          '<button class="saltar" id="volver">← Volver a la cola</button>';
+        document.querySelectorAll('[data-i]').forEach((b) => b.onclick = () => {
+          const t = l[b.dataset.i].link;
+          (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('📋 Copiado')).catch(() => prompt('Copia el link:', t));
+        });
+        $('#volver').onclick = () => { mostrando = false; pintar(); };
+      })
+      .withFailureHandler((e) => toast(e.message || String(e), true))
+      .app_links(LLAVE);
+  };
   $('#errores').onclick = () => {
     $('#main').innerHTML = '<div class="vacio">Cargando errores…</div>';
     google.script.run

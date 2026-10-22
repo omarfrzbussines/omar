@@ -21,7 +21,7 @@ async function cargar() {
   const tabla = $('mods');
   tabla.innerHTML = '';
   for (const [k, nombre] of Object.entries(MODS)) {
-    const modo = c.modos[k] || (k === 'm1' ? (c.dryRun === false ? 'real' : 'sim') : 'sim');
+    const modo = c.modos[k] || (k === 'm1' ? (c.dryRun === false ? 'real' : 'sim') : k === 'cf' ? 'real' : 'sim');
     const tr = document.createElement('tr');
     tr.innerHTML = `<td></td><td style="text-align:right"><select data-k="${k}">
       <option value="sim">🧪 Simulación</option><option value="real">📤 Envío real</option><option value="off">Apagado</option></select></td>`;

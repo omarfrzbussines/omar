@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>RURUSH — Configuración</title>
+<style>
+:root{--rojo:#C00000;--rojo-osc:#8B0000;--luz:#FF3333;--negro:#1A0606;--linea:rgba(255,255,255,.12)}
+*{box-sizing:border-box;margin:0}
+body{background:var(--negro);color:#fff;font-family:Montserrat,"Segoe UI",system-ui,sans-serif;
+     font-size:14px;min-height:100vh;padding:0 0 40px}
+header{display:flex;align-items:center;gap:12px;padding:18px 28px;
+       background:linear-gradient(135deg,var(--rojo),var(--rojo-osc))}
+header img{width:32px;height:32px}
+header b{font-weight:900;letter-spacing:.1em}
+main{max-width:620px;margin:28px auto;padding:0 20px}
+h2{font-size:11px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;
+   color:var(--luz);margin:24px 0 10px}
+.card{background:rgba(255,255,255,.06);border:1px solid var(--linea);border-radius:12px;padding:16px 18px}
+label{display:block;font-size:11px;color:rgba(255,255,255,.55);margin:12px 0 4px}
+label:first-child{margin-top:0}
+input{width:100%;background:rgba(0,0,0,.35);border:1px solid var(--linea);color:#fff;
+      border-radius:8px;padding:10px 12px;font-size:13px;font-family:inherit}
+input:focus{outline:none;border-color:var(--luz)}
+.hint{font-size:11px;color:rgba(255,255,255,.45);margin-top:4px;line-height:1.5}
+.btns{display:flex;gap:8px;margin-top:16px}
+button{background:var(--rojo);border:0;color:#fff;border-radius:8px;padding:10px 18px;
+       font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+button.sec{background:rgba(255,255,255,.1)}
+button:hover{background:var(--luz)}
+button.sec:hover{background:rgba(255,255,255,.2)}
+#estado{margin-top:14px;font-size:12px;line-height:1.7;white-space:pre-wrap}
+.ok{color:#29d366}.err{color:#ff6b6b}
+.aviso{background:rgba(255,176,32,.1);border-left:3px solid #ffb020;border-radius:8px;
+       padding:12px 14px;font-size:12px;line-height:1.6;margin-top:12px}
+ul{margin:8px 0 0 18px;font-size:12px;line-height:1.7;color:rgba(255,255,255,.7)}
+.auto{background:rgba(192,0,0,.12);border:1px dashed rgba(255,51,51,.5);border-radius:10px;
+      padding:14px;margin:16px 0}
+.auto b{font-size:12px;letter-spacing:.06em}
+.auto p{font-size:11px;color:rgba(255,255,255,.6);line-height:1.5;margin:6px 0 10px}
+.auto input[type=file]{font-size:11px;padding:8px;cursor:pointer}
+code{background:rgba(0,0,0,.4);padding:1px 5px;border-radius:4px;font-size:11px}
+</style>
+</head>
+<body>
+<header><img src="icons/logo-blanco.png" alt=""><b>RURUSH — CONFIGURACIÓN</b></header>
+<main>
+  <div id="cerrojo" hidden>
+    <h2>Acceso</h2>
+    <div class="card">
+      <label>Clave de acceso</label>
+      <input id="pin" type="password" placeholder="Tu clave" autocomplete="off">
+      <div class="btns"><button id="entrar">Entrar</button></div>
+      <div id="pin-estado"></div>
+    </div>
+  </div>
+  <div id="contenido" hidden>
+  <div id="aviso-clave"></div>
+  <h2>Credenciales</h2>
+  <div class="card">
+    <label>TokenEmpresa de Apps Fit</label>
+    <input id="appsfit" type="password" placeholder="CC0677F3-…" autocomplete="off">
+    <p class="hint">Es el UUID que ya tienes en <code>credenciales_api.txt</code>, el que empieza con CC0677F3.</p>
+
+    <label>API token de Pipedrive</label>
+    <input id="pipedrive" type="password" placeholder="Tu token personal" autocomplete="off">
+    <p class="hint">Pipedrive → foto de perfil → Preferencias personales → API.</p>
+
+    <div class="auto">
+      <b>⚡ Autoconfigurar</b>
+      <p>Elige tu archivo <code>credenciales_api.txt</code> y la extensión toma sola los dos tokens. El archivo no sale de tu equipo.</p>
+      <input type="file" id="archivo" accept=".txt">
+    </div>
+
+    <div class="btns">
+      <button id="guardar">Guardar</button>
+      <button class="sec" id="probar">Probar conexión</button>
+      <button class="sec" id="ver">Ver / ocultar</button>
+      <button class="sec" id="borrar">Borrar todo</button>
+      <button class="sec" id="clave">Clave de acceso</button>
+    </div>
+    <div id="estado"></div>
+
+    <div class="aviso">
+      🔐 Los tokens quedan guardados solo en este Chrome, en este equipo. No se envían a ningún servidor
+      que no sea Apps Fit y Pipedrive. Si prestas o cambias la laptop, bórralos desde aquí.
+    </div>
+  </div>
+
+  <h2>Modo llave (computadoras del equipo)</h2>
+  <div class="card">
+    <p class="hint">
+      Con esto configurado, <b>los tokens de arriba no hacen falta y no deben estar</b>: las
+      consultas pasan por el intermediario de Omar, que es quien los guarda. Si alguien copia
+      esta extensión, se lleva una llave que se da de baja en diez segundos.
+    </p>
+
+    <label>URL del intermediario (Apps Script)</label>
+    <input id="proxyUrl" type="text" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
+    <p class="hint">Se obtiene al implementar <code>RURUSH_Proxy_API.gs</code>.</p>
+
+    <label>Llave de esta computadora</label>
+    <input id="proxyLlave" type="password" placeholder="rurush-nombre-xxxx" autocomplete="off">
+    <p class="hint">Una distinta por asesora. Omar la da de baja borrándola de <code>LLAVES</code>.</p>
+
+    <div class="btns">
+      <button id="guardarProxy">Guardar</button>
+      <button class="sec" id="quitarProxy">Quitar llave (volver a modo directo)</button>
+    </div>
+    <div id="proxy-estado"></div>
+  </div>
+
+  <h2>Venta por asesora (Sheet VENTAS 2026)</h2>
+  <div class="card">
+    <p class="hint">
+      El dashboard muestra la venta del mes y del día por asesora. La lee un Apps Script
+      que corre <b>en la cuenta de Omar</b>, no en esta computadora: acá no hace falta
+      acceso al Sheet ni cuenta de Google, solo esta URL.
+    </p>
+
+    <label>URL del Apps Script de ventas</label>
+    <input id="ventasUrl" type="text" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
+    <p class="hint">Se obtiene al implementar <code>RURUSH_Ventas_API.gs</code> en el Sheet.</p>
+
+    <label>Llave</label>
+    <input id="ventasLlave" type="password" placeholder="la que pusiste en LLAVE" autocomplete="off">
+
+    <div class="btns">
+      <button id="guardarVentas">Guardar</button>
+      <button class="sec" id="probarVentas">Probar</button>
+      <button class="sec" id="quitarVentas">Quitar</button>
+    </div>
+    <div id="ventas-estado"></div>
+  </div>
+
+  <h2>Guardar contactos solos</h2>
+  <div class="card">
+    <label style="display:flex;gap:8px;align-items:center"><input id="autoPd" type="checkbox" style="width:auto"> Al abrir un chat que no está en Pipedrive, guardarlo solo</label>
+    <p class="hint">Como Timelines: se crea la persona con el nombre de WhatsApp y el número. Solo si ya te escribió, nunca en grupos, y nunca dos veces el mismo número.</p>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input id="autoLlegada" type="checkbox" style="width:auto"> Guardar apenas llega un mensaje (aunque no abras el chat)</label>
+    <p class="hint">Apagado por defecto. Préndelo solo en la PC de una línea de leads: mientras WhatsApp Web esté abierto, cada persona nueva que escriba se guarda en Pipedrive.</p>
+    <div id="autoPd-estado"></div>
+  </div>
+
+  <h2>Qué hace la extensión</h2>
+  <div class="card">
+    <ul>
+      <li><b>WhatsApp Web</b> — pestaña RURUSH al costado derecho (o Alt+R): ficha del socio, plantillas y etiquetado.</li>
+      <li><b>Apps Fit</b> — la misma pestaña abre un buscador de socios vigentes con botón directo a WhatsApp.</li>
+      <li><b>Ícono de la extensión</b> — dashboard del día: activos, inscritos de hoy, free pass, no-shows y planes por vencer.</li>
+    </ul>
+  </div>
+
+  <h2>Recordatorios de uso</h2>
+  <div class="card">
+    <ul>
+      <li>El panel se abre con la pestaña roja del costado o con <b>Alt + R</b>.</li>
+      <li>Los horarios que ofrece el panel son 6, 7, 9 y 10 am y de ahí hasta 9 pm. Nunca 8 am.</li>
+      <li>Agendar siempre hoy o mañana. Más lejos, el lead se enfría.</li>
+      <li>La línea 926918075 no se usa para difusión en frío: es la que recibe los leads de Meta Ads.</li>
+      <li>La ubicación GPS va como mensaje aparte en todo recordatorio de free pass.</li>
+    </ul>
+  </div>
+  </div>
+</main>
+<script src="options.js"></script>
+</body>
+</html>

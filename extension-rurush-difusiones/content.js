@@ -201,6 +201,184 @@ async function clickSend() {
   return { ok: false, error: 'el mensaje quedó en el cuadro de texto' };
 }
 
+// ── Imagen: se pega en el cuadro de texto (como Ctrl+V), WhatsApp abre la vista previa
+//    y se aprieta su botón Enviar. Sin texto: el texto va después, como mensaje normal.
+const ICONO_ENVIAR = 'span[data-icon="send"], span[data-icon="wds-ic-send-filled"]';
+
+function vistaPrevia() {
+  const iconos = [...document.querySelectorAll(ICONO_ENVIAR)].filter((i) => !i.closest('#main footer') && i.offsetParent);
+  if (!iconos.length) return null;
+  const icono = iconos[iconos.length - 1];
+  const boton = icono.closest('button, [role="button"]') || icono.parentElement;
+  const textos = [...document.querySelectorAll('div[contenteditable="true"]')]
+    .filter((e) => !e.closest('#main footer') && !e.closest('#side') && !e.closest('#pane-side') && e.offsetParent);
+  return { boton, comentario: textos[textos.length - 1] || null };
+}
+
+async function esperar(fn, ms) {
+  const fin = Date.now() + ms;
+  while (Date.now() < fin) {
+    const r = fn();
+    if (r) return r;
+    await new Promise((res) => setTimeout(res, 300));
+  }
+  return null;
+}
+
+const salientes = () => document.querySelectorAll('#main .message-out, #main [data-id^="true_"]').length;
+
+async function enviarImagen({ b64, mime, nombre, texto }) {
+  const c = compose();
+  if (!c) return { ok: false, error: 'el chat no está abierto' };
+  const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+  const archivo = new File([bytes], nombre || 'promo.jpg', { type: mime || 'image/jpeg' });
+  const conArchivo = () => { const dt = new DataTransfer(); dt.items.add(archivo); return dt; };
+
+  // Con el texto ya en el cuadro, WhatsApp lo pasa como comentario de la imagen:
+  // sale UN solo mensaje (imagen + texto abajo).
+  c.focus();
+  c.dispatchEvent(new ClipboardEvent('paste', { clipboardData: conArchivo(), bubbles: true, cancelable: true }));
+  let metodo = 'pegar';
+  let vista = await esperar(vistaPrevia, 8000);
+  if (!vista) {
+    // plan B: soltar el archivo sobre el chat (como arrastrarlo)
+    metodo = 'soltar';
+    const zona = document.querySelector('#main');
+    const dt = conArchivo();
+    for (const t of ['dragenter', 'dragover', 'drop']) zona.dispatchEvent(new DragEvent(t, { dataTransfer: dt, bubbles: true, cancelable: true }));
+    vista = await esperar(vistaPrevia, 8000);
+  }
+  if (!vista) return { ok: false, error: 'no se abrió la vista previa de la imagen' };
+  await new Promise((r) => setTimeout(r, 800));
+  vista = vistaPrevia() || vista;
+
+  const cancelar = (error) => {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+    return { ok: false, error, metodo };
+  };
+  const leer = () => normTexto(vista.comentario ? vista.comentario.innerText : '');
+  if (!leer() && vista.comentario) {
+    // no pasó el texto: se pega como comentario
+    const dt = new DataTransfer();
+    dt.setData('text/plain', texto);
+    vista.comentario.focus();
+    vista.comentario.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    await new Promise((r) => setTimeout(r, 600));
+  }
+  if (leer() !== normTexto(texto)) return cancelar('el comentario de la imagen no coincide con el mensaje del Sheet');
+
+  vista.boton.click();
+  const cerro = await esperar(() => !vistaPrevia(), 20000);
+  if (!cerro) return cancelar('la imagen no salió (la vista previa no se cerró)');
+  return { ok: true, metodo };
+}
+
+// ── 📲 Estado: pestaña Estados → «＋» → Fotos y videos → vista previa → Enviar.
+//    El archivo se entrega al <input type=file> de WhatsApp (sin abrir el selector de Windows).
+const visible = (e) => !!(e && (e.offsetParent || e.getClientRects().length));
+const clicable = (e) => (e && (e.closest('button, [role="button"], a, li, [tabindex]') || e));
+function buscar(selectores, raiz = document) {
+  for (const sel of selectores) {
+    const e = [...raiz.querySelectorAll(sel)].find(visible);
+    if (e) return clicable(e);
+  }
+  return null;
+}
+function porTexto(re) {
+  const e = [...document.querySelectorAll('li, button, [role="button"], [role="menuitem"], div[aria-label], span')]
+    .filter(visible).find((x) => re.test((x.getAttribute('aria-label') || x.innerText || '').trim()));
+  return e ? clicable(e) : null;
+}
+const NAV_ESTADOS = ['[aria-label="Estados"]', '[aria-label="Estado"]', '[aria-label="Status"]', '[aria-label="Updates in Status"]',
+  '[data-icon="status-outline"]', '[data-icon="status-refreshed"]', '[data-icon="status"]', '[data-icon="status-filled"]', '[data-icon="wds-ic-status"]'];
+const NAV_CHATS = ['[aria-label="Chats"]', '[data-icon="chats-outline"]', '[data-icon="chats-filled"]', '[data-icon="chat"]'];
+const MAS_ESTADO = ['[aria-label="Agregar estado"]', '[aria-label="Añadir estado"]', '[aria-label="Add status"]', '[aria-label="Add Status"]',
+  '[aria-label="Mi estado"]', '[aria-label="My status"]', '[data-icon="status-add"]', '[data-icon="add-status"]', '[data-icon="plus-rounded"]', '[data-icon="plus"]', '[data-icon="wds-ic-add"]'];
+const inputFoto = () => [...document.querySelectorAll('input[type="file"]')].reverse()
+  .find((i) => /image|video|\*/.test(i.getAttribute('accept') || '*')) || null;
+
+// Qué se ve en pantalla (para entender un fallo sin estar frente a la PC).
+function pistas() {
+  const v = [...document.querySelectorAll('[aria-label], [data-icon], [role="menuitem"], li')].filter(visible)
+    .map((e) => e.getAttribute('aria-label') || (e.getAttribute('data-icon') ? 'icon:' + e.getAttribute('data-icon') : (e.innerText || '').trim().slice(0, 25)))
+    .filter(Boolean);
+  return [...new Set(v)].slice(-25).join(' | ');
+}
+
+async function subirEstado({ b64, mime, nombre, texto }) {
+  let paso = 'abrir Estados';
+  const volver = () => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true })); const c = buscar(NAV_CHATS); if (c) c.click(); };
+  const falla = (error) => { const p = pistas(); volver(); return { ok: false, error: error + ' · veo: ' + p }; };
+  try {
+    const nav = buscar(NAV_ESTADOS);
+    if (!nav) return falla('no encontré el botón Estados');
+    nav.click();
+    await new Promise((r) => setTimeout(r, 1500));
+    paso = 'botón ＋ de estado';
+    const mas = await esperar(() => buscar(MAS_ESTADO, document.querySelector('#app') || document), 8000);
+    if (!mas) return falla('no encontré el ＋ para agregar estado');
+    // el archivo queda esperando en la página: cuando WhatsApp pida «elegir archivo», se le entrega este
+    window.postMessage({ rurush: 'archivoEstado', b64, mime, nombre }, '*');
+    let entregado = false;
+    const oir = (e) => { if (e.source === window && e.data && e.data.rurush === 'archivoEntregado') entregado = true; };
+    window.addEventListener('message', oir);
+    const antes = new Set(document.querySelectorAll('input[type="file"]'));
+    mas.click();
+    await new Promise((r) => setTimeout(r, 1200));
+    paso = 'Fotos y videos';
+    let item = null, input = null;
+    if (!entregado && !vistaPrevia()) {
+      // el texto exacto «Fotos y videos» (no el menú entero) y de ahí su fila clicable
+      const hoja = [...document.querySelectorAll('span, div')].filter(visible)
+        .find((e) => /^(fotos y v[ií]deos|photos (&|and) videos)$/i.test((e.innerText || '').trim()) && e.children.length <= 2);
+      item = hoja ? (hoja.closest('li, [role="button"], [role="menuitem"], button') || hoja) : null;
+      if (item) {
+        input = item.querySelector('input[type="file"]');
+        if (!input) {
+          const r = item.getBoundingClientRect(), o = { bubbles: true, cancelable: true, view: window, clientX: r.left + 10, clientY: r.top + 10, button: 0 };
+          for (const t of ['pointerdown', 'mousedown', 'pointerup', 'mouseup']) item.dispatchEvent(new (t.startsWith('pointer') ? PointerEvent : MouseEvent)(t, o));
+          item.click();
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      }
+    }
+    if (!entregado && !vistaPrevia()) {
+      // plan B: un <input type=file> que sí esté en la página
+      input = input || [...document.querySelectorAll('input[type="file"]')].reverse().find((i) => !antes.has(i)) || inputFoto();
+      if (input) {
+        const dt = new DataTransfer();
+        dt.items.add(new File([Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0))], nombre || 'estado.jpg', { type: mime || 'image/jpeg' }));
+        input.files = dt.files;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }
+    window.removeEventListener('message', oir);
+    paso = 'vista previa';
+    let vista = await esperar(vistaPrevia, 15000);
+    if (!vista) {
+      const ins = [...document.querySelectorAll('input[type="file"]')].map((i) => i.getAttribute('accept') || '*').join(', ');
+      return falla((entregado ? 'entregué la foto pero no se abrió la vista previa' : 'no se abrió la vista previa')
+        + ` [opción: ${item ? item.tagName + ' «' + (item.innerText || '').trim().slice(0, 20) + '»' : 'no la hallé'} · input: ${input ? 'sí' : 'no'} · inputs en página: ${ins || 'ninguno'}]`);
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+    vista = vistaPrevia() || vista;
+    if (texto && vista.comentario) {
+      const t = new DataTransfer(); t.setData('text/plain', texto);
+      vista.comentario.focus();
+      vista.comentario.dispatchEvent(new ClipboardEvent('paste', { clipboardData: t, bubbles: true, cancelable: true }));
+      await new Promise((r) => setTimeout(r, 600));
+    }
+    paso = 'enviar';
+    vista.boton.click();
+    const cerro = await esperar(() => !vistaPrevia(), 30000);
+    if (!cerro) return falla('el estado no salió (la vista previa no se cerró)');
+    await new Promise((r) => setTimeout(r, 2000));
+    const c = buscar(NAV_CHATS); if (c) c.click();
+    return { ok: true };
+  } catch (e) {
+    return falla(paso + ': ' + String(e && e.message || e));
+  }
+}
 
 // Turno compartido entre Rurush FP y Rurush Difusiones: las dos usan la misma pestaña de
 // WhatsApp Web, así que quien envía toma el turno y la otra espera. Vive en el localStorage
@@ -250,6 +428,12 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     reply(clearDraft());
   } else if (msg.type === 'send') {
     clickSend().then(reply);
+    return true;
+  } else if (msg.type === 'subirEstado') {
+    subirEstado(msg).then(reply, (e) => reply({ ok: false, error: String(e && e.message || e) }));
+    return true;
+  } else if (msg.type === 'enviarImagen') {
+    enviarImagen(msg).then(reply, (e) => reply({ ok: false, error: String(e && e.message || e) }));
     return true;
   }
   return false;

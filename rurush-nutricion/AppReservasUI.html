@@ -169,7 +169,7 @@ function render(){
 }
 function vPaso1(){
   return '<section class="card step"><h2><span class="n">1</span>Buscar socio</h2>'+
-    '<form class="row" id="fb"><input class="big" type="text" id="tel" maxlength="60" autocomplete="off" placeholder="Celular, DNI o nombre" value="'+esc(S.q)+'">'+
+    '<form class="row" id="fb"><input class="big" type="text" id="tel" maxlength="60" autocomplete="off" placeholder="Celular, DNI, nombre o código" value="'+esc(S.q)+'">'+
     '<button class="btn primary"'+(S.busy==="buscar"?' disabled':'')+'>'+(S.busy==="buscar"?'<span class="spin"></span> Buscando':'Buscar')+'</button></form>'+
     '<div class="help">Escribe el celular (lo más seguro), el DNI o el nombre y apellido. Sin correo: la cita va directo a la ficha del socio.</div>'+(S.err&&!S.fichas?'<div class="err">'+esc(S.err)+'</div>':'')+'</section>';
 }
@@ -179,6 +179,7 @@ function fichaHtml(f,sel){
     '<div class="meta"><span>'+tag+'</span><span>DNI: <b>'+esc(f.dni||"—")+'</b></span><span>Cel: <b>'+esc((f.tels||[]).join(" · ")||"—")+'</b></span></div>'+
     '<div class="meta" style="margin-top:4px"><span>Evaluaciones: <b>'+(f.evaluaciones||0)+'</b></span><span>Última: <b>'+ddmm(f.ultima)+'</b></span>'+(f.org?'<span>'+esc(f.org)+'</span>':'')+'</div></div>'+
     (sel?'':'<button class="btn sm primary" data-sel="'+esc(f.pid)+'">Es esta persona</button>')+'</div>'+
+    (f.sinFicha?'<div class="alert ok">Alumno activo en AppsFit sin ficha en Pipedrive: se le crea su ficha al confirmar la reserva.</div>':'')+
     (f.mezclada?'<div class="alert bad">Esta ficha tiene muchos celulares (puede estar mezclada con otras personas). Revisa que el nombre sea el correcto antes de agendar.</div>':'')+
     (f.prox&&sel?'<div class="alert warn">Ya tiene cita el '+esc(lab(f.prox.fecha))+' a las '+esc(hTxt(f.prox.hora))+'. '+
       (S.mover?'Elige abajo la nueva fecha: se moverá esa misma cita.':'No se le puede poner otra.')+
@@ -249,7 +250,7 @@ function bind(){
   var on=function(sel,ev,fn){var e=$(sel);if(e)e[ev]=fn;};
   on("#salir","onclick",function(){reset();pinScreen();});
   on("#fb","onsubmit",function(e){e.preventDefault();var q=$("#tel").value.trim();S.err="";
-    if(q.length<3){S.q=q;S.fichas=null;S.err="Escribe el celular, el DNI o el nombre y apellido.";return render();}
+    if(q.length<3&&!/^\d{2,4}$/.test(q)){S.q=q;S.fichas=null;S.err="Escribe el celular, el DNI o el nombre y apellido.";return render();}
     reset();S.q=q;S.busy="buscar";render();
     call("rv_buscar",q).then(function(r){S.busy="";S.fichas=r.fichas;S.modo=r.modo;S.tel=r.tel||"";
       if(r.fichas.length===1&&!r.fichas[0].mezclada&&r.modo!=="nombre")elegir(r.fichas[0]);render();},

@@ -8,10 +8,12 @@
 
 const DV_ID = '1DHEBkhtGgOvSkUZDsdokVOVozHhujUF77sFUWgv9Ves';
 const DV_PLAZO = 21;
+const DV_PLAZO_MES = { '2026-10': 28 };   // meses con otro plazo (octubre 2026: hasta el miércoles 28)
+const dv_diaPlazo = (mesIso) => DV_PLAZO_MES[mesIso] || DV_PLAZO;
 const DV_CORREO = 'omarfrz@gmail.com';   // a quién llega el cuadro diario
-const DV_METAS = { MONICA: 18000, DANNA: 11000, LAURA: 11000 };   // metas del mes (cámbialas aquí)
-const DV_ASESORAS = ['DANNA', 'MONICA', 'LAURA'];
-const DV_NOMBRE = { DANNA: 'DANNA', MONICA: 'MÓNICA', LAURA: 'LAURA' };
+const DV_METAS = { MONICA: 18000, DANNA: 11000, LAURA: 11000, CIELO: 6000 };   // metas del mes (cámbialas aquí)
+const DV_ASESORAS = ['DANNA', 'MONICA', 'LAURA', 'CIELO'];
+const DV_NOMBRE = { DANNA: 'DANNA', MONICA: 'MÓNICA', LAURA: 'LAURA', CIELO: 'CIELO' };
 const DV_DIAS = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
 
 /* ---------- fechas (todo en 'yyyy-MM-dd', hora Lima) ---------- */
@@ -30,8 +32,8 @@ const dv_num = (v) => (typeof v === 'number' ? v : (parseFloat(String(v || '').r
 const dv_nom = (v) => String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase();
 
 /* ---------- datos ---------- */
-function dv_datos() {
-  const hoy = fechaLima(0);
+function dv_datos(hoyIso) {
+  const hoy = hoyIso || fechaLima(0);
   const y = Number(hoy.slice(0, 4)), m = Number(hoy.slice(5, 7));
   const MES = MESES[m - 1];
   const r = Sheets.Spreadsheets.Values.batchGet(DV_ID, {
@@ -58,17 +60,19 @@ function dv_datos() {
 
   // Plazo: el 21; si ya pasó, fin de mes.
   const ini = hoy.slice(0, 8) + '01';
-  let plazo = hoy.slice(0, 8) + ('0' + DV_PLAZO).slice(-2);
+  let plazo = hoy.slice(0, 8) + ('0' + dv_diaPlazo(hoy.slice(0, 7))).slice(-2);
   if (hoy > plazo) plazo = dv_iso(new Date(Date.UTC(y, m, 0, 12)));
   const diasTot = dv_habiles(ini, plazo);
   const diasPas = hoy > ini ? dv_habiles(ini, dv_mas(hoy, -1)) : 0;
   const diasRest = Math.max(1, dv_habiles(hoy, plazo));
   const esperado = diasTot ? diasPas / diasTot : 0;
 
-  // últimos 5 días hábiles hasta ayer
+  // semana de lunes a viernes (la de hoy; el lunes, la semana pasada completa)
   const ayer = dv_habilAnterior(hoy);
-  const ult = [ayer];
-  while (ult.length < 5) ult.unshift(dv_habilAnterior(ult[0]));
+  const wd = dv_d(hoy).getUTCDay();
+  let lunes = dv_mas(hoy, -((wd + 6) % 7));
+  if (wd === 1) lunes = dv_mas(lunes, -7);
+  const ult = [0, 1, 2, 3, 4].map((i) => dv_mas(lunes, i));
 
   let llam = {};
   try { llam = (getEquipo(false).llamadas || {}).ayer || {}; } catch (e) { /* sin llamadas */ }
@@ -95,54 +99,88 @@ function dv_datos() {
   };
 }
 
-/* ---------- HTML (sirve para el correo y para la pestaña 📈 Ventas) ---------- */
+/* ---------- HTML (sirve para el correo y para la pestaña 📈 Ventas) ----------
+   Arriba: ranking por % de la meta del mes (barra + raya de dónde deberían ir hoy).
+   Abajo: por asesora, lo que necesita HOY y su semana día por día:
+   🟩 llegó a lo que necesitaba ese día · 🟨 vendió sin llegar · 🟥 no vendió.
+   Solo tablas (sin position/flex) para que se vea igual en Gmail. */
 function dv_html(d) {
   const S = (v) => 'S/ ' + Math.round(v).toLocaleString('en-US');
   const P = (v) => Math.round(v * 100) + '%';
-  const COL = { 'META CUMPLIDA': '#0f8a4b', 'AL DÍA': '#0f8a4b', 'EN CAMINO': '#b7791f', 'EN RIESGO': '#d03b3b' };
-  const BG = { 'META CUMPLIDA': '#e3f3ea', 'AL DÍA': '#e3f3ea', 'EN CAMINO': '#fbf0d9', 'EN RIESGO': '#fae3e3' };
   const dia = (iso) => DV_DIAS[dv_d(iso).getUTCDay()] + ' ' + Number(iso.slice(8));
-  const barra = (pct, col, esp) =>
-    '<div style="position:relative;height:10px;background:#dcdbd6;border-radius:5px;margin:8px 0 4px">' +
-    '<div style="height:10px;width:' + Math.min(100, pct * 100).toFixed(1) + '%;background:' + col + ';border-radius:5px"></div>' +
-    '<div style="position:absolute;top:-4px;left:' + Math.min(100, esp * 100).toFixed(1) + '%;width:3px;height:18px;background:#24231f"></div></div>';
+  // barra con raya amarilla en "dónde deberían ir" hecha con celdas de tabla
+  const barra = (pct, esp, col) => {
+    const p = Math.min(100, Math.max(0, pct * 100)), e = Math.min(99, Math.max(0, esp * 100));
+    const seg = (w, bg) => w > 0 ? '<td style="width:' + w.toFixed(1) + '%;height:10px;background:' + bg + ';font-size:0;line-height:0">&nbsp;</td>' : '';
+    const cells = p <= e ? seg(p, col) + seg(e - p, '#4a4943') + seg(0.6, '#f2b84b') + seg(100 - e - 0.6, '#4a4943')
+                         : seg(e, col) + seg(0.6, '#f2b84b') + seg(p - e - 0.6, col) + seg(100 - p, '#4a4943');
+    return '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border-radius:5px;overflow:hidden;margin-top:5px"><tr>' + cells + '</tr></table>';
+  };
+  const lunes = dv_mas(d.hoy, -((dv_d(d.hoy).getUTCDay() + 6) % 7));
+  d.lista.forEach((a) => {
+    a.semana = 0;
+    a.dias = d.ult.map((f) => {
+      const v = a.porDia[f] || 0; a.semana += v;
+      if (f >= d.hoy) return { f: f, v: v, c: f === d.hoy ? 'hoy' : 'fut' };
+      let antes = 0; Object.keys(a.porDia).forEach((x) => { if (x < f) antes += a.porDia[x]; });
+      const need = Math.max(0, a.meta - antes) / Math.max(1, dv_habiles(f, d.plazo));
+      return { f: f, v: v, c: v >= need && need > 0 ? 'gano' : v > 0 ? 'algo' : 'nada' };
+    });
+  });
+  // lunes en la mañana: arriba la semana pasada (cómo cerró) y abajo la que empieza (cuánto falta vender)
+  const resumenLunes = d.ult[0] !== lunes && !d.noche;
+  const nueva = [0, 1, 2, 3, 4].map((i) => dv_mas(lunes, i));
+  const finSem = nueva[4] < d.plazo ? nueva[4] : d.plazo;
+  const diasSem = dv_habiles(d.hoy, finSem);
+  const rango = (a, b) => Number(a.slice(8)) + '–' + Number(b.slice(8)) + ' ' + ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'][Number(b.slice(5, 7)) - 1];
+  const rank = d.lista.slice().sort((p, q) => q.pct - p.pct || q.semana - p.semana);
+  const med = ['🥇', '🥈', '🥉'];
+  const COL = { gano: ['#16a34a', '#ffffff'], algo: ['#facc15', '#3b2f00'], nada: ['#dc2626', '#ffffff'], hoy: ['#ffffff', '#24231f'], fut: ['#ebeae6', '#9a9994'] };
   const pctEq = d.meta ? d.acum / d.meta : 0;
 
-  let h = '<div style="max-width:620px;margin:0 auto;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0b0b0b;background:#fcfcfb;padding:16px">' +
-    '<div style="font-size:12px;letter-spacing:2px;color:#8a8984;font-weight:700">RURUSH FITNESS CLUB</div>' +
-    '<div style="font-size:24px;font-weight:800;margin-top:2px">Cuadro de ventas · ' + dia(d.hoy) + '</div>' +
-    '<div style="font-size:14px;color:#52514e">Plazo: ' + Number(d.plazo.slice(8)) + ' · quedan <b>' + d.diasRest + ' días hábiles</b> (lun–vie)</div>' +
-    // equipo
-    '<div style="background:#24231f;color:#fff;border-radius:16px;padding:16px;margin-top:14px">' +
-    '<table width="100%" style="border-collapse:collapse;color:#fff"><tr>' +
-    '<td style="font-size:13px;font-weight:800;letter-spacing:1px">🎯 EQUIPO</td>' +
-    '<td align="right" style="font-size:26px;font-weight:800">' + S(d.acum) + ' <span style="font-size:14px;color:#c9c8c2;font-weight:600">de ' + S(d.meta) + '</span></td></tr></table>' +
-    '<div style="position:relative;height:12px;background:#4a4943;border-radius:6px;margin:10px 0 8px"><div style="height:12px;width:' + Math.min(100, pctEq * 100).toFixed(1) + '%;background:#fff;border-radius:6px"></div>' +
-    '<div style="position:absolute;top:-4px;left:' + Math.min(100, d.esperado * 100).toFixed(1) + '%;width:3px;height:20px;background:#f2b84b"></div></div>' +
-    '<table width="100%" style="border-collapse:collapse;color:#c9c8c2;font-size:13px"><tr><td><b style="color:#fff">' + P(pctEq) + '</b> logrado · deberíamos ir en <b style="color:#fff">' + P(d.esperado) + '</b></td>' +
-    '<td align="right">Faltan <b style="color:#fff;white-space:nowrap">' + S(d.falta) + '</b> → <b style="color:#fff;white-space:nowrap">' + S(d.falta / d.diasRest) + '/día</b></td></tr></table></div>';
+  const HOY = d.noche ? 'MAÑANA' : dv_habil(d.hoy) ? 'HOY' : 'EL LUNES';   // sábado en la mañana: resumen de la semana
+  let h = '<div style="max-width:540px;margin:0 auto;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0b0b0b;background:#fcfcfb;padding:16px">' +
+    '<table width="100%" style="border-collapse:collapse"><tr><td><div style="font-size:11px;letter-spacing:2px;color:#8a8984;font-weight:700">RURUSH FITNESS CLUB</div>' +
+    '<div style="font-size:22px;font-weight:800">' + (d.noche ? '🌙 Cierre · ' + dia(d.ayer) : 'Ventas · ' + dia(d.hoy)) + '</div></td>' +
+    '<td align="right" style="font-size:12px;color:#52514e">Equipo <b style="color:#0b0b0b;font-size:16px">' + P(pctEq) + '</b> del mes<br>quedan <b>' + d.diasRest + ' días</b> al ' + Number(d.plazo.slice(8)) + '</td></tr></table>';
 
-  d.lista.forEach((a) => {
-    const c = COL[a.estado];
-    h += '<div style="background:#f3f2ef;border-radius:16px;padding:14px 16px;margin-top:12px">' +
-      '<table width="100%" style="border-collapse:collapse"><tr><td style="font-size:20px;font-weight:800">' + a.nombre + '</td>' +
-      '<td align="right"><span style="background:' + BG[a.estado] + ';color:' + c + ';font-size:12px;font-weight:800;padding:4px 10px;border-radius:99px">' + a.estado + '</span></td></tr></table>' +
-      '<table width="100%" style="border-collapse:collapse;margin-top:6px"><tr>' +
-      '<td style="vertical-align:top"><div style="font-size:12px;color:#52514e">Meta de HOY</div><div style="font-size:26px;font-weight:800">' + S(a.metaHoy) + '</div></td>' +
-      '<td align="right" style="vertical-align:top"><div style="font-size:12px;color:#52514e">Mes</div><div style="font-size:16px;font-weight:800">' + S(a.acum) + ' <span style="font-weight:600;color:#52514e">de ' + S(a.meta) + ' · ' + P(a.pct) + '</span></div></td></tr></table>' +
-      barra(a.pct, c, d.esperado) +
-      '<table width="100%" style="border-collapse:separate;border-spacing:4px 0;margin-top:8px"><tr>' +
-      d.ult.map((f, i) => '<td align="center" style="background:' + (a.ult[i] ? '#fff' : '#ebeae6') + ';border-radius:8px;padding:5px 0">' +
-        '<div style="font-size:11px;color:#52514e">' + dia(f) + '</div><div style="font-size:14px;font-weight:800;color:' + (a.ult[i] ? '#0b0b0b' : '#9a9994') + '">' +
-        (a.ult[i] ? Math.round(a.ult[i]).toLocaleString('en-US') : '–') + '</div></td>').join('') + '</tr></table>' +
-      (a.llam ? '<div style="font-size:12px;color:#52514e;margin-top:8px">📞 Ayer: <b>' + a.llam.n + '</b> llamadas · <b>' + a.llam.cont + '</b> contestaron · <b>' + a.llam.agend + '</b> FP agendados</div>' : '') +
+  h += '<div style="background:#24231f;color:#ffffff;border-radius:16px;padding:12px 16px;margin-top:10px">' +
+    '<div style="font-size:12px;font-weight:800;letter-spacing:1px;color:#c9c8c2">🏆 RANKING · % DE LA META DEL MES</div>' +
+    rank.map((a, i) => '<div style="margin-top:8px"><table width="100%" style="border-collapse:collapse;color:#ffffff"><tr>' +
+      '<td style="font-size:18px;font-weight:800">' + (a.pct > 0 ? med[i] : '😴') + ' ' + a.nombre + '</td>' +
+      '<td align="right" style="font-size:24px;font-weight:900">' + P(a.pct) + '</td></tr></table>' +
+      barra(a.pct, d.esperado, a.pct >= d.esperado ? '#22c55e' : '#f87171') +
+      '<table width="100%" style="border-collapse:collapse;color:#c9c8c2;font-size:12px;margin-top:3px"><tr><td>Meta del mes <b style="color:#ffffff">' + S(a.meta) + '</b></td>' +
+      '<td align="right">lleva <b style="color:#ffffff">' + S(a.acum) + '</b> · faltan ' + S(a.falta) + ' · ' + (resumenLunes ? 'sem. pasada' : 'semana') + ' <b style="color:#ffffff">' + S(a.semana) + '</b></td></tr></table></div>').join('') +
+    '<div style="font-size:11px;color:#a8a7a1;margin-top:8px"><span style="color:#f2b84b">┃</span> donde deberían ir ' + (d.noche ? 'mañana' : 'hoy') + ' (' + P(d.esperado) + ')' +
+    (d.ult[0] !== lunes && !d.noche ? ' · semana pasada' : '') + '</div></div>';
+
+  const cajas = (dias) => '<table width="100%" style="border-collapse:separate;border-spacing:4px 0;margin-top:4px"><tr>' +
+    dias.map((x) => '<td align="center" style="width:20%;background:' + COL[x.c][0] + ';color:' + COL[x.c][1] + ';border-radius:8px;padding:4px 0' +
+      (x.c === 'hoy' ? ';border:2px solid #24231f' : '') + '">' +
+      '<div style="font-size:10px">' + dia(x.f) + '</div><div style="font-size:15px;font-weight:900">' +
+      (x.c === 'hoy' ? (d.noche ? 'MAÑ' : 'HOY') : x.c === 'fut' ? '·' : Math.round(x.v).toLocaleString('en-US')) + '</div></td>').join('') + '</tr></table>';
+  const rotulo = (t) => '<div style="font-size:10px;font-weight:800;letter-spacing:1px;color:#52514e;margin-top:7px">' + t + '</div>';
+  rank.forEach((a) => {
+    h += '<div style="background:#f3f2ef;border-radius:14px;padding:8px 12px;margin-top:8px">' +
+      '<table width="100%" style="border-collapse:collapse"><tr><td style="font-size:16px;font-weight:800">' + a.nombre + '</td>' +
+      '<td align="right" style="font-size:12px;color:#52514e">🎯 ' + HOY + ' necesita <b style="font-size:18px;color:#0b0b0b">' + S(a.metaHoy) + '</b></td></tr></table>';
+    if (resumenLunes) {
+      h += rotulo('SEMANA PASADA ' + rango(d.ult[0], d.ult[4]) + ' · vendió ' + S(a.semana)) + cajas(a.dias) +
+        rotulo('ESTA SEMANA ' + rango(nueva[0], nueva[4]) + ' · necesita ' + S(a.metaHoy * diasSem) + (finSem < nueva[4] ? ' hasta el ' + Number(finSem.slice(8)) : '')) +
+        cajas(nueva.map((f) => ({ f: f, v: 0, c: f === d.hoy ? 'hoy' : 'fut' })));
+    }
+    h += (resumenLunes ? '' : '<table width="100%" style="border-collapse:separate;border-spacing:4px 0;margin-top:6px"><tr>' +
+      a.dias.map((x) => '<td align="center" style="width:20%;background:' + COL[x.c][0] + ';color:' + COL[x.c][1] + ';border-radius:8px;padding:4px 0' +
+        (x.c === 'hoy' ? ';border:2px solid #24231f' : '') + '">' +
+        '<div style="font-size:10px">' + dia(x.f) + '</div><div style="font-size:15px;font-weight:900">' +
+        (x.c === 'hoy' ? (d.noche ? 'MAÑ' : 'HOY') : x.c === 'fut' ? '·' : Math.round(x.v).toLocaleString('en-US')) + '</div></td>').join('') +
+      '</tr></table>') +
+      (a.llam && !d.noche ? '<div style="font-size:11px;color:#52514e;margin-top:5px">📞 Ayer: <b>' + a.llam.n + '</b> llamadas · <b>' + a.llam.cont + '</b> contestaron · <b>' + a.llam.agend + '</b> FP agendados</div>' : '') +
       '</div>';
   });
-
-  if (d.ganadora) h += '<div style="background:#e3f3ea;color:#0f8a4b;border-radius:14px;padding:12px 16px;margin-top:12px;font-size:16px;font-weight:700">🏆 Ganadora de ayer (' + dia(d.ayer) + '): ' + d.ganadora.nombre + ' · ' + S(d.ganadora.monto) + '</div>';
-  h += '<div style="font-size:11px;color:#9a9994;margin-top:12px">AL DÍA = va al ritmo para llegar al ' + Number(d.plazo.slice(8)) + ' · EN CAMINO = 70–100% del ritmo · EN RIESGO = menos del 70%. ' +
-    'Meta de HOY = lo que falta ÷ días hábiles que quedan. Fuente: Hoja de Reportes 2026 (DATOS_ORIGEN). Ventas hasta ayer.</div></div>';
-  return h;
+  return h + '<div style="font-size:11px;color:#9a9994;margin-top:8px">🟩 llegó a su meta del día · 🟨 vendió sin llegar · 🟥 no vendió · ' +
+    (d.noche ? 'incluye lo de hoy' : 'ventas hasta ayer') + '</div></div>';
 }
 
 /* ---------- web (pestaña 📈 Ventas) y correo ---------- */
@@ -177,4 +215,81 @@ function dv_instalar() {
   MailApp.sendEmail({ to: DV_CORREO, subject: '📈 PRUEBA · Cuadro de ventas', htmlBody: dv_html(d), name: 'RURUSH Hoy' });
   Logger.log('Listo: correo de prueba enviado a ' + DV_CORREO + '. ' +
     d.lista.map((a) => a.nombre + ' ' + Math.round(a.acum) + '/' + a.meta + ' → hoy ' + Math.round(a.metaHoy)).join(' | '));
+}
+
+/* ---------- 📲 Cuadro para WhatsApp (la PC de Omar saca la foto y lo envía) ----------
+   Link de solo lectura con su propia clave (CUADRO_TOKEN): devuelve el HTML del cuadro y nada más.
+   ?cuadro=<clave>          → el de la mañana (ventas hasta ayer, lo que necesitan HOY)
+   ?cuadro=<clave>&noche=1  → el cierre de la noche (incluye lo de hoy, lo que necesitan MAÑANA) */
+function dv_cuadroTexto(noche) {
+  let d;
+  if (noche) {
+    let man = fechaLima(1);
+    while (!dv_habil(man)) man = dv_mas(man, 1);
+    // fin de mes: el cierre se hace con el mes que termina (no con el mes nuevo vacío)
+    d = man.slice(0, 7) === fechaLima(0).slice(0, 7) ? dv_datos(man) : dv_datos();
+    d.noche = man.slice(0, 7) === fechaLima(0).slice(0, 7);
+  } else d = dv_datos();
+  return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=540">' +
+    '<style>body{margin:0;background:#fcfcfb}</style></head><body>' + dv_html(d) + '</body></html>';
+}
+/* La PC crea su propia clave y la pide de alta; a Omar le llega un correo con un link para autorizarla
+   y escribir su número de WhatsApp. Hasta que no la autorice, la PC no ve nada. */
+function cuadro_tokens_() {
+  const props = PropertiesService.getScriptProperties();
+  const l = JSON.parse(props.getProperty('CUADRO_TOKENS') || '[]');
+  const viejo = props.getProperty('CUADRO_TOKEN');           // versión anterior: una sola clave
+  if (viejo && l.indexOf(viejo) < 0) l.push(viejo);
+  return l;
+}
+function cuadro_tokenOk_(t) { return !!t && cuadro_tokens_().indexOf(t) >= 0; }
+// Cada equipo (PC, extensión) tiene su clave. Cada pedido de alta manda su propio link (no anula los otros).
+function cuadro_alta_(tok) {
+  tok = String(tok || '');
+  if (!/^[a-f0-9]{32}$/.test(tok)) return 'Clave no válida.';
+  if (cuadro_tokenOk_(tok)) return 'OK';
+  const props = PropertiesService.getScriptProperties(), cache = CacheService.getScriptCache();
+  if (cache.get('cuadro_alta_' + tok)) return 'ESPERANDO';     // máx. 1 correo por hora por equipo
+  cache.put('cuadro_alta_' + tok, '1', 3600);
+  const pend = JSON.parse(props.getProperty('CUADRO_PENDIENTES') || '{}');
+  const code = Utilities.getUuid().replace(/-/g, '');
+  pend[code] = tok;
+  const claves = Object.keys(pend); if (claves.length > 10) delete pend[claves[0]];
+  props.setProperty('CUADRO_PENDIENTES', JSON.stringify(pend));
+  const url = ScriptApp.getService().getUrl() + '?cuadrook=' + code;
+  MailApp.sendEmail({ to: DV_CORREO, subject: '📲 Autoriza el envío del cuadro de ventas por WhatsApp', name: 'RURUSH Hoy',
+    htmlBody: '<p>Un equipo (tu PC o la extensión Rurush Difusiones) pidió permiso para enviar el cuadro de ventas por WhatsApp.</p>' +
+      '<p><a href="' + url + '" style="background:#e53935;color:#fff;padding:12px 18px;border-radius:10px;text-decoration:none;font-weight:700">✅ Autorizar</a></p>' +
+      '<p style="color:#888">Si no fuiste tú, ignora este correo.</p>' });
+  return 'ESPERANDO';
+}
+function cuadro_okPagina_(code, numero) {
+  const props = PropertiesService.getScriptProperties();
+  const page = (t) => HtmlService.createHtmlOutput('<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<div style="font:18px -apple-system,Roboto,sans-serif;padding:24px;max-width:420px;margin:auto">' + t + '</div>').setTitle('RURUSH · Cuadro');
+  const pend = JSON.parse(props.getProperty('CUADRO_PENDIENTES') || '{}');
+  const tok = pend[code] || (code && props.getProperty('CUADRO_OKCODE') === code ? props.getProperty('CUADRO_PEND') : null);
+  if (!tok) return page('Link vencido o ya usado. Si ya lo habías autorizado, no tienes que hacer nada.');
+  const n = String(numero || '').replace(/\D/g, '');
+  if (n.length >= 9) props.setProperty('CUADRO_NUMERO', n.length === 9 ? '51' + n : n);
+  const l = cuadro_tokens_(); if (l.indexOf(tok) < 0) l.push(tok);
+  props.setProperty('CUADRO_TOKENS', JSON.stringify(l.slice(-10)));
+  delete pend[code]; props.setProperty('CUADRO_PENDIENTES', JSON.stringify(pend));
+  return page('<h2>✅ Listo</h2><p>Quedó autorizado. El cuadro sale lun-vie a las 7:00 am y 9:00 pm a los números de la pestaña 📲 CUADRO WHATSAPP.</p>');
+}
+
+/* A quién se manda el cuadro: pestaña "📲 CUADRO WHATSAPP" de la Hoja de Reportes (columna A, desde la fila 2).
+   Los números no van en el código (GitHub es público). Nunca a los números bloqueados. */
+const CUADRO_BLOQUEO = ['51942853538', '51953876647'];
+function cuadro_destinos_() {
+  try {
+    const v = Sheets.Spreadsheets.Values.get(DV_ID, "'📲 CUADRO WHATSAPP'!A2:A50").values || [];
+    const out = [];
+    v.forEach((f) => {
+      let n = String(f[0] || '').replace(/\D/g, '');
+      if (n.length === 9) n = '51' + n;
+      if (/^519\d{8}$/.test(n) && CUADRO_BLOQUEO.indexOf(n) < 0 && out.indexOf(n) < 0) out.push(n);
+    });
+    return out;
+  } catch (e) { return []; }
 }

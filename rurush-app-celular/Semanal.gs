@@ -37,6 +37,7 @@ function sm_ase(v) {
   if (/monica/.test(s)) return 'MONICA';
   if (/danna|dilan|liam/.test(s)) return 'DANNA';
   if (/valeria/.test(s)) return 'VALERIA';
+  if (/cielo/.test(s)) return 'CIELO';
   return s ? 'OTROS' : 'SIN ASESORA';
 }
 // "09/11/2026" o "05/10/2026 05:56 p. m." → "2026-11-09"
@@ -131,7 +132,7 @@ function sm_datos() {
     });
   });
   const ini = mesIso + '-01';
-  let plazo = mesIso + '-' + ('0' + DV_PLAZO).slice(-2);
+  let plazo = mesIso + '-' + ('0' + dv_diaPlazo(mesIso)).slice(-2);
   if (dom > plazo) plazo = dv_iso(new Date(Date.UTC(y, m, 0, 12)));
   const diasTot = dv_habiles(ini, plazo);
   res.esperado = diasTot ? Math.min(1, dv_habiles(ini, dom < plazo ? dom : plazo) / diasTot) : 1;
@@ -341,11 +342,11 @@ function sm_html(d) {
     const R = d.retencion, pg = sm_pct(R.tot.vinieron, R.tot.activos);
     h += card('🔥 RETENCIÓN DE USO (vinieron la semana pasada · meta ' + Math.round(SM_RET_META * 100) + '%)',
       '<div style="font-size:15px;margin-bottom:6px">Global: <b style="color:' + (pg >= SM_RET_META * 100 ? '#0f8a4b' : '#d03b3b') + '">' + pg + '%</b> (' + R.tot.vinieron + ' de ' + R.tot.activos + ' activos)</div>' +
-      tabla(['Asesora', 'Activos', 'Vinieron', '%'], ['MONICA', 'LAURA', 'DANNA'].filter((a) => R.porAse[a]).map((a) => {
+      tabla(['Asesora', 'Activos', 'Vinieron', '%'], ['MONICA', 'LAURA', 'DANNA', 'CIELO'].filter((a) => R.porAse[a]).map((a) => {
         const r = R.porAse[a], p = sm_pct(r.vinieron, r.activos);
         return fila([DV_NOMBRE[a], r.activos, r.vinieron, '<b style="color:' + (p >= SM_RET_META * 100 ? '#0f8a4b' : '#d03b3b') + '">' + p + '%</b>']);
       })) +
-      ['MONICA', 'LAURA', 'DANNA'].filter((a) => R.porAse[a] && R.porAse[a].no.length).map((a) =>
+      ['MONICA', 'LAURA', 'DANNA', 'CIELO'].filter((a) => R.porAse[a] && R.porAse[a].no.length).map((a) =>
         '<div style="font-size:12px;color:#52514e;margin-top:4px">' + DV_NOMBRE[a] + ' – llamar: ' + R.porAse[a].no.map((x) => x.nombre + ' (' + (x.dias == null ? 'nunca' : x.dias + 'd') + ')').join(', ') + '</div>').join(''));
   }
 

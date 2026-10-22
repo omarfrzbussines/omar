@@ -306,7 +306,7 @@ function dg_deshacer(pin, q) {
 function dg_buscar(pin, q) {
   dg_pin(pin);
   q = String(q || '').trim();
-  if (q.length < 3) return [];
+  if (q.length < 3 && !/^\d{1,4}$/.test(q)) return [];
   const tel = nu_tel(q);
   // Pipedrive corta al azar entre resultados del mismo puntaje: se piden 30 y se quitan los que solo se parecen ("Clara" al buscar "lara")
   const j = nu_pd('/persons/search?limit=30&fields=' + (tel ? 'phone' : 'name') + '&term=' + encodeURIComponent(tel || q));
@@ -317,9 +317,9 @@ function dg_buscar(pin, q) {
   const ya = {};
   return extra.concat(base).filter((it) => !ya[it.item.id] && (ya[it.item.id] = 1)).map((it) => {
     const tels = (it.item.phones || []).map(nu_tel).filter((t, k, l) => t && l.indexOf(t) === k);
-    const nivel = nu_nivel(tels, it.item.organization && it.item.organization.name, vig);
+    const nivel = nu_nivel(tels, it.item.organization && it.item.organization.name, vig, it.item.name);
     return { pid: String(it.item.id), nombre: it.item.name, tels: tels.slice(0, 3), n: tels.length, nivel: nivel,
-             vence: (tels.map((t) => vig[t]).filter(Boolean).sort().pop()) || '' };
+             vence: nivel === 0 ? nu_esVigente(tels, it.item.name) : '' };
   }).filter((p) => p.n <= 3)                // fichas con muchos teléfonos son fichas mezcladas: no se ofrecen
     .sort((a, b) => a.nivel - b.nivel).slice(0, 15);   // socios activos primero
 }
@@ -327,8 +327,9 @@ function dg_buscar(pin, q) {
 /* 🚶 Sin cita: el socio llegó sin reserva y Diego ya lo evaluó */
 function dg_sinCita(pin, q) {
   dg_pin(pin);
-  const nombre = String(q.nombre || '').trim(), obs = String(q.obs || '').trim();
+  const nombre = String(q.nombre || '').replace(/\s*\(sin ficha\)$/, '').trim(), obs = String(q.obs || '').trim();
   let tel = nu_tel(q.tel);
+  if (/^af:/.test(String(q.pid || ''))) { q.pid = ''; }   // activo de AppsFit sin ficha: se crea
   if (!q.pid && (nombre.split(/\s+/).length < 2 || /^(socio|cliente|nuevo|nueva|prueba)\b/i.test(nombre))) throw new Error('Escribe el nombre y apellido reales del socio (no "Socio" ni "Cliente").');
   if (!q.pid && !tel) throw new Error('Escribe el celular del socio (9 dígitos, empieza con 9): así no se crea una ficha repetida.');
   if (obs.length < 3) throw new Error('Escribe la observación de la evaluación.');
@@ -336,9 +337,9 @@ function dg_sinCita(pin, q) {
     const sh = dg_hoja(), ah = dg_ahora();
     let pid = q.pid ? String(q.pid) : '';
     if (!pid) {   // antes de crear, buscar por celular para no duplicar
-      const hit = (((nu_pd('/persons/search?limit=1&fields=phone&term=' + tel).data || {}).items) || [])[0];
-      if (hit && !nu_mismoNombre(hit.item.name, nombre))
-        throw new Error('El celular ' + tel + ' ya está en la ficha de "' + hit.item.name + '". Revisa el número, o busca a ' + nombre + ' arriba y elígelo de la lista.');
+      const hit = ((((nu_pd('/persons/search?limit=10&fields=phone&term=' + tel).data || {}).items) || [])
+        .filter((it) => (it.item.phones || []).map(nu_tel).indexOf(tel) >= 0 && nu_mismoNombre(it.item.name, nombre)))[0];
+      // se reutiliza solo si es la misma persona; si el celular es de un familiar, se crea su propia ficha
       pid = hit ? String(hit.item.id) : String(nu_pd('/persons', { method: 'post', contentType: 'application/json',
         payload: JSON.stringify({ name: nombre, phone: [{ value: '+51' + tel, primary: true }] }) }).data.id);
     }

@@ -55,6 +55,7 @@ function doGet(e) {
       case 'marcar': return json_(marcar_(p));
       case 'porRevisar': return json_(porRevisar_(p.asesora, Number(p.dias) || 3));
       case 'respuesta': return json_(respuesta_(p));
+      case 'imagen': return json_(imagen_(p.tab));
       default: return json_({ ok: false, error: 'Acción desconocida: ' + p.a });
     }
   } catch (err) {
@@ -253,10 +254,59 @@ function esInasistencias_(tab) {
   return /INASIST/i.test(String(tab || ''));
 }
 
+/** Campañas a socios activos (📣 SOCIOS ACTIVOS…): son chats que ya existen. */
+function esSocios_(tab) {
+  return /SOCIOS/i.test(String(tab || ''));
+}
+
+/** Pestañas que escriben a gente con la que ya hay conversación (no son difusión en frío). */
+function esChatExistente_(tab) {
+  return esInasistencias_(tab) || esSocios_(tab);
+}
+
+/**
+ * Imagen de la pestaña: en las filas de arriba de la cabecera, una celda «🖼 IMAGEN» y a su
+ * derecha el enlace (Google Drive compartido «Cualquiera con el enlace», o un enlace directo).
+ * Devuelve el enlace, 'FALTA' si está la celda «🖼 IMAGEN» sin enlace, o '' si la pestaña no lleva imagen.
+ */
+function imagenUrl_(sh, h) {
+  var n = Math.max(1, (h ? h.row : HEADER_SCAN_ROWS) - 1);
+  var vals = sh.getRange(1, 1, n, Math.min(sh.getLastColumn(), 30)).getDisplayValues();
+  var falta = '';
+  for (var r = 0; r < vals.length; r++) {
+    for (var c = 0; c < vals[r].length - 1; c++) {
+      if (!/^\W*IMAGEN\b/.test(sinTildes_(vals[r][c]))) continue;
+      var url = String(vals[r][c + 1]).trim();
+      if (/^https?:\/\//i.test(url)) return url;
+      falta = 'FALTA';
+    }
+  }
+  return falta;
+}
+
+function imagen_(tab) {
+  var sh = SpreadsheetApp.getActive().getSheetByName(tab);
+  if (!sh) return { ok: false, error: 'No existe la pestaña «' + tab + '».' };
+  var url = imagenUrl_(sh, cabecera_(sh));
+  if (!url || url === 'FALTA') return { ok: false, error: 'La pestaña no tiene imagen (celda «🖼 IMAGEN» + enlace).' };
+  var id = /drive\.google\.com|docs\.google\.com/.test(url) && (/[-\w]{25,}/.exec(url) || [])[0];
+  var dl = id ? 'https://drive.google.com/uc?export=download&id=' + id : url;
+  var r = UrlFetchApp.fetch(dl, { followRedirects: true, muteHttpExceptions: true });
+  var blob = r.getBlob();
+  var mime = String(blob.getContentType() || '');
+  if (r.getResponseCode() !== 200 || !/^image\/(jpeg|png)$/.test(mime)) {
+    return { ok: false, error: 'No pude bajar la imagen (' + r.getResponseCode() + ', ' + (mime || 'sin tipo')
+      + '). Debe ser JPG o PNG y estar compartida como «Cualquiera con el enlace».' };
+  }
+  return { ok: true, mime: mime, nombre: /png/.test(mime) ? 'promo.png' : 'promo.jpg', b64: Utilities.base64Encode(blob.getBytes()) };
+}
+
 function pendientes_(tab, asesora, diasAntiDup) {
   // En INASISTENCIAS la frecuencia ya la controla la lista (un mensaje cada 5 días):
   // aquí solo se evita escribirle si recibió cualquier mensaje en los últimos 4 días.
+  // En una campaña a SOCIOS cada uno recibe una vez (ENV de la pestaña); solo se evita el mismo día.
   if (esInasistencias_(tab)) diasAntiDup = Math.min(diasAntiDup, 4);
+  if (esSocios_(tab)) diasAntiDup = 1;
   var sh = SpreadsheetApp.getActive().getSheetByName(tab);
   if (!sh) return { ok: false, error: 'No existe la pestaña «' + tab + '».' };
   var h = cabecera_(sh);
@@ -266,15 +316,18 @@ function pendientes_(tab, asesora, diasAntiDup) {
   var lineas = lineas_();
   var linea = lineas[sinTildes_(asesora)];
   if (!linea) return { ok: false, error: (asesora || 'Esa asesora') + ' no tiene línea en ⚙️ CONFIG. No se envía nada.' };
-  if (soloInasistencias_(asesora) && !esInasistencias_(tab)) {
+  if (soloInasistencias_(asesora) && !esChatExistente_(tab)) {
     return { ok: false, error: 'La línea de ' + asesora + ' solo envía 🏃 INASISTENCIAS (⚙️ CONFIG). No se envía esta tanda.' };
   }
+
+  var imagen = imagenUrl_(sh, h);
+  if (imagen === 'FALTA') return { ok: false, error: 'Falta el enlace de la imagen en «🖼 IMAGEN» de la pestaña. No se envía sin imagen.' };
 
   var dias = diasHoy_();
   var idx = indiceGlobal_();
   // Socios en pausa (PAUSAS del Sheet de socios): se revisa también al enviar, por si la asesora
   // lo anotó después de que se armó la lista de la mañana.
-  var pausas = esInasistencias_(tab) && typeof pausas_ === 'function'
+  var pausas = esChatExistente_(tab) && typeof pausas_ === 'function'
     ? pausas_(Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd')) : {};
   var items = [], excluidos = [];
   var vistos = {};
@@ -298,7 +351,7 @@ function pendientes_(tab, asesora, diasAntiDup) {
     var cod = h.cod >= 0 ? String(v[h.cod]).trim() : '';
     if (pausas[tel] || (cod && pausas['COD:' + cod])) return excluir('En PAUSAS (viaje, lesión o descanso)');
     var g = idx[tel];
-    if (g && (g.bloqueado || (g.socioActivo && !esInasistencias_(tab)))) return excluir('NO CONTACTAR en alguna pestaña');
+    if (g && (g.bloqueado || (g.socioActivo && !esChatExistente_(tab)))) return excluir('NO CONTACTAR en alguna pestaña');
     if (g && g.ultimo && (Date.now() - g.ultimo) / 86400000 < diasAntiDup) {
       return excluir('Ya recibió difusión el ' + Utilities.formatDate(new Date(g.ultimo), 'America/Lima', 'dd/MM') + ' (' + g.pestana + ')');
     }
@@ -317,19 +370,23 @@ function pendientes_(tab, asesora, diasAntiDup) {
     items.push({ fila: f.fila, nombre: nombre, celular: tel, mensaje: msj });
   });
 
-  return { ok: true, tab: tab, asesora: asesora, linea: linea, dias: dias, diasAntiDup: diasAntiDup, items: items, excluidos: excluidos };
+  return {
+    ok: true, tab: tab, asesora: asesora, linea: linea, dias: dias, diasAntiDup: diasAntiDup, items: items, excluidos: excluidos,
+    imagen: !!imagen, chatExistente: esChatExistente_(tab),
+  };
 }
 
 function yaEnviado_(celular, diasAntiDup, tab) {
   var tel = normPhone_(celular);
   if (!tel) return { ok: false, error: 'Celular inválido' };
   if (esInasistencias_(tab)) diasAntiDup = Math.min(diasAntiDup, 4);
+  if (esSocios_(tab)) diasAntiDup = 1;
   var g = indiceGlobal_()[tel];
   if (!g) return { ok: true, enviado: false, bloqueado: false };
   var reciente = !!(g.ultimo && (Date.now() - g.ultimo) / 86400000 < diasAntiDup);
   return {
     ok: true,
-    bloqueado: g.bloqueado || (g.socioActivo && !esInasistencias_(tab)),
+    bloqueado: g.bloqueado || (g.socioActivo && !esChatExistente_(tab)),
     enviado: reciente,
     fecha: g.ultimo ? Utilities.formatDate(new Date(g.ultimo), 'America/Lima', 'dd/MM/yyyy') : null,
     pestana: g.pestana,

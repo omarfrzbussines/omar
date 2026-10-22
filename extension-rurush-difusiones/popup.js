@@ -130,3 +130,20 @@ for (const id of ['iniciar', 'pausar', 'detener']) {
 chrome.storage.onChanged.addListener(pintar);
 cargarInfo();
 pintar();
+
+// 📊 Cuadro de ventas: lo manda ahora (prueba) a los números de la pestaña 📲 CUADRO WHATSAPP
+$('cuadro').addEventListener('click', async () => {
+  $('cuadro').disabled = true;
+  $('cuadro').textContent = 'Enviando cuadro… (~1 min)';
+  await send({ type: 'cuadroProbar' });
+  $('cuadro').textContent = '📊 Probar cuadro de ventas ahora';
+  $('cuadro').disabled = false;
+});
+
+$('estados').addEventListener('click', async () => {
+  $('estados').disabled = true;
+  $('estados').textContent = 'Publicando… (~1 min)';
+  const r = await send({ type: 'estadosAhora' });
+  $('estados').textContent = (r && r.ok ? r.data : (r && r.error)) || '📲 Publicar estados que ya tocan';
+  setTimeout(() => { $('estados').textContent = '📲 Publicar estados que ya tocan'; $('estados').disabled = false; }, 6000);
+});
