@@ -838,7 +838,7 @@ async function guardar() {
   };
   await colaPut({ id, creado: Date.now(), gasto, archivo: nombreArchivo(c), fotos: F.fotos.map((x) => x.blob), subidas: [], filaOk: false });
   historial(id, { estado: 'pend', reg: c.hoy, fecha: c.fecha, descripcion: gasto.descripcion, categoria: gasto.categoria,
-    metodo: gasto.metodo, total: gasto.total, persona: gasto.persona });
+    metodo: gasto.metodo, total: gasto.total, persona: gasto.persona, archivo: nombreArchivo(c) });
   if (gasto.proveedor) { const p = proveedores(); p[gasto.proveedor] = gasto.ruc || p[gasto.proveedor] || ''; ls.set('proveedores', p); }
   F.fotos.forEach((x) => URL.revokeObjectURL(x.url));
   F = nuevoForm();
@@ -858,7 +858,9 @@ function pintarHist() {
   const fila = (x) => {
     const tag = x.estado === 'ok' ? '<span class="tag ok">subido</span>' : x.estado === 'err' ? '<span class="tag err">reintentando</span>' : '<span class="tag pend">en cola</span>';
     const t = `<div class="main"><div class="t">${esc(x.descripcion)}${tag}</div><div class="d">${fm(x.fecha).slice(0, 5)} · ${esc(x.categoria)} · ${esc(x.metodo)} · ${esc(x.persona)}${x.estado === 'err' && x.error ? '<br>' + esc(x.error) : ''}</div></div><div class="m">${soles(x.total)}</div>`;
-    return x.foto ? `<a class="row" style="color:inherit;text-decoration:none" href="${esc(x.foto)}" target="_blank" rel="noopener">${t}</a>` : `<div class="row">${t}</div>`;
+    const del = `<button class="btn" data-borrar="${esc(x.id)}" title="Borrar" style="flex:none;padding:6px 9px">🗑️</button>`;
+    return x.foto ? `<div class="row"><a style="display:flex;flex:1;min-width:0;gap:10px;align-items:center;color:inherit;text-decoration:none" href="${esc(x.foto)}" target="_blank" rel="noopener">${t}</a>${del}</div>`
+      : `<div class="row">${t}${del}</div>`;
   };
   const R = ls.get('raiz');
   const [a, m] = MES_VER.split('-').map(Number);
@@ -921,6 +923,48 @@ async function pintarTotalMes(forzar) {
     <h2 style="font-size:13px">Por persona</h2><div class="list">${agrupar(4)}</div>
     <h2 style="font-size:13px">Pagado con</h2><div class="list">${agrupar(16)}</div>`;
   if (F.web) $('#totMes').insertAdjacentHTML('beforeend', `<a class="btn" style="display:block;text-align:center;margin-top:10px;text-decoration:none" href="${esc(F.web)}" target="_blank" rel="noopener">📊 Abrir el Excel</a>`);
+}
+
+/* ---------- borrar un gasto registrado por error ----------
+   Borra la fila del Excel (por su ID) y las fotos/PDF de ese gasto en nuestra
+   carpeta del mes y en la copia de la contadora (solo archivos que subió la app:
+   los que empiezan con el nombre del gasto). */
+
+async function borrarGasto(id) {
+  const h = ls.get('hist', []);
+  const x = h.find((g) => g.id === id);
+  if (!x) return;
+  const quitarDelHistorial = () => ls.set('hist', ls.get('hist', []).filter((g) => g.id !== id));
+  // Todavía en la cola (no subió nada): se borra solo del celular.
+  const enCola = (await colaTodo()).find((it) => it.id === id);
+  if (enCola && !enCola.filaOk && !(enCola.subidas || []).length) { await colaDel(id); quitarDelHistorial(); return 'Borrado del celular (no se había subido).'; }
+  if (enCola) await colaDel(id);   // a medio subir: que no se vuelva a intentar
+  const R = await raiz();
+  const xid = await excel();
+  const rango = await gj('GET', `/drives/${R.driveId}/items/${xid}/workbook/tables/${TABLA}/dataBodyRange?$select=address,values`);
+  const i = (rango.values || []).findIndex((f) => String(f[0]).trim() === id);
+  let base = x.archivo;
+  if (i >= 0) {
+    const f = rango.values[i];
+    if (!base) base = nombreOk([x.fecha, String(f[5] || x.categoria).toUpperCase(), f[9] || f[6] || x.descripcion, 'S' + r2(typeof f[15] === 'number' ? f[15] : num(f[15])), f[4] || x.persona].join(' - '));
+    const m = String(rango.address).match(/^(.*)!([A-Z]+)(\d+):([A-Z]+)\d+$/);
+    const hoja = m[1].replace(/^'|'$/g, ''), fila = Number(m[3]) + i;
+    await gj('POST', `/drives/${R.driveId}/items/${xid}/workbook/worksheets/${encodeURIComponent(hoja)}/range(address='${m[2]}${fila}:${m[4]}${fila}')/delete`, { shift: 'Up' });
+  }
+  let n = 0;
+  const borrarEn = async (d) => {
+    for (const a of await hijos(d)) {
+      if (!a.folder && base && sinTildes(a.name).startsWith(sinTildes(base))) { await gj('DELETE', `/drives/${d.driveId}/items/${a.id}`); n++; }
+    }
+  };
+  await borrarEn(await carpetaPropia(x.fecha));
+  let aviso = '';
+  if (CFG.fotos) {
+    try { await borrarEn(await carpetaFotos(x.fecha)); } catch (e) { aviso = ' No pude borrar la copia de la contadora: ' + e.message; }
+  }
+  quitarDelHistorial();
+  FILAS = null;
+  return (i >= 0 ? 'Fila del Excel borrada' : 'No estaba en el Excel') + ` · ${n} archivo(s) borrado(s).` + aviso;
 }
 
 function pintarConf() {
@@ -1078,6 +1122,15 @@ document.addEventListener('click', async (ev) => {
   if (t.dataset.comp != null) { F.comprobante = t.dataset.comp; return pintar(); }
   if (t.dataset.metodo != null) { F.metodo = t.dataset.metodo; return pintar(); }
   if (t.id === 'guardar') { t.disabled = true; try { await guardar(); } catch (e) { t.disabled = false; toast('❌ ' + e.message, 5000); } return; }
+  if (t.dataset.borrar) {
+    ev.preventDefault();
+    const g = ls.get('hist', []).find((x) => x.id === t.dataset.borrar);
+    if (!g || !confirm(`¿Borrar "${g.descripcion}" (${soles(g.total)})?\n\nSe borra la fila del Excel y sus fotos (tuya y la copia de la contadora). No se puede deshacer.`)) return;
+    t.disabled = true; t.textContent = '…';
+    try { toast('🗑️ ' + await borrarGasto(t.dataset.borrar), 5000); pintar(); }
+    catch (e) { t.disabled = false; t.textContent = '🗑️'; toast('❌ ' + e.message, 6000); }
+    return;
+  }
   if (t.dataset.mes) {
     const [a, m] = MES_VER.split('-').map(Number);
     const d = new Date(a, m - 1 + Number(t.dataset.mes), 1);
