@@ -221,19 +221,29 @@
   .ll-f { display:grid; grid-template-columns:150px minmax(0,1fr); gap:10px; align-items:center; margin-bottom:10px } .ll-f > span { font-weight:600; font-size:14px }
   @media (max-width:640px) { .ll-f { grid-template-columns:minmax(0,1fr) } .ll-marco iframe { height:calc(100vh - 170px) } }
   .tb-top { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px }
-  .tablero { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(200px,1fr); gap:12px; overflow-x:auto; padding-bottom:10px; margin-bottom:12px; align-items:start }
-  .tb-col { background:var(--gris-suave); border:1px solid var(--borde); border-radius:var(--r); display:flex; flex-direction:column; max-height:72vh }
-  .tb-h { display:flex; justify-content:space-between; align-items:baseline; gap:8px; padding:12px 14px 10px; border-bottom:1px solid var(--borde) }
-  .tb-h b { font-size:13px; letter-spacing:.03em; text-transform:uppercase } .tb-h span { font-size:13px; color:var(--sub); font-weight:700; font-variant-numeric:tabular-nums }
-  .tb-l { padding:10px; display:flex; flex-direction:column; gap:8px; overflow-y:auto }
-  .tb-c { background:var(--sup); border:1px solid var(--borde); border-radius:var(--r-s); padding:10px 12px; box-shadow:var(--sombra) }
-  .tb-n { font-weight:650; font-size:14px; word-break:break-word } .tb-m { display:flex; justify-content:space-between; align-items:center; gap:6px; margin-top:4px; font-size:12.5px; color:var(--sub) } .tb-m .sem { margin-left:0 }
-  .tb-a { font-size:12px; color:var(--sub); margin-top:4px; display:flex; align-items:center; gap:4px } .tb-a .ic { width:12px; height:12px }
-  .tb-acc { display:flex; gap:6px; margin-top:8px; align-items:center }
-  .tb-b { flex:1; height:32px; box-sizing:border-box; line-height:1; display:inline-flex; align-items:center; justify-content:center; gap:5px; min-height:32px; border:1px solid var(--borde-f); border-radius:var(--r-s); font-size:12.5px; font-weight:600; color:var(--texto); text-decoration:none; background:var(--sup) }
-  .tb-b:hover { background:var(--gris-suave) } .tb-b.wa { color:var(--verde) } .tb-b .ic { width:14px; height:14px }
+  .tablero { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(250px,1fr); gap:12px; overflow-x:auto; padding-bottom:10px; margin-bottom:12px; align-items:stretch }
+  .tb-col { --c:#64748b; --cs:#f1f5f9; background:var(--gris-suave); border:1px solid var(--borde); border-top:4px solid var(--c); border-radius:var(--r); display:flex; flex-direction:column; height:74vh; min-height:420px }
+  .tb-col.e71, .tb-col.e72 { --c:#2563eb; --cs:#eaf1ff } .tb-col.e73 { --c:#7c3aed; --cs:#f2ecff } .tb-col.e89 { --c:#ea580c; --cs:#fff0e6 }
+  .tb-col.e74 { --c:#0d9488; --cs:#e3f6f3 } .tb-col.e75 { --c:#d97706; --cs:#fff5e0 } .tb-col.e76 { --c:#16a34a; --cs:#e7f7ec }
+  .tb-h { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:12px 14px; background:var(--cs); border-bottom:1px solid var(--borde); border-radius:calc(var(--r) - 4px) calc(var(--r) - 4px) 0 0 }
+  .tb-h b { font-size:13.5px; letter-spacing:.03em; text-transform:uppercase; color:var(--c) }
+  .tb-cnt { background:var(--c); color:#fff; font-weight:800; font-size:16px; min-width:36px; padding:3px 10px; border-radius:99px; text-align:center; font-variant-numeric:tabular-nums }
+  .tb-l { padding:10px; display:flex; flex-direction:column; gap:8px; overflow-y:auto; flex:1 }
+  .tb-c { background:var(--sup); border:1px solid var(--borde); border-radius:var(--r-s); padding:12px 13px; box-shadow:var(--sombra) }
+  .tb-c.tarde { border:1.5px solid #e5484d; box-shadow:0 0 0 3px rgba(229,72,77,.10) }
+  .tb-n { font-weight:700; font-size:15.5px; line-height:1.25; word-break:break-word }
+  .tb-m { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:6px; margin-top:6px; font-size:13px; color:var(--sub) } .tb-m > span:first-child { white-space:nowrap }
+  .tb-d { font-size:12.5px; font-weight:650; padding:2px 8px; border-radius:99px; background:var(--gris-suave); color:var(--sub); white-space:nowrap }
+  .tb-d.r { background:#fde8e8; color:#b3121b }
+  .tb-a { font-size:13px; color:var(--sub); margin-top:6px; display:flex; align-items:center; gap:5px } .tb-a .ic { width:14px; height:14px }
+  .tb-a.sin { display:inline-flex; background:var(--ambar-suave); color:var(--ambar); font-weight:650; padding:2px 9px; border-radius:99px }
+  .tb-x { font-size:13px; font-weight:650; color:var(--texto); margin-top:6px }
+  .tb-acc { display:grid; grid-template-columns:1fr 1.25fr; gap:6px; margin-top:10px; align-items:center }
+  .tb-b { min-width:0; padding:0 6px; height:34px; box-sizing:border-box; line-height:1; display:inline-flex; align-items:center; justify-content:center; gap:6px; border:1px solid var(--borde-f); border-radius:var(--r-s); font-size:13px; font-weight:700; color:var(--texto); text-decoration:none; background:var(--sup); white-space:nowrap }
+  .tb-b:hover { background:var(--gris-suave) } .tb-b .ic { width:15px; height:15px }
+  .tb-b.wa { background:#e7f7ec; border-color:#9fd8b0; color:#11632b } .tb-b.wa:hover { background:#d6f1de }
   .dec-b .tb-b { flex:0 0 auto; padding:0 10px }
-  .tb-v { text-align:center; font-size:12.5px; color:var(--tenue); padding:6px }
+  .tb-v { text-align:center; font-size:13px; color:var(--tenue); padding:10px 6px }
   .t.rk tr.yo td { background:var(--rojo-suave) } .t.rk td:first-child { width:36px } .t.rk th:nth-child(2), .t.rk td:nth-child(2) { text-align:left }
   .dec-b { align-items:center }
   .corr { font-size:13.5px; padding:9px 0; border-bottom:1px solid var(--borde) } .corr:last-child { border-bottom:0 } .corr small { color:var(--tenue) }
@@ -653,6 +663,9 @@ function fechasRangoE(r) {
 }
 const telBotones = (n, peq) => n ? `<a class="tb-b" href="tel:+${esc(n)}" title="Llamar">${ic('tel')}${peq ? '' : ' Llamar'}</a><a class="tb-b wa" href="https:\/\/wa.me/${esc(n)}" target="_blank" rel="noopener" title="WhatsApp">💬${peq ? '' : ' WhatsApp'}</a>` : '<span class="tenue" style="font-size:12.5px">sin celular</span>';
 const diasCls = (d) => (d >= 7 ? 'r' : d >= 3 ? 'a' : 'v');
+// Por etapa: días máximos antes de marcarla en rojo y la próxima acción que toca
+const TB_ETAPA = { 71: { plazo: 1, accion: 'Primer contacto' }, 72: { plazo: 3, accion: 'Agendar clase' }, 73: { plazo: 7, accion: 'Confirmar asistencia' },
+  89: { plazo: 2, accion: 'Reagendar clase' }, 74: { plazo: 2, accion: 'Presentar plan' }, 75: { plazo: 5, accion: 'Cerrar inscripción' }, 76: { accion: 'Dar la bienvenida' } };
 function pantallaEmbudo() {
   const sub = (id, i, t) => `<button class="btn sec peq ${subE === id ? 'sel' : ''}" data-act="subE" data-s="${id}" aria-pressed="${subE === id}">${ic(i)} ${t}</button>`;
   const cab = `<div class="top"><div><h1>${D.esOmar ? 'Embudo de ventas' : 'Mi embudo'}</h1><div class="fecha">${D.esOmar ? 'Todo el equipo · solo tú ves esto' : 'Solo tus leads · ' + esc(cap(D.quien))} · Pipedrive</div></div>
@@ -666,14 +679,19 @@ function pantallaTablero() {
     : (T ? `<div class="tb-top"><span class="tenue" style="font-size:12.5px">${T.total} tratos abiertos tuyos · datos de las ${esc(T.hora)}</span></div>` : '');
   if (tErr) return filtro + `<div class="panel vacio">${ic('alerta')}<b>No se pudo leer Pipedrive</b>${esc(tErr)}</div>`;
   if (!T) return filtro + '<div class="carga"><span class="spin"></span>Armando el tablero… (la primera vez del día tarda unos segundos)</div>';
-  const card = (x) => `<div class="tb-c"><div class="tb-n">${esc(x.nombre || 'Sin nombre')}</div>
-      <div class="tb-m"><span>${esc(x.telM || '')}</span><span class="sem ${diasCls(x.dias)}">${x.dias} d</span></div>
-      ${D.esOmar && !tFiltro ? `<div class="tb-a">${ic('personas')} ${esc(cap(x.ase))}</div>` : ''}
-      <div class="tb-acc">${telBotones(x.tel, true)}</div></div>`;
-  return filtro + `<div class="tablero">${T.cols.map((c) => `<section class="tb-col" aria-label="${esc(c.nombre)}">
-      <div class="tb-h"><b>${esc(c.nombre)}</b><span>${c.n}</span></div>
-      <div class="tb-l">${c.cards.length ? c.cards.map(card).join('') : '<div class="tb-v">Vacío</div>'}${c.n > c.cards.length ? `<div class="tb-v">+ ${c.n - c.cards.length} más</div>` : ''}</div></section>`).join('')}</div>
-    <p class="aviso">${ic('candado')} Solo lectura: los tratos se mueven solos cada 30 min según lo que se marca en Free Pass (asistió, ¿se inscribió?). En cada columna salen 15: hasta Clase agendada los más nuevos; desde No vino, los que llevan más días.</p>`;
+  const card = (x, c) => {
+    const et = TB_ETAPA[c.id] || {}, tarde = x.dias > (et.plazo != null ? et.plazo : 99), sinAse = x.ase === 'SIN ASESORA';
+    const dias = x.dias === 0 ? 'Hoy en etapa' : x.dias === 1 ? '1 día en etapa' : x.dias + ' días en etapa';
+    return `<div class="tb-c ${tarde ? 'tarde' : ''}"><div class="tb-n">${esc(x.nombre || 'Sin nombre')}</div>
+      <div class="tb-m"><span>${esc(x.telM || 'sin celular')}</span><span class="tb-d ${tarde ? 'r' : ''}">${tarde ? '⚠️ ' : ''}${dias}</span></div>
+      ${D.esOmar && !tFiltro ? `<div class="tb-a ${sinAse ? 'sin' : ''}">${ic('personas')} ${sinAse ? 'Sin asesora' : esc(cap(x.ase))}</div>` : ''}
+      ${et.accion ? `<div class="tb-x">➜ ${et.accion}</div>` : ''}
+      <div class="tb-acc">${x.tel ? `<a class="tb-b" href="tel:+${esc(x.tel)}">${ic('tel')} Llamar</a><a class="tb-b wa" href="https:\/\/wa.me/${esc(x.tel)}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ''}</div></div>`;
+  };
+  return filtro + `<div class="tablero">${T.cols.map((c) => `<section class="tb-col e${c.id}" aria-label="${esc(c.nombre)}">
+      <div class="tb-h"><b>${esc(c.nombre)}</b><span class="tb-cnt">${c.n}</span></div>
+      <div class="tb-l">${c.cards.length ? c.cards.map((x) => card(x, c)).join('') : '<div class="tb-v">Sin tratos en esta etapa</div>'}${c.n > c.cards.length ? `<div class="tb-v">+ ${c.n - c.cards.length} más</div>` : ''}</div></section>`).join('')}</div>
+    <p class="aviso">${ic('candado')} Solo lectura: los tratos se mueven solos cada 30 min según lo que se marca en Free Pass (asistió, ¿se inscribió?). En cada columna salen 15: hasta Clase agendada los más nuevos; desde No vino, los que llevan más días. ⚠️ en rojo = pasó el plazo de la etapa (Nuevo lead 1 día · Contactado 3 · Clase agendada 7 · No vino 2 · Vino a clase 2 · En decisión 5).</p>`;
 }
 function pantallaNumeros() {
   const [de, ha] = E ? [E.desde, E.hasta] : fechasRangoE(rangoE);
