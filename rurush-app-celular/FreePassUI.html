@@ -84,7 +84,12 @@
   .item:last-child { border-bottom:0 }
   .item::before { content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:#c4c4c9 }
   .item.ok::before { background:var(--verde) } .item.no::before { background:#e58b8f }
-  .item.abierto { background:#fafafa }
+  .item { transition:background .18s ease, box-shadow .18s ease }
+  /* fila que se está editando: tono grafito suave y elevada, para que se note cuál es */
+  .item.abierto { background:#e9eaee; box-shadow:inset 0 1px 0 #d2d3d9, inset 0 -1px 0 #d2d3d9, 0 8px 22px rgba(16,16,20,.10); z-index:1; border-bottom-color:transparent }
+  .item.abierto::before { width:6px }
+  .item.abierto .detalle { border-top:1px dashed #cfd0d6; padding-top:14px }
+  .item.abierto .detalle select, .item.abierto .detalle .seg, .item.abierto .detalle input { background:#fff }
   .fila { padding:12px 16px 12px 20px; min-height:66px }
   .hora { font-size:17px; font-weight:700; font-variant-numeric:tabular-nums; line-height:1.1 }
   .hora small { display:block; font-size:12px; color:var(--tenue); font-weight:500 }
