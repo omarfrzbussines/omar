@@ -198,6 +198,18 @@
   .t tr:last-child td { border-bottom:0 }
   .sem { display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:600; padding:1px 8px; border-radius:99px; margin-left:6px }
   .sem.v { background:var(--verde-suave); color:var(--verde) } .sem.a { background:var(--ambar-suave); color:var(--ambar) } .sem.r { background:var(--rojo-suave); color:var(--rojo-texto) }
+  .embudo.e5 { grid-template-columns:repeat(5,minmax(0,1fr)) }
+  .ksub { font-size:12.5px; color:var(--sub); margin-top:2px } .tenue { color:var(--tenue) }
+  .fun-f { display:grid; grid-template-columns:86px minmax(0,1fr) 92px; gap:10px; align-items:center; padding:7px 0 }
+  .fun-n { font-size:13.5px; font-weight:600; color:var(--sub) }
+  .fun-b { height:30px; background:var(--gris-suave); border-radius:8px; overflow:hidden } .fun-b i { display:block; height:100%; background:var(--rojo); border-radius:8px }
+  .fun-v { text-align:right; font-variant-numeric:tabular-nums } .fun-v b { font-size:18px } .fun-v em { font-style:normal; color:var(--rojo-texto); font-weight:700; font-size:13px; margin-left:6px }
+  .fun-aparte { display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:12px; padding-top:12px; border-top:1px solid var(--borde); font-size:13.5px; color:var(--sub) }
+  .fun-aparte span { display:inline-flex; align-items:center; gap:6px } .fun-aparte .ic { width:15px; height:15px } .fun-aparte b { color:var(--texto); font-size:15px }
+  .dec-f { padding:11px 0; border-bottom:1px solid var(--borde) } .dec-f:last-child { border-bottom:0 }
+  .dec-a { display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:14.5px } .dec-a .sem { margin-left:0; white-space:nowrap }
+  .dec-b { display:flex; flex-wrap:wrap; gap:4px 16px; margin-top:4px; font-size:13.5px; color:var(--sub) } .dec-b span { display:inline-flex; align-items:center; gap:5px } .dec-b .ic { width:14px; height:14px }
+  .dec a { color:var(--rojo-texto); font-weight:600; text-decoration:none }
   .corr { font-size:13.5px; padding:9px 0; border-bottom:1px solid var(--borde) } .corr:last-child { border-bottom:0 } .corr small { color:var(--tenue) }
 
   /* ---- pantallas medianas y celular ---- */
@@ -229,7 +241,9 @@
     .nav button { width:auto; flex-shrink:0; min-height:40px }
     .side .pie { display:none }
     .main { padding:18px 16px 32px }
-    .kpis, .embudo { grid-template-columns:repeat(2,minmax(0,1fr)) }
+    .kpis, .embudo, .embudo.e5 { grid-template-columns:repeat(2,minmax(0,1fr)) }
+    .fun-f { grid-template-columns:74px minmax(0,1fr) 80px; gap:8px }
+    .embudo.e5 + .rejilla .t th, .embudo.e5 + .rejilla .t td { padding-left:6px; padding-right:6px }
     .rejilla { grid-template-columns:minmax(0,1fr) }
     .barra { padding:12px }
     .tabs { width:100%; display:grid; grid-template-columns:repeat(3,1fr) } .tabs button { white-space:normal; line-height:1.2; padding:6px; font-size:13px }
@@ -258,6 +272,7 @@
   <symbol id="i-pesa" viewBox="0 0 24 24"><path d="M6.5 6.5h11M6.5 17.5h11M3 9v6M21 9v6M6.5 5v14M17.5 5v14"/></symbol>
   <symbol id="i-canal" viewBox="0 0 24 24"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></symbol>
   <symbol id="i-tarjeta" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></symbol>
+  <symbol id="i-embudo" viewBox="0 0 24 24"><path d="M3 4h18l-7 8.5V18l-4 2v-7.5Z"/></symbol>
   <symbol id="i-pend" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></symbol>
 </svg>
 <div id="raiz"><div class="carga"><span class="spin"></span>Cargando…</div></div>
@@ -362,12 +377,13 @@ function filtrada() {
 
 /* ---------- pantalla ---------- */
 function pintar() {
-  const titulo = { hoy: 'Free Pass de hoy', ayer: 'Pendientes de ayer', manana: 'Free Pass de mañana', nutri: 'Nutrición', agendar: 'Agendar', metricas: 'Métricas' }[vista];
+  const titulo = { hoy: 'Free Pass de hoy', ayer: 'Pendientes de ayer', manana: 'Free Pass de mañana', nutri: 'Nutrición', agendar: 'Agendar', metricas: 'Métricas', embudo: 'Embudo' }[vista];
   const fechaV = vista === 'ayer' ? ayerDe(D.hoy) : vista === 'manana' ? manDe(D.hoy) : D.hoy;
   const nav = (id, i, t, n) => `<button class="${vista === id ? 'on' : ''}" data-act="nav" data-v="${id}" ${vista === id ? 'aria-current="page"' : ''}>${ic(i)}<span>${t}</span>${n != null ? `<span class="n">${n}</span>` : ''}</button>`;
   const agenda = ['hoy', 'ayer', 'manana'].includes(vista);
   let cont;
   if (vista === 'metricas') cont = pantallaMetricas();
+  else if (vista === 'embudo') cont = pantallaEmbudo();
   else {
     const btnAg = vista !== 'agendar' ? `<button class="btn pri" data-act="nav" data-v="agendar">${ic('mas')} Agendar Free Pass</button>` : '';
     cont = `<div class="top"><div><h1>${titulo}</h1><div class="fecha">${fechaLarga(fechaV)} · RURUSH Fitness Club</div></div>
@@ -390,7 +406,7 @@ function pintar() {
   }
   $('#raiz').innerHTML = `<div class="app"><nav class="side" aria-label="Menú"><img class="logo" src="${LOGO}" alt="RURUSH Fitness Club">
       <div class="who"><span class="av">${esc(String(D.quien).charAt(0))}</span><div>Sesión<b>${esc(cap(D.quien))}</b>${ic('candado', 'style="width:12px;height:12px"')} PC autorizada</div></div>
-      <div class="nav">${nav('hoy', 'ticket', 'Free Pass hoy', D.hoyL.length)}${nav('ayer', 'reloj', 'Pendientes de ayer', D.ayer.length)}${nav('manana', 'cal', 'Mañana', D.manana.length)}${nav('nutri', 'nutri', 'Nutrición', D.nutri.length)}${nav('agendar', 'mas', 'Agendar')}${D.esOmar ? nav('metricas', 'graf', 'Métricas') : ''}</div>
+      <div class="nav">${nav('hoy', 'ticket', 'Free Pass hoy', D.hoyL.length)}${nav('ayer', 'reloj', 'Pendientes de ayer', D.ayer.length)}${nav('manana', 'cal', 'Mañana', D.manana.length)}${nav('nutri', 'nutri', 'Nutrición', D.nutri.length)}${nav('agendar', 'mas', 'Agendar')}${D.esOmar ? nav('metricas', 'graf', 'Métricas') + nav('embudo', 'embudo', 'Embudo') : ''}</div>
       <div class="pie">${ic('candado', 'style="width:13px;height:13px;margin-top:1px"')}<span>Solo se ve lo de hoy · sin descargas · todo queda registrado</span></div></nav>
     <main class="main">${cont}</main></div>`;
   refrescar();
@@ -512,7 +528,7 @@ document.addEventListener('click', (ev) => {
   const b = ev.target.closest('[data-act]');
   if (!b || b.disabled || b.tagName === 'SELECT') return;
   const a = b.dataset.act;
-  if (a === 'nav') { vista = b.dataset.v; filtro = 'todos'; fAse = ''; fEst = ''; q = ''; if (vista === 'metricas') cargarMetricas(); else pintar(); window.scrollTo(0, 0); }
+  if (a === 'nav') { vista = b.dataset.v; filtro = 'todos'; fAse = ''; fEst = ''; q = ''; if (vista === 'metricas') cargarMetricas(); else if (vista === 'embudo') cargarEmbudo(); else pintar(); window.scrollTo(0, 0); }
   else if (a === 'tab') { filtro = b.dataset.f; refrescar(); }
   else if (a === 'marcar') marcar(Number(b.dataset.id), b.dataset.m, b.dataset.v, !!b.dataset.n);
   else if (a === 'exp') { const id = Number(b.dataset.id); abiertos.has(id) ? abiertos.delete(id) : abiertos.add(id); refrescar(); const e = document.querySelector('[data-k="exp-' + id + '"]'); if (e && !abiertos.has(id)) e.focus(); }
@@ -520,6 +536,7 @@ document.addEventListener('click', (ev) => {
   else if (a === 'refrescar') { b.disabled = true; cargar(true).then(() => { b.disabled = false; toast('Lista actualizada', 'ok'); }); }
   else if (a === 'reintentar') cargar();
   else if (a === 'rango') { rango = b.dataset.r; cargarMetricas(); }
+  else if (a === 'rangoE') { rangoE = b.dataset.r; cargarEmbudo(); }
   else if (a === 'nuSel') elegirN(b.dataset.pid);
   else if (a === 'nuDia') diaN(b.dataset.f);
   else if (a === 'nuHora') { S.hora = b.dataset.h; pintarNform(); }
@@ -591,6 +608,56 @@ async function cargarMetricas() {
   M = null; mErr = ''; pintar();
   try { M = await llamar('fp_metricas', de, ha); } catch (e) { mErr = e.message; }
   if (vista === 'metricas') pintar();
+}
+
+/* ---------- 📊 embudo de Pipedrive (solo Omar, solo lectura) ---------- */
+let E = null, eErr = '', rangoE = 'semana';
+function fechasRangoE(r) {
+  const h = D.hoy, lunes = isoMas(h, -((new Date(h + 'T12:00:00Z').getUTCDay() + 6) % 7));
+  if (r === 'semana') return [lunes, h];
+  if (r === 'semant') return [isoMas(lunes, -7), isoMas(lunes, -1)];
+  if (r === 'mes') return [h.slice(0, 8) + '01', h];
+  if (r === 'mesant') { const fin = isoMas(h.slice(0, 8) + '01', -1); return [fin.slice(0, 8) + '01', fin]; }
+  return [($('#eDesde') || {}).value || lunes, ($('#eHasta') || {}).value || h];
+}
+function pantallaEmbudo() {
+  const [de, ha] = E ? [E.desde, E.hasta] : fechasRangoE(rangoE);
+  const bt = (id, t) => `<button class="btn sec peq ${rangoE === id ? 'sel' : ''}" data-act="rangoE" data-r="${id}" aria-pressed="${rangoE === id}">${t}</button>`;
+  const cab = `<div class="top"><div><h1>Embudo de ventas</h1><div class="fecha">Leads creados del ${fechaCorta(de)} ${MESES[+de.slice(5, 7) - 1]} al ${fechaCorta(ha)} ${MESES[+ha.slice(5, 7) - 1]} · Pipedrive${E ? ' · datos de las ' + esc(E.hora) : ''} · solo tú ves esto</div></div>
+    <div class="rango">${bt('semana', 'Esta semana')}${bt('semant', 'Semana pasada')}${bt('mes', 'Este mes')}${bt('mesant', 'Mes pasado')}
+    <label class="sr" for="eDesde">Desde</label><input type="date" id="eDesde" value="${de}" max="${D.hoy}"> <span aria-hidden="true">→</span> <label class="sr" for="eHasta">Hasta</label><input type="date" id="eHasta" value="${ha}" max="${D.hoy}">${bt('otro', 'Ver')}</div></div>`;
+  if (eErr) return cab + `<div class="panel vacio">${ic('alerta')}<b>No se pudo leer Pipedrive</b>${esc(eErr)}</div>`;
+  if (!E) return cab + '<div class="carga"><span class="spin"></span>Leyendo el embudo de Pipedrive…</div>';
+  const t = E.total;
+  const k = (i, tit, n, sub) => `<div class="k"><small>${ic(i)} ${tit}</small><b>${n}</b>${sub ? `<div class="ksub">${sub}</div>` : ''}</div>`;
+  const etapas = [['Leads', t.leads, null], ['Agendaron', t.agend, t.leads], ['Vinieron', t.vino, t.agend], ['Inscritos', t.insc, t.vino]];
+  const fun = etapas.map((e, i) => `<div class="fun-f"><span class="fun-n">${e[0]}</span>
+      <div class="fun-b"><i style="width:${Math.max(t.leads ? e[1] / t.leads * 100 : 0, e[1] ? 3 : 0)}%;opacity:${1 - i * 0.18}"></i></div>
+      <span class="fun-v"><b>${e[1]}</b>${e[2] != null ? `<em>${pct(e[1], e[2])}%</em>` : ''}</span></div>`).join('');
+  const filaA = (x) => `<tr><td>${esc(cap(x.nombre))}</td><td>${x.leads}</td><td>${x.agend}</td><td>${x.vino}</td><td>${x.insc}</td><td>${pct(x.insc, x.agend)}%</td></tr>`;
+  const tel = (n) => n ? `<a href="tel:+${esc(n)}">${esc(n.replace(/^51/, ''))}</a> · <a href="https:\/\/wa.me/${esc(n)}" target="_blank" rel="noopener">WhatsApp</a>` : '<span class="tenue">sin celular</span>';
+  const dec = E.decision;
+  return cab + `<div class="embudo e5">${k('personas', 'Leads', t.leads)}${k('cal', 'Clase agendada', t.agend, pct(t.agend, t.leads) + '% de los leads')}
+      ${k('ok', 'Vinieron', t.vino, pct(t.vino, t.agend) + '% de los agendados')}${k('tarjeta', 'Inscritos', t.insc, pct(t.insc, t.vino) + '% de los que vinieron')}
+      ${k('graf', 'Conversión total', pct(t.insc, t.leads) + '%', 'inscritos ÷ leads')}</div>
+    <div class="rejilla"><div class="panel"><div class="panel-h">${ic('embudo')} Embudo</div><div class="panel-b">${fun}
+        <div class="fun-aparte"><span>${ic('alerta')} No vinieron (por reagendar) <b>${t.noVino}</b></span><span>${ic('x')} Perdidos <b>${t.perdidos}</b></span></div>
+        <p class="tenue" style="font-size:12.5px;margin-top:10px">El % de cada barra es respecto a la etapa anterior.</p></div></div>
+      <div class="panel"><div class="panel-h">${ic('personas')} Por asesora</div><div class="panel-b tw"><table class="t"><tr><th>Asesora</th><th>Leads</th><th>Agend.</th><th>Vin.</th><th>Inscr.</th><th>Conv.</th></tr>
+        ${E.asesoras.length ? E.asesoras.map(filaA).join('') : '<tr><td colspan="6" class="vacio-t">Sin leads en estas fechas</td></tr>'}</table>
+        <p class="tenue" style="font-size:12.5px;margin-top:8px">Asesora = campo RESPONSABLE de la persona (o la del asunto del FP). Conv. = inscritos ÷ agendados.</p></div></div></div>
+    <div class="panel"><div class="panel-h">${ic('reloj')} En decisión · ${dec.n} ${dec.n > dec.lista.length ? `(los ${dec.lista.length} con más días)` : ''}</div><div class="panel-b tw">
+      ${dec.lista.length ? `<div class="dec">${dec.lista.map((x) => `<div class="dec-f"><div class="dec-a"><b>${esc(x.nombre)}</b><span class="sem ${x.dias >= 7 ? 'r' : x.dias >= 3 ? 'a' : 'v'}">${x.dias} d en decisión</span></div>
+          <div class="dec-b">${tel(x.tel)}<span>${ic('personas')} ${esc(cap(x.ase || 'sin asesora'))}</span></div></div>`).join('')}</div>`
+        : '<div class="vacio-t" style="padding:12px 0">Nadie en decisión ahora mismo.</div>'}
+      <p class="tenue" style="font-size:12.5px;margin-top:8px">Todos los que están hoy en EN DECISIÓN (sin importar las fechas de arriba). Días = desde que entraron a esa etapa.</p></div></div>
+    <p class="aviso">${ic('candado')} Solo lectura. Los tratos los mueve el bot cada 30 min según lo que se marca en la app (vino, cierre). Se actualiza cada 10 min.</p>`;
+}
+async function cargarEmbudo() {
+  const [de, ha] = fechasRangoE(rangoE);
+  E = null; eErr = ''; pintar();
+  try { E = await llamar('fp_embudo', de, ha); } catch (e) { eErr = e.message; }
+  if (vista === 'embudo') pintar();
 }
 
 /* ---------- agendar nutrición con la base de socios (proyecto de Nutrición) ---------- */
