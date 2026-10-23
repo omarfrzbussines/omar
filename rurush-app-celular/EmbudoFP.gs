@@ -91,19 +91,20 @@ function emb_personas_(pids) {
   return out;
 }
 
-/** Pestaña 📊 Embudo: tratos CREADOS entre desde y hasta (add_time, hora Perú). */
-function fp_embudo(llave, pc, desde, hasta) {
-  if (fp_quien_(llave, pc) !== 'OMAR') throw new Error('Solo Omar ve el embudo.');
-  const hoy = fechaLima(0);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(desde || '') || !/^\d{4}-\d{2}-\d{2}$/.test(hasta || '')) throw new Error('Elige las fechas.');
-  if (hasta > hoy) hasta = hoy;
-  if (desde > hasta) throw new Error('La fecha inicial es posterior a la final.');
-  if (Date.parse(hasta) - Date.parse(desde) > 186 * 864e5) throw new Error('Máximo 6 meses por consulta.');
-  const clave = 'fpEmb_' + desde + '_' + hasta;
+// nombre de asesora "limpio" (sin tilde, DANA → DANNA); '' si no es una asesora conocida
+function emb_ok_(n) {
+  n = String(n || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
+  if (n === 'DANA') n = 'DANNA';
+  return EMB_ASESORAS.indexOf(n) >= 0 ? n : '';
+}
+const emb_dias_ = (d, ahora) => Math.max(0, Math.floor((ahora - d.cambio) / 864e5));
+
+/** Números de un periodo para TODAS las asesoras (10 min en caché). Cada quien ve después solo lo suyo. */
+function emb_periodo_(desde, hasta) {
+  const clave = 'fpEmb2_' + desde + '_' + hasta;
   const c = hoy_cacheGet_(clave);
   if (c) return c;
-
-  const todos = emb_tratos_(), ahora = Date.now();
+  const hoy = fechaLima(0), todos = emb_tratos_(), ahora = Date.now();
   const del = todos.filter(function (d) { const f = emb_diaLima_(d.add); return f >= desde && f <= hasta; });
   const decision = todos.filter(function (d) { return d.st === EMB_DECISION && d.est === 'open'; });
   const per = emb_personas_(del.concat(decision).map(function (d) { return d.pid; }));
@@ -112,48 +113,92 @@ function fp_embudo(llave, pc, desde, hasta) {
   let fpDe = null;
   const aseDe = function (d) {
     const p = per[d.pid] || {};
-    if (p.r) return p.r;
-    const ok = (n) => { n = String(n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase(); if (n === 'DANA') n = 'DANNA'; return EMB_ASESORAS.indexOf(n) >= 0 ? n : ''; };
-    if (ok(d.fp)) return ok(d.fp);
+    if (p.r) return emb_ok_(p.r) || p.r;
+    if (emb_ok_(d.fp)) return emb_ok_(d.fp);
     if (!fpDe) {
       fpDe = {};
       try {
         fp_acts_('meeting', desde, fp_mas_(hoy, 14)).forEach(function (a) {
-          if (a.personId && /^\s*FP\b/i.test(a.asunto) && ok(asesoraDeAsunto(a.asunto))) fpDe[a.personId] = ok(asesoraDeAsunto(a.asunto));
+          const n = emb_ok_(asesoraDeAsunto(a.asunto));
+          if (a.personId && /^\s*FP\b/i.test(a.asunto) && n) fpDe[a.personId] = n;
         });
       } catch (e) {}
     }
     return fpDe[d.pid] || 'SIN ASESORA';
   };
 
-  const nuevo = () => ({ leads: 0, agend: 0, vino: 0, insc: 0 });
-  const tot = Object.assign(nuevo(), { noVino: 0, perdidos: 0 }), porAse = {};
+  const nuevo = () => ({ leads: 0, agend: 0, vino: 0, insc: 0, noVino: 0, perdidos: 0 });
+  const tot = nuevo(), porAse = {};
   del.forEach(function (d) {
     const ganado = d.est === 'won', insc = ganado || (d.est === 'open' && d.st === EMB_EMPEZO);
     const nivel = insc ? 4 : (EMB_NIVEL[d.st] != null ? EMB_NIVEL[d.st] : 0);
-    const ase = aseDe(d), fil = [tot, porAse[ase] = porAse[ase] || nuevo()];
-    fil.forEach(function (x) {
+    const ase = aseDe(d);
+    [tot, porAse[ase] = porAse[ase] || nuevo()].forEach(function (x) {
       x.leads++;
       if (nivel >= 2) x.agend++;
       if (nivel >= 3) x.vino++;
       if (insc) x.insc++;
+      if (d.st === EMB_NO_VINO && !ganado) x.noVino++;
+      if (d.est === 'lost') x.perdidos++;
     });
-    if (d.st === EMB_NO_VINO && !ganado) tot.noVino++;
-    if (d.est === 'lost') tot.perdidos++;
   });
-
   const lista = decision.map(function (d) {
     const p = per[d.pid] || {};
-    return { nombre: d.nom, tel: p.t || '', ase: p.r || d.fp || '', dias: Math.max(0, Math.floor((ahora - d.cambio) / 864e5)) };
+    return { nombre: d.nom, tel: p.t || '', ase: emb_ok_(p.r) || p.r || emb_ok_(d.fp) || '', dias: emb_dias_(d, ahora) };
   }).sort(function (a, b) { return b.dias - a.dias; });
-
-  const res = {
-    desde: desde, hasta: hasta, total: tot,
-    asesoras: Object.keys(porAse).map(function (k) { return Object.assign({ nombre: k }, porAse[k]); })
-      .sort(function (x, y) { return y.insc - x.insc || y.vino - x.vino || y.agend - x.agend || y.leads - x.leads; }),
-    decision: { n: lista.length, lista: lista.slice(0, 30) },
-    hora: Utilities.formatDate(new Date(), 'America/Lima', 'HH:mm')
-  };
+  const res = { desde: desde, hasta: hasta, total: tot, porAse: porAse, decision: lista, hora: Utilities.formatDate(new Date(), 'America/Lima', 'HH:mm') };
   try { hoy_cachePut_(clave, res, EMB_SEG); } catch (e) {}
   return res;
+}
+
+/** Pestaña 📊 Embudo: tratos CREADOS entre desde y hasta (add_time, hora Perú).
+    Omar ve todo; cada asesora ve SOLO lo suyo + el ranking del equipo. */
+function fp_embudo(llave, pc, desde, hasta) {
+  const quien = fp_quien_(llave, pc), esOmar = quien === 'OMAR';
+  const hoy = fechaLima(0);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(desde || '') || !/^\d{4}-\d{2}-\d{2}$/.test(hasta || '')) throw new Error('Elige las fechas.');
+  if (hasta > hoy) hasta = hoy;
+  if (desde > hasta) throw new Error('La fecha inicial es posterior a la final.');
+  if (Date.parse(hasta) - Date.parse(desde) > 186 * 864e5) throw new Error('Máximo 6 meses por consulta.');
+  const P = emb_periodo_(desde, hasta), yo = emb_ok_(quien) || quien;
+  const vacio = { leads: 0, agend: 0, vino: 0, insc: 0, noVino: 0, perdidos: 0 };
+  const ranking = Object.keys(P.porAse).filter(function (k) { return k !== 'SIN ASESORA' && k !== 'OMAR'; })
+    .map(function (k) { const x = P.porAse[k]; return { nombre: k, agend: x.agend, vino: x.vino, insc: x.insc, yo: k === yo }; })
+    .sort(function (x, y) { return y.insc - x.insc || y.vino - x.vino || y.agend - x.agend; });
+  const dec = esOmar ? P.decision : P.decision.filter(function (x) { return x.ase === yo; });
+  return {
+    desde: P.desde, hasta: P.hasta, hora: P.hora, esOmar: esOmar, yo: yo,
+    total: esOmar ? P.total : (P.porAse[yo] || vacio),
+    asesoras: esOmar ? Object.keys(P.porAse).map(function (k) { return Object.assign({ nombre: k }, P.porAse[k]); })
+      .sort(function (x, y) { return y.insc - x.insc || y.vino - x.vino || y.agend - x.agend || y.leads - x.leads; }) : [],
+    ranking: ranking,
+    decision: { n: dec.length, lista: dec.slice(0, 30) }
+  };
+}
+
+/** 🗂️ Tablero: tratos ABIERTOS por etapa. Asesora = solo los suyos; Omar = todos o la asesora que elija.
+    Por columna: cuántos hay y las 15 tarjetas más urgentes (hasta Clase agendada: los más nuevos primero; de No vino en adelante: los más atascados). */
+const EMB_COLS = [[71, 'Nuevo lead'], [72, 'Contactado'], [73, 'Clase agendada'], [89, 'No vino (reagendar)'], [74, 'Vino a clase'], [75, 'En decisión'], [76, 'Empezó plan']];
+function fp_tablero(llave, pc, filtro) {
+  const quien = fp_quien_(llave, pc), esOmar = quien === 'OMAR';
+  const ver = esOmar ? (emb_ok_(filtro) || (filtro === 'SIN ASESORA' ? 'SIN ASESORA' : '')) : (emb_ok_(quien) || quien);
+  const clave = 'fpTab_' + (ver || 'TODAS');
+  const c = hoy_cacheGet_(clave);
+  if (c) return Object.assign(c, { esOmar: esOmar });
+  const ahora = Date.now(), abiertos = emb_tratos_().filter(function (d) { return d.est === 'open' && EMB_NIVEL[d.st] != null; });
+  const per = emb_personas_(abiertos.map(function (d) { return d.pid; }));
+  const aseDe = (d) => { const p = per[d.pid] || {}; return emb_ok_(p.r) || p.r || emb_ok_(d.fp) || 'SIN ASESORA'; };
+  const mios = ver ? abiertos.filter(function (d) { return aseDe(d) === ver; }) : abiertos;
+  const cols = EMB_COLS.map(function (col) {
+    const l = mios.filter(function (d) { return d.st === col[0]; }).map(function (d) {
+      const p = per[d.pid] || {};
+      return { nombre: d.nom, tel: p.t || '', telM: fp_mascara_(p.t), dias: emb_dias_(d, ahora), ase: aseDe(d) };
+    });
+    const frescos = [71, 72, 73].indexOf(col[0]) >= 0;   // antes de la clase: lo más nuevo está más caliente
+    l.sort(function (a, b) { return frescos ? a.dias - b.dias : b.dias - a.dias; });
+    return { id: col[0], nombre: col[1], n: l.length, cards: l.slice(0, 15) };
+  });
+  const res = { ver: ver, cols: cols, total: mios.length, hora: Utilities.formatDate(new Date(), 'America/Lima', 'HH:mm') };
+  try { hoy_cachePut_(clave, res, EMB_SEG); } catch (e) {}
+  return Object.assign(res, { esOmar: esOmar });
 }
