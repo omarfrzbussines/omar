@@ -729,7 +729,7 @@ function pantallaLlamadas() {
   if (!LL) return cab() + '<div class="carga"><span class="spin"></span>Abriendo tu app de Llamadas…</div>';
   const conf = LL.esOmar ? `<button class="btn sec peq" data-act="llConf">⚙️ Links de asesoras</button>` : '';
   const nueva = LL.url ? `<a class="btn sec peq" href="${esc(LL.url)}" target="_blank" rel="noopener">↗ Abrir en otra pestaña</a>` : '';
-  if (LL.esOmar && (llConf || !LL.url && LL.conectadas.every((x) => !x.ok))) {
+  if (LL.esOmar && (llConf || !LL.url)) {   // a Omar, sin su propio link, siempre le sale el formulario para conectar
     const fila = (x) => `<label class="ll-f"><span>${esc(cap(x.asesora))} ${x.ok ? '<span class="sem v">conectada</span>' : '<span class="sem a">falta</span>'}</span>
         <input class="campo" data-ll="${x.asesora}" placeholder="${x.ok ? 'Ya está. Pega otro link para cambiarlo (o - para quitar)' : 'Pega aquí su link de Llamadas (…?k=…)'}" autocomplete="off"></label>`;
     return cab(nueva) + `<div class="panel" style="max-width:720px"><div class="panel-h">⚙️ Conectar la app de Llamadas de cada asesora</div><div class="panel-b">
