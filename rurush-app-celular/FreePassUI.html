@@ -215,6 +215,11 @@
   .dec-a { display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:14.5px } .dec-a .sem { margin-left:0; white-space:nowrap }
   .dec-b { display:flex; flex-wrap:wrap; gap:4px 16px; margin-top:4px; font-size:13.5px; color:var(--sub) } .dec-b span { display:inline-flex; align-items:center; gap:5px } .dec-b .ic { width:14px; height:14px }
   .dec a { color:var(--rojo-texto); font-weight:600; text-decoration:none }
+  a.btn { text-decoration:none; color:inherit }
+  .ll-marco { background:var(--sup); border:1px solid var(--borde); border-radius:var(--r); overflow:hidden; box-shadow:var(--sombra) }
+  .ll-marco iframe { display:block; width:100%; height:calc(100vh - 210px); min-height:560px; border:0; background:#111 }
+  .ll-f { display:grid; grid-template-columns:150px minmax(0,1fr); gap:10px; align-items:center; margin-bottom:10px } .ll-f > span { font-weight:600; font-size:14px }
+  @media (max-width:640px) { .ll-f { grid-template-columns:minmax(0,1fr) } .ll-marco iframe { height:calc(100vh - 170px) } }
   .tb-top { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px }
   .tablero { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(200px,1fr); gap:12px; overflow-x:auto; padding-bottom:10px; margin-bottom:12px; align-items:start }
   .tb-col { background:var(--gris-suave); border:1px solid var(--borde); border-radius:var(--r); display:flex; flex-direction:column; max-height:72vh }
@@ -398,13 +403,14 @@ function filtrada() {
 
 /* ---------- pantalla ---------- */
 function pintar() {
-  const titulo = { hoy: 'Free Pass de hoy', ayer: 'Pendientes de ayer', manana: 'Free Pass de mañana', nutri: 'Nutrición', agendar: 'Agendar', metricas: 'Métricas', embudo: 'Embudo' }[vista];
+  const titulo = { hoy: 'Free Pass de hoy', ayer: 'Pendientes de ayer', manana: 'Free Pass de mañana', nutri: 'Nutrición', agendar: 'Agendar', metricas: 'Métricas', embudo: 'Embudo', llamadas: 'Llamadas' }[vista];
   const fechaV = vista === 'ayer' ? ayerDe(D.hoy) : vista === 'manana' ? manDe(D.hoy) : D.hoy;
   const nav = (id, i, t, n) => `<button class="${vista === id ? 'on' : ''}" data-act="nav" data-v="${id}" ${vista === id ? 'aria-current="page"' : ''}>${ic(i)}<span>${t}</span>${n != null ? `<span class="n">${n}</span>` : ''}</button>`;
   const agenda = ['hoy', 'ayer', 'manana'].includes(vista);
   let cont;
   if (vista === 'metricas') cont = pantallaMetricas();
   else if (vista === 'embudo') cont = pantallaEmbudo();
+  else if (vista === 'llamadas') cont = pantallaLlamadas();
   else {
     const btnAg = vista !== 'agendar' ? `<button class="btn pri" data-act="nav" data-v="agendar">${ic('mas')} Agendar Free Pass</button>` : '';
     cont = `<div class="top"><div><h1>${titulo}</h1><div class="fecha">${fechaLarga(fechaV)} · RURUSH Fitness Club</div></div>
@@ -427,7 +433,7 @@ function pintar() {
   }
   $('#raiz').innerHTML = `<div class="app"><nav class="side" aria-label="Menú"><img class="logo" src="${LOGO}" alt="RURUSH Fitness Club">
       <div class="who"><span class="av">${esc(String(D.quien).charAt(0))}</span><div>Sesión<b>${esc(cap(D.quien))}</b>${ic('candado', 'style="width:12px;height:12px"')} PC autorizada</div></div>
-      <div class="nav">${nav('hoy', 'ticket', 'Free Pass hoy', D.hoyL.length)}${nav('ayer', 'reloj', 'Pendientes de ayer', D.ayer.length)}${nav('manana', 'cal', 'Mañana', D.manana.length)}${nav('nutri', 'nutri', 'Nutrición', D.nutri.length)}${nav('agendar', 'mas', 'Agendar')}${nav('embudo', 'embudo', D.esOmar ? 'Embudo' : 'Mi embudo')}${D.esOmar ? nav('metricas', 'graf', 'Métricas') : ''}</div>
+      <div class="nav">${nav('hoy', 'ticket', 'Free Pass hoy', D.hoyL.length)}${nav('ayer', 'reloj', 'Pendientes de ayer', D.ayer.length)}${nav('manana', 'cal', 'Mañana', D.manana.length)}${nav('nutri', 'nutri', 'Nutrición', D.nutri.length)}${nav('agendar', 'mas', 'Agendar')}${nav('embudo', 'embudo', D.esOmar ? 'Embudo' : 'Mi embudo')}${nav('llamadas', 'tel', 'Llamadas · Socios')}${D.esOmar ? nav('metricas', 'graf', 'Métricas') : ''}</div>
       <div class="pie">${ic('candado', 'style="width:13px;height:13px;margin-top:1px"')}<span>Solo se ve lo de hoy · sin descargas · todo queda registrado</span></div></nav>
     <main class="main">${cont}</main></div>`;
   refrescar();
@@ -549,7 +555,7 @@ document.addEventListener('click', (ev) => {
   const b = ev.target.closest('[data-act]');
   if (!b || b.disabled || b.tagName === 'SELECT') return;
   const a = b.dataset.act;
-  if (a === 'nav') { vista = b.dataset.v; filtro = 'todos'; fAse = ''; fEst = ''; q = ''; if (vista === 'metricas') cargarMetricas(); else if (vista === 'embudo') cargarEmbudo(); else pintar(); window.scrollTo(0, 0); }
+  if (a === 'nav') { vista = b.dataset.v; filtro = 'todos'; fAse = ''; fEst = ''; q = ''; if (vista === 'metricas') cargarMetricas(); else if (vista === 'embudo') cargarEmbudo(); else if (vista === 'llamadas') { if (LL) pintar(); else cargarLlamadas(); } else pintar(); window.scrollTo(0, 0); }
   else if (a === 'tab') { filtro = b.dataset.f; refrescar(); }
   else if (a === 'marcar') marcar(Number(b.dataset.id), b.dataset.m, b.dataset.v, !!b.dataset.n);
   else if (a === 'exp') { const id = Number(b.dataset.id); abiertos.has(id) ? abiertos.delete(id) : abiertos.add(id); refrescar(); const e = document.querySelector('[data-k="exp-' + id + '"]'); if (e && !abiertos.has(id)) e.focus(); }
@@ -557,6 +563,8 @@ document.addEventListener('click', (ev) => {
   else if (a === 'refrescar') { b.disabled = true; cargar(true).then(() => { b.disabled = false; toast('Lista actualizada', 'ok'); }); }
   else if (a === 'reintentar') cargar();
   else if (a === 'rango') { rango = b.dataset.r; cargarMetricas(); }
+  else if (a === 'llConf') { llConf = !llConf; pintar(); }
+  else if (a === 'llGuardar') guardarLlamadas();
   else if (a === 'rangoE') { rangoE = b.dataset.r; cargarEmbudo(); }
   else if (a === 'subE') { subE = b.dataset.s; if ((subE === 'tablero' && !T) || (subE === 'numeros' && !E)) cargarEmbudo(); else pintar(); }
   else if (a === 'nuSel') elegirN(b.dataset.pid);
@@ -711,6 +719,36 @@ async function cargarEmbudo() {
     try { E = await llamar('fp_embudo', de, ha); } catch (e) { eErr = e.message; }
   }
   if (vista === 'embudo') pintar();
+}
+
+/* ---------- 📞 Llamadas · Socios · Cobros (su app de Llamadas, adentro) ---------- */
+let LL = null, llErr = '', llConf = false;
+function pantallaLlamadas() {
+  const cab = (extra) => `<div class="top"><div><h1>Llamadas · Socios · Cobros</h1><div class="fecha">Tu app de Llamadas, aquí mismo</div></div><div class="acciones">${extra || ''}</div></div>`;
+  if (llErr) return cab() + `<div class="panel vacio">${ic('alerta')}<b>No se pudo abrir</b>${esc(llErr)}</div>`;
+  if (!LL) return cab() + '<div class="carga"><span class="spin"></span>Abriendo tu app de Llamadas…</div>';
+  const conf = LL.esOmar ? `<button class="btn sec peq" data-act="llConf">⚙️ Links de asesoras</button>` : '';
+  const nueva = LL.url ? `<a class="btn sec peq" href="${esc(LL.url)}" target="_blank" rel="noopener">↗ Abrir en otra pestaña</a>` : '';
+  if (LL.esOmar && (llConf || !LL.url && LL.conectadas.every((x) => !x.ok))) {
+    const fila = (x) => `<label class="ll-f"><span>${esc(cap(x.asesora))} ${x.ok ? '<span class="sem v">conectada</span>' : '<span class="sem a">falta</span>'}</span>
+        <input class="campo" data-ll="${x.asesora}" placeholder="${x.ok ? 'Ya está. Pega otro link para cambiarlo (o - para quitar)' : 'Pega aquí su link de Llamadas (…?k=…)'}" autocomplete="off"></label>`;
+    return cab(nueva) + `<div class="panel" style="max-width:720px"><div class="panel-h">⚙️ Conectar la app de Llamadas de cada asesora</div><div class="panel-b">
+      <p class="aviso" style="margin:0 0 12px">Abre tu app de Llamadas en el celular → 🔗 Links → copia el link de cada una y pégalo aquí. Se hace una sola vez. Las llaves se guardan en Google, no en GitHub.</p>
+      ${LL.conectadas.map(fila).join('')}
+      <div style="display:flex;gap:8px;margin-top:14px"><button class="btn pri" data-act="llGuardar">Guardar</button>${LL.url ? '<button class="btn sec" data-act="llConf">Cancelar</button>' : ''}</div></div></div>`;
+  }
+  if (!LL.url) return cab() + `<div class="panel vacio">${ic('tel')}<b>Tu app de Llamadas todavía no está conectada aquí</b>Pídele a Omar que la conecte. Mientras, usa tu link de siempre en el celular.</div>`;
+  return cab(nueva + conf) + `<p class="aviso" style="margin:-4px 0 10px">${ic('candado')} La primera vez en esta computadora te pedirá el PIN de Omar (tu celular sigue funcionando igual). Las llamadas se marcan mejor desde el celular.</p>
+    <div class="ll-marco"><iframe src="${esc(LL.url)}" title="App de Llamadas" allow="clipboard-write"></iframe></div>`;
+}
+async function cargarLlamadas() {
+  LL = null; llErr = ''; pintar();
+  try { LL = await llamar('fp_llamadasLink'); } catch (e) { llErr = e.message; }
+  if (vista === 'llamadas') pintar();
+}
+async function guardarLlamadas() {
+  const o = {}; document.querySelectorAll('[data-ll]').forEach((i) => { o[i.dataset.ll] = i.value; });
+  try { LL = await llamar('fp_guardarLlamadas', o); llConf = false; toast('Links guardados', 'ok'); pintar(); } catch (e) { toast(e.message, 'err'); }
 }
 
 /* ---------- agendar nutrición con la base de socios (proyecto de Nutrición) ---------- */

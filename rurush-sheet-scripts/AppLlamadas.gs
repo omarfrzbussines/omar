@@ -49,8 +49,17 @@ function app_asesora(k) {
     app_actualizarCel(a, { id: disp });
     return a;
   }
+  // 🖥️ segunda llave: la computadora de la asesora (para usar la app dentro de Free Pass), sin tocar el celular
+  const pcd = cel && cel.pc;
+  if (pcd && disp && pcd.id === disp) return a;
+  if (pcd && huella && pcd.huella === huella && /^[a-z0-9]{16,}$/.test(disp)) {
+    app_actualizarCel(a, { pc: Object.assign({}, pcd, { id: disp }) });
+    return a;
+  }
   throw new Error("CELULAR_NO_AUTORIZADO: este link solo funciona en el celular activado de " + a + ".");
 }
+// ¿Es una computadora? (navegador sin "Mobi/Android/iPhone/iPad")
+const app_esPC_ = (modelo) => !!modelo && !/Mobi|Android|iPhone|iPad|iPod/i.test(String(modelo));
 function app_actualizarCel(a, cambios) {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(5000)) return;
@@ -66,10 +75,11 @@ function app_estadoCelular(k) {
   const a = app_asesoraLlave(k);
   try { app_asesora(k); return { ok: true }; } catch (e) {
     const cel = app_celulares()[a];
-    return { ok: false, asesora: a, tiene: !!cel, desde: cel ? cel.desde : "" };
+    return { ok: false, asesora: a, tiene: !!(cel && cel.id), desde: cel ? cel.desde || "" : "", tienePC: !!(cel && cel.pc), desdePC: cel && cel.pc ? cel.pc.desde : "" };
   }
 }
 // Omar escribe el PIN en el celular de la asesora: ese celular queda como el único autorizado (reemplaza al anterior).
+// Si se activa desde una COMPUTADORA, queda como su PC (una sola) y el celular sigue funcionando.
 function app_activarCelular(k, pin, modelo) {
   const a = app_asesoraLlave(k);
   const disp = String(k || "").split("|")[1] || "";
@@ -85,7 +95,9 @@ function app_activarCelular(k, pin, modelo) {
   const lock = LockService.getScriptLock(); lock.waitLock(10000);
   try {
     const c = app_celulares();
-    c[a] = { id: disp, huella: String(k || "").split("|")[2] || "", desde: Utilities.formatDate(new Date(), "America/Lima", "dd/MM/yyyy HH:mm"), modelo: String(modelo || "").slice(0, 80) };
+    const nuevo = { id: disp, huella: String(k || "").split("|")[2] || "", desde: Utilities.formatDate(new Date(), "America/Lima", "dd/MM/yyyy HH:mm"), modelo: String(modelo || "").slice(0, 80) };
+    if (app_esPC_(modelo)) c[a] = Object.assign({}, c[a] || {}, { pc: nuevo });
+    else c[a] = Object.assign(nuevo, c[a] && c[a].pc ? { pc: c[a].pc } : {});
     app_props().setProperty("APP_CELULARES", JSON.stringify(c));
   } finally { lock.releaseLock(); }
   return { ok: true };
@@ -112,7 +124,8 @@ function app_links(llave) {
     const out = APP_ASESORAS.map(function (a) {
       let k = Object.keys(llaves).filter(function (x) { return llaves[x] === a; })[0];
       if (!k) { k = Utilities.getUuid().replace(/-/g, "").slice(0, 20); llaves[k] = a; }
-      return { asesora: a, link: "https://omarfrzbussines.github.io/omar/rurush-llamadas/?k=" + k, celular: cel[a] ? cel[a].desde + " · " + cel[a].modelo : "" };
+      return { asesora: a, link: "https://omarfrzbussines.github.io/omar/rurush-llamadas/?k=" + k, celular: cel[a] && cel[a].id ? cel[a].desde + " · " + cel[a].modelo : "",
+        pc: cel[a] && cel[a].pc ? cel[a].pc.desde : "" };
     });
     app_props().setProperty("APP_LLAVES", JSON.stringify(llaves));
     return out;
@@ -122,7 +135,7 @@ function app_links(llave) {
 function app_verCelulares() {
   const c = app_celulares();
   Logger.log("Candado " + (app_props().getProperty("APP_PIN") ? "ENCENDIDO" : "APAGADO (falta la propiedad APP_PIN)"));
-  APP_ASESORAS.forEach(function (a) { Logger.log(a + ": " + (c[a] ? "activado " + c[a].desde + " · " + c[a].modelo : "SIN CELULAR (nadie puede usar su link)")); });
+  APP_ASESORAS.forEach(function (a) { Logger.log(a + ": " + (c[a] && c[a].id ? "activado " + c[a].desde + " · " + c[a].modelo : "SIN CELULAR") + (c[a] && c[a].pc ? " · 🖥️ PC desde " + c[a].pc.desde : "")); });
 }
 
 /** Ejecutar UNA vez después de implementar (y cuando quieras cambiar los links).

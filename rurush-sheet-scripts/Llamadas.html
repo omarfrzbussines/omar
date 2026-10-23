@@ -8,6 +8,7 @@
   :root { --bg:#111; --card:#1c1c1e; --line:#2c2c2e; --tx:#f2f2f2; --mut:#9a9a9f; --red:#e53935; --grn:#34c759; --ice:#64b5f6; }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   body { margin:0; background:var(--bg); color:var(--tx); font:16px -apple-system, system-ui, Roboto, sans-serif; }
+  @media (min-width:760px) { body { max-width:680px; margin:0 auto; border-left:1px solid var(--line); border-right:1px solid var(--line); min-height:100vh } }   /* en la computadora (dentro de Free Pass) no se estira */
   header { padding:14px 16px 10px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--bg); z-index:5; }
   .top { display:flex; justify-content:space-between; align-items:center; }
   h1 { font-size:19px; margin:0; } h1 b { color:var(--red); }
@@ -738,7 +739,7 @@ if (ASESORA === 'OMAR') {
     google.script.run
       .withSuccessHandler((l) => {
         $('#main').innerHTML = '<h2>🔗 Links de las asesoras</h2>' + l.map((x, i) =>
-          `<div class="card" style="margin-bottom:8px"><div class="num"><b>${esc(x.asesora)}</b> · ${x.celular ? '📱 activado ' + esc(x.celular) : '⚪ falta activar su celular (pide tu PIN)'}</div>
+          `<div class="card" style="margin-bottom:8px"><div class="num"><b>${esc(x.asesora)}</b> · ${x.celular ? '📱 activado ' + esc(x.celular) : '⚪ falta activar su celular (pide tu PIN)'}${x.pc ? ' · 🖥️ PC desde ' + esc(x.pc) : ''}</div>
           <div class="tip" style="word-break:break-all;margin:6px 0">${esc(x.link)}</div>
           <button class="guardar" data-i="${i}">📋 Copiar link</button></div>`).join('') +
           '<button class="saltar" id="volver">← Volver a la cola</button>';
@@ -774,17 +775,19 @@ function iniciar() {
 }
 function pantallaPin(r) {
   $('#base').style.display = 'none';
+  const pc = !/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent), eq = pc ? 'esta computadora' : 'este celular';
   $('#main').innerHTML = `<div class="card" style="margin-top:20px">
-    <div class="nombre">🔒 Celular no autorizado</div>
-    <div class="num" style="margin-top:8px">Este link de <b>${esc(r.asesora)}</b> solo funciona en su celular.
-    ${r.tiene ? 'Ya hay un celular activado desde el ' + esc(r.desde) + '. Si activas este, el otro deja de funcionar.' : ''}</div>
-    <div class="tip" style="margin:14px 0 6px">PIN de Omar para activar este celular:</div>
+    <div class="nombre">🔒 ${pc ? 'Computadora' : 'Celular'} no autorizado</div>
+    <div class="num" style="margin-top:8px">Este link de <b>${esc(r.asesora)}</b> solo funciona en su celular y en su computadora.
+    ${pc ? (r.tienePC ? 'Ya hay una computadora activada desde el ' + esc(r.desdePC) + '. Si activas esta, la otra deja de funcionar (el celular sigue igual).' : 'El celular sigue funcionando igual.')
+      : (r.tiene ? 'Ya hay un celular activado desde el ' + esc(r.desde) + '. Si activas este, el otro deja de funcionar.' : '')}</div>
+    <div class="tip" style="margin:14px 0 6px">PIN de Omar para activar ${eq}:</div>
     <input id="pin" type="password" inputmode="numeric" autocomplete="off" placeholder="PIN">
-    <button class="guardar" id="activar">Activar este celular</button></div>`;
+    <button class="guardar" id="activar">Activar ${eq}</button></div>`;
   $('#activar').onclick = () => {
     $('#activar').disabled = true;
     google.script.run
-      .withSuccessHandler(() => { toast('✓ Celular activado'); $('#base').style.display = ''; $('#main').innerHTML = '<div class="vacio">Cargando tu cola…</div>'; iniciar(); })
+      .withSuccessHandler(() => { toast('✓ ' + (pc ? 'Computadora' : 'Celular') + ' activado'); $('#base').style.display = ''; $('#main').innerHTML = '<div class="vacio">Cargando tu cola…</div>'; iniciar(); })
       .withFailureHandler((e) => { $('#activar').disabled = false; toast('⚠️ ' + (e.message || e), true); })
       .app_activarCelular(LLAVE, $('#pin').value, navigator.userAgent);
   };
