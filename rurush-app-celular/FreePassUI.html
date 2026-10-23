@@ -215,6 +215,22 @@
   .dec-a { display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:14.5px } .dec-a .sem { margin-left:0; white-space:nowrap }
   .dec-b { display:flex; flex-wrap:wrap; gap:4px 16px; margin-top:4px; font-size:13.5px; color:var(--sub) } .dec-b span { display:inline-flex; align-items:center; gap:5px } .dec-b .ic { width:14px; height:14px }
   .dec a { color:var(--rojo-texto); font-weight:600; text-decoration:none }
+  .tb-top { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px }
+  .tablero { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(200px,1fr); gap:12px; overflow-x:auto; padding-bottom:10px; margin-bottom:12px; align-items:start }
+  .tb-col { background:var(--gris-suave); border:1px solid var(--borde); border-radius:var(--r); display:flex; flex-direction:column; max-height:72vh }
+  .tb-h { display:flex; justify-content:space-between; align-items:baseline; gap:8px; padding:12px 14px 10px; border-bottom:1px solid var(--borde) }
+  .tb-h b { font-size:13px; letter-spacing:.03em; text-transform:uppercase } .tb-h span { font-size:13px; color:var(--sub); font-weight:700; font-variant-numeric:tabular-nums }
+  .tb-l { padding:10px; display:flex; flex-direction:column; gap:8px; overflow-y:auto }
+  .tb-c { background:var(--sup); border:1px solid var(--borde); border-radius:var(--r-s); padding:10px 12px; box-shadow:var(--sombra) }
+  .tb-n { font-weight:650; font-size:14px; word-break:break-word } .tb-m { display:flex; justify-content:space-between; align-items:center; gap:6px; margin-top:4px; font-size:12.5px; color:var(--sub) } .tb-m .sem { margin-left:0 }
+  .tb-a { font-size:12px; color:var(--sub); margin-top:4px; display:flex; align-items:center; gap:4px } .tb-a .ic { width:12px; height:12px }
+  .tb-acc { display:flex; gap:6px; margin-top:8px; align-items:center }
+  .tb-b { flex:1; height:32px; box-sizing:border-box; line-height:1; display:inline-flex; align-items:center; justify-content:center; gap:5px; min-height:32px; border:1px solid var(--borde-f); border-radius:var(--r-s); font-size:12.5px; font-weight:600; color:var(--texto); text-decoration:none; background:var(--sup) }
+  .tb-b:hover { background:var(--gris-suave) } .tb-b.wa { color:var(--verde) } .tb-b .ic { width:14px; height:14px }
+  .dec-b .tb-b { flex:0 0 auto; padding:0 10px }
+  .tb-v { text-align:center; font-size:12.5px; color:var(--tenue); padding:6px }
+  .t.rk tr.yo td { background:var(--rojo-suave) } .t.rk td:first-child { width:36px } .t.rk th:nth-child(2), .t.rk td:nth-child(2) { text-align:left }
+  .dec-b { align-items:center }
   .corr { font-size:13.5px; padding:9px 0; border-bottom:1px solid var(--borde) } .corr:last-child { border-bottom:0 } .corr small { color:var(--tenue) }
 
   /* ---- pantallas medianas y celular ---- */
@@ -411,7 +427,7 @@ function pintar() {
   }
   $('#raiz').innerHTML = `<div class="app"><nav class="side" aria-label="Menú"><img class="logo" src="${LOGO}" alt="RURUSH Fitness Club">
       <div class="who"><span class="av">${esc(String(D.quien).charAt(0))}</span><div>Sesión<b>${esc(cap(D.quien))}</b>${ic('candado', 'style="width:12px;height:12px"')} PC autorizada</div></div>
-      <div class="nav">${nav('hoy', 'ticket', 'Free Pass hoy', D.hoyL.length)}${nav('ayer', 'reloj', 'Pendientes de ayer', D.ayer.length)}${nav('manana', 'cal', 'Mañana', D.manana.length)}${nav('nutri', 'nutri', 'Nutrición', D.nutri.length)}${nav('agendar', 'mas', 'Agendar')}${D.esOmar ? nav('metricas', 'graf', 'Métricas') + nav('embudo', 'embudo', 'Embudo') : ''}</div>
+      <div class="nav">${nav('hoy', 'ticket', 'Free Pass hoy', D.hoyL.length)}${nav('ayer', 'reloj', 'Pendientes de ayer', D.ayer.length)}${nav('manana', 'cal', 'Mañana', D.manana.length)}${nav('nutri', 'nutri', 'Nutrición', D.nutri.length)}${nav('agendar', 'mas', 'Agendar')}${nav('embudo', 'embudo', D.esOmar ? 'Embudo' : 'Mi embudo')}${D.esOmar ? nav('metricas', 'graf', 'Métricas') : ''}</div>
       <div class="pie">${ic('candado', 'style="width:13px;height:13px;margin-top:1px"')}<span>Solo se ve lo de hoy · sin descargas · todo queda registrado</span></div></nav>
     <main class="main">${cont}</main></div>`;
   refrescar();
@@ -542,6 +558,7 @@ document.addEventListener('click', (ev) => {
   else if (a === 'reintentar') cargar();
   else if (a === 'rango') { rango = b.dataset.r; cargarMetricas(); }
   else if (a === 'rangoE') { rangoE = b.dataset.r; cargarEmbudo(); }
+  else if (a === 'subE') { subE = b.dataset.s; if ((subE === 'tablero' && !T) || (subE === 'numeros' && !E)) cargarEmbudo(); else pintar(); }
   else if (a === 'nuSel') elegirN(b.dataset.pid);
   else if (a === 'nuDia') diaN(b.dataset.f);
   else if (a === 'nuHora') { S.hora = b.dataset.h; pintarNform(); }
@@ -558,6 +575,7 @@ document.addEventListener('change', (ev) => {
   if (s.dataset.act === 'marcarSel') marcar(Number(s.dataset.id), s.dataset.m, s.value, false);
   else if (s.id === 'fAse') { fAse = s.value; refrescar(); }
   else if (s.id === 'fEst') { fEst = s.value; refrescar(); }
+  else if (s.id === 'tFiltro') { tFiltro = s.value; cargarEmbudo(); }
 });
 document.addEventListener('input', (ev) => {
   const t = ev.target;
@@ -615,8 +633,8 @@ async function cargarMetricas() {
   if (vista === 'metricas') pintar();
 }
 
-/* ---------- 📊 embudo de Pipedrive (solo Omar, solo lectura) ---------- */
-let E = null, eErr = '', rangoE = 'semana';
+/* ---------- 🗂️ Mi embudo: tablero + números (cada asesora lo suyo + ranking; Omar todo) ---------- */
+let E = null, eErr = '', rangoE = 'semana', subE = 'tablero', T = null, tErr = '', tFiltro = '';
 function fechasRangoE(r) {
   const h = D.hoy, lunes = isoMas(h, -((new Date(h + 'T12:00:00Z').getUTCDay() + 6) % 7));
   if (r === 'semana') return [lunes, h];
@@ -625,43 +643,73 @@ function fechasRangoE(r) {
   if (r === 'mesant') { const fin = isoMas(h.slice(0, 8) + '01', -1); return [fin.slice(0, 8) + '01', fin]; }
   return [($('#eDesde') || {}).value || lunes, ($('#eHasta') || {}).value || h];
 }
+const telBotones = (n, peq) => n ? `<a class="tb-b" href="tel:+${esc(n)}" title="Llamar">${ic('tel')}${peq ? '' : ' Llamar'}</a><a class="tb-b wa" href="https:\/\/wa.me/${esc(n)}" target="_blank" rel="noopener" title="WhatsApp">💬${peq ? '' : ' WhatsApp'}</a>` : '<span class="tenue" style="font-size:12.5px">sin celular</span>';
+const diasCls = (d) => (d >= 7 ? 'r' : d >= 3 ? 'a' : 'v');
 function pantallaEmbudo() {
+  const sub = (id, i, t) => `<button class="btn sec peq ${subE === id ? 'sel' : ''}" data-act="subE" data-s="${id}" aria-pressed="${subE === id}">${ic(i)} ${t}</button>`;
+  const cab = `<div class="top"><div><h1>${D.esOmar ? 'Embudo de ventas' : 'Mi embudo'}</h1><div class="fecha">${D.esOmar ? 'Todo el equipo · solo tú ves esto' : 'Solo tus leads · ' + esc(cap(D.quien))} · Pipedrive</div></div>
+    <div class="rango">${sub('tablero', 'embudo', 'Tablero')}${sub('numeros', 'graf', 'Números')}</div></div>`;
+  return cab + (subE === 'tablero' ? pantallaTablero() : pantallaNumeros());
+}
+function pantallaTablero() {
+  const filtro = D.esOmar ? `<div class="tb-top"><label for="tFiltro" class="tenue" style="font-size:13px">Ver:</label><select id="tFiltro" class="campo" style="max-width:220px">
+      ${[['', 'Todas las asesoras'], ['MONICA', 'Mónica'], ['LAURA', 'Laura'], ['DANNA', 'Danna'], ['CIELO', 'Cielo'], ['BOT', 'Bot'], ['SIN ASESORA', 'Sin asesora']].map((o) => `<option value="${o[0]}" ${tFiltro === o[0] ? 'selected' : ''}>${o[1]}</option>`).join('')}</select>
+      ${T ? `<span class="tenue" style="font-size:12.5px">${T.total} tratos abiertos · datos de las ${esc(T.hora)}</span>` : ''}</div>`
+    : (T ? `<div class="tb-top"><span class="tenue" style="font-size:12.5px">${T.total} tratos abiertos tuyos · datos de las ${esc(T.hora)}</span></div>` : '');
+  if (tErr) return filtro + `<div class="panel vacio">${ic('alerta')}<b>No se pudo leer Pipedrive</b>${esc(tErr)}</div>`;
+  if (!T) return filtro + '<div class="carga"><span class="spin"></span>Armando el tablero… (la primera vez del día tarda unos segundos)</div>';
+  const card = (x) => `<div class="tb-c"><div class="tb-n">${esc(x.nombre || 'Sin nombre')}</div>
+      <div class="tb-m"><span>${esc(x.telM || '')}</span><span class="sem ${diasCls(x.dias)}">${x.dias} d</span></div>
+      ${D.esOmar && !tFiltro ? `<div class="tb-a">${ic('personas')} ${esc(cap(x.ase))}</div>` : ''}
+      <div class="tb-acc">${telBotones(x.tel, true)}</div></div>`;
+  return filtro + `<div class="tablero">${T.cols.map((c) => `<section class="tb-col" aria-label="${esc(c.nombre)}">
+      <div class="tb-h"><b>${esc(c.nombre)}</b><span>${c.n}</span></div>
+      <div class="tb-l">${c.cards.length ? c.cards.map(card).join('') : '<div class="tb-v">Vacío</div>'}${c.n > c.cards.length ? `<div class="tb-v">+ ${c.n - c.cards.length} más</div>` : ''}</div></section>`).join('')}</div>
+    <p class="aviso">${ic('candado')} Solo lectura: los tratos se mueven solos cada 30 min según lo que se marca en Free Pass (asistió, ¿se inscribió?). En cada columna salen 15: hasta Clase agendada los más nuevos; desde No vino, los que llevan más días.</p>`;
+}
+function pantallaNumeros() {
   const [de, ha] = E ? [E.desde, E.hasta] : fechasRangoE(rangoE);
   const bt = (id, t) => `<button class="btn sec peq ${rangoE === id ? 'sel' : ''}" data-act="rangoE" data-r="${id}" aria-pressed="${rangoE === id}">${t}</button>`;
-  const cab = `<div class="top"><div><h1>Embudo de ventas</h1><div class="fecha">Leads creados del ${fechaCorta(de)} ${MESES[+de.slice(5, 7) - 1]} al ${fechaCorta(ha)} ${MESES[+ha.slice(5, 7) - 1]} · Pipedrive${E ? ' · datos de las ' + esc(E.hora) : ''} · solo tú ves esto</div></div>
-    <div class="rango">${bt('semana', 'Esta semana')}${bt('semant', 'Semana pasada')}${bt('mes', 'Este mes')}${bt('mesant', 'Mes pasado')}
-    <label class="sr" for="eDesde">Desde</label><input type="date" id="eDesde" value="${de}" max="${D.hoy}"> <span aria-hidden="true">→</span> <label class="sr" for="eHasta">Hasta</label><input type="date" id="eHasta" value="${ha}" max="${D.hoy}">${bt('otro', 'Ver')}</div></div>`;
-  if (eErr) return cab + `<div class="panel vacio">${ic('alerta')}<b>No se pudo leer Pipedrive</b>${esc(eErr)}</div>`;
-  if (!E) return cab + '<div class="carga"><span class="spin"></span>Leyendo el embudo de Pipedrive…</div>';
+  const per = `<div class="fecha" style="margin:-6px 0 10px">Leads creados del ${fechaCorta(de)} ${MESES[+de.slice(5, 7) - 1]} al ${fechaCorta(ha)} ${MESES[+ha.slice(5, 7) - 1]}${E ? ' · datos de las ' + esc(E.hora) : ''}</div>
+    <div class="rango" style="margin-bottom:16px">${bt('semana', 'Esta semana')}${bt('semant', 'Semana pasada')}${bt('mes', 'Este mes')}${bt('mesant', 'Mes pasado')}
+    <label class="sr" for="eDesde">Desde</label><input type="date" id="eDesde" value="${de}" max="${D.hoy}"> <span aria-hidden="true">→</span> <label class="sr" for="eHasta">Hasta</label><input type="date" id="eHasta" value="${ha}" max="${D.hoy}">${bt('otro', 'Ver')}</div>`;
+  if (eErr) return per + `<div class="panel vacio">${ic('alerta')}<b>No se pudo leer Pipedrive</b>${esc(eErr)}</div>`;
+  if (!E) return per + '<div class="carga"><span class="spin"></span>Leyendo el embudo de Pipedrive…</div>';
   const t = E.total;
   const k = (i, tit, n, sub) => `<div class="k"><small>${ic(i)} ${tit}</small><b>${n}</b>${sub ? `<div class="ksub">${sub}</div>` : ''}</div>`;
   const etapas = [['Leads', t.leads, null], ['Agendaron', t.agend, t.leads], ['Vinieron', t.vino, t.agend], ['Inscritos', t.insc, t.vino]];
   const fun = etapas.map((e, i) => `<div class="fun-f"><span class="fun-n">${e[0]}</span>
       <div class="fun-b"><i style="width:${Math.max(t.leads ? e[1] / t.leads * 100 : 0, e[1] ? 3 : 0)}%;opacity:${1 - i * 0.18}"></i></div>
       <span class="fun-v"><b>${e[1]}</b>${e[2] != null ? `<em>${pct(e[1], e[2])}%</em>` : ''}</span></div>`).join('');
-  const filaA = (x) => `<tr><td>${esc(cap(x.nombre))}</td><td>${x.leads}</td><td>${x.agend}</td><td>${x.vino}</td><td>${x.insc}</td><td>${pct(x.insc, x.agend)}%</td></tr>`;
-  const tel = (n) => n ? `<a href="tel:+${esc(n)}">${esc(n.replace(/^51/, ''))}</a> · <a href="https:\/\/wa.me/${esc(n)}" target="_blank" rel="noopener">WhatsApp</a>` : '<span class="tenue">sin celular</span>';
+  const tabla = E.esOmar
+    ? `<div class="panel"><div class="panel-h">${ic('personas')} Por asesora</div><div class="panel-b tw"><table class="t"><tr><th>Asesora</th><th>Leads</th><th>Agend.</th><th>Vin.</th><th>Inscr.</th><th>Conv.</th></tr>
+        ${E.asesoras.length ? E.asesoras.map((x) => `<tr><td>${esc(cap(x.nombre))}</td><td>${x.leads}</td><td>${x.agend}</td><td>${x.vino}</td><td>${x.insc}</td><td>${pct(x.insc, x.agend)}%</td></tr>`).join('') : '<tr><td colspan="6" class="vacio-t">Sin leads en estas fechas</td></tr>'}</table>
+        <p class="tenue" style="font-size:12.5px;margin-top:8px">Asesora = campo RESPONSABLE de la persona (o la del asunto del FP). Conv. = inscritos ÷ agendados.</p></div></div>`
+    : `<div class="panel"><div class="panel-h">${ic('personas')} Ranking del equipo</div><div class="panel-b tw"><table class="t rk"><tr><th>#</th><th>Asesora</th><th>Inscr.</th><th>Vin.</th><th>Agend.</th></tr>
+        ${E.ranking.map((x, i) => `<tr class="${x.yo ? 'yo' : ''}"><td>${i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</td><td>${esc(cap(x.nombre))}${x.yo ? ' <span class="sem v">Tú</span>' : ''}</td><td>${x.insc}</td><td>${x.vino}</td><td>${x.agend}</td></tr>`).join('')}</table>
+        <p class="tenue" style="font-size:12.5px;margin-top:8px">Ordenado por inscritos, luego por los que vinieron. Mismo periodo de arriba.</p></div></div>`;
   const dec = E.decision;
-  return cab + `<div class="embudo e5">${k('personas', 'Leads', t.leads)}${k('cal', 'Clase agendada', t.agend, pct(t.agend, t.leads) + '% de los leads')}
+  return per + `<div class="embudo e5">${k('personas', E.esOmar ? 'Leads' : 'Tus leads', t.leads)}${k('cal', 'Clase agendada', t.agend, pct(t.agend, t.leads) + '% de los leads')}
       ${k('ok', 'Vinieron', t.vino, pct(t.vino, t.agend) + '% de los agendados')}${k('tarjeta', 'Inscritos', t.insc, pct(t.insc, t.vino) + '% de los que vinieron')}
       ${k('graf', 'Conversión total', pct(t.insc, t.leads) + '%', 'inscritos ÷ leads')}</div>
     <div class="rejilla"><div class="panel"><div class="panel-h">${ic('embudo')} Embudo</div><div class="panel-b">${fun}
         <div class="fun-aparte"><span>${ic('alerta')} No vinieron (por reagendar) <b>${t.noVino}</b></span><span>${ic('x')} Perdidos <b>${t.perdidos}</b></span></div>
-        <p class="tenue" style="font-size:12.5px;margin-top:10px">El % de cada barra es respecto a la etapa anterior.</p></div></div>
-      <div class="panel"><div class="panel-h">${ic('personas')} Por asesora</div><div class="panel-b tw"><table class="t"><tr><th>Asesora</th><th>Leads</th><th>Agend.</th><th>Vin.</th><th>Inscr.</th><th>Conv.</th></tr>
-        ${E.asesoras.length ? E.asesoras.map(filaA).join('') : '<tr><td colspan="6" class="vacio-t">Sin leads en estas fechas</td></tr>'}</table>
-        <p class="tenue" style="font-size:12.5px;margin-top:8px">Asesora = campo RESPONSABLE de la persona (o la del asunto del FP). Conv. = inscritos ÷ agendados.</p></div></div></div>
-    <div class="panel"><div class="panel-h">${ic('reloj')} En decisión · ${dec.n} ${dec.n > dec.lista.length ? `(los ${dec.lista.length} con más días)` : ''}</div><div class="panel-b tw">
-      ${dec.lista.length ? `<div class="dec">${dec.lista.map((x) => `<div class="dec-f"><div class="dec-a"><b>${esc(x.nombre)}</b><span class="sem ${x.dias >= 7 ? 'r' : x.dias >= 3 ? 'a' : 'v'}">${x.dias} d en decisión</span></div>
-          <div class="dec-b">${tel(x.tel)}<span>${ic('personas')} ${esc(cap(x.ase || 'sin asesora'))}</span></div></div>`).join('')}</div>`
+        <p class="tenue" style="font-size:12.5px;margin-top:10px">El % de cada barra es respecto a la etapa anterior.</p></div></div>${tabla}</div>
+    <div class="panel"><div class="panel-h">${ic('reloj')} En decisión · ${dec.n} ${dec.n > dec.lista.length ? `(los ${dec.lista.length} con más días)` : ''}</div><div class="panel-b">
+      ${dec.lista.length ? `<div class="dec">${dec.lista.map((x) => `<div class="dec-f"><div class="dec-a"><b>${esc(x.nombre)}</b><span class="sem ${diasCls(x.dias)}">${x.dias} d en decisión</span></div>
+          <div class="dec-b">${telBotones(x.tel)}${E.esOmar ? `<span>${ic('personas')} ${esc(cap(x.ase || 'sin asesora'))}</span>` : ''}</div></div>`).join('')}</div>`
         : '<div class="vacio-t" style="padding:12px 0">Nadie en decisión ahora mismo.</div>'}
-      <p class="tenue" style="font-size:12.5px;margin-top:8px">Todos los que están hoy en EN DECISIÓN (sin importar las fechas de arriba). Días = desde que entraron a esa etapa.</p></div></div>
-    <p class="aviso">${ic('candado')} Solo lectura. Los tratos los mueve el bot cada 30 min según lo que se marca en la app (vino, cierre). Se actualiza cada 10 min.</p>`;
+      <p class="tenue" style="font-size:12.5px;margin-top:8px">Todos los que están hoy en EN DECISIÓN (sin importar las fechas de arriba). Días = desde que entraron a esa etapa.</p></div></div>`;
 }
 async function cargarEmbudo() {
-  const [de, ha] = fechasRangoE(rangoE);
-  E = null; eErr = ''; pintar();
-  try { E = await llamar('fp_embudo', de, ha); } catch (e) { eErr = e.message; }
+  if (subE === 'tablero') {
+    T = null; tErr = ''; pintar();
+    try { T = await llamar('fp_tablero', tFiltro); } catch (e) { tErr = e.message; }
+  } else {
+    const [de, ha] = fechasRangoE(rangoE);
+    E = null; eErr = ''; pintar();
+    try { E = await llamar('fp_embudo', de, ha); } catch (e) { eErr = e.message; }
+  }
   if (vista === 'embudo') pintar();
 }
 
