@@ -178,11 +178,12 @@ function fp_embudo(llave, pc, desde, hasta) {
 
 /** 🗂️ Tablero: tratos ABIERTOS por etapa. Asesora = solo los suyos; Omar = todos o la asesora que elija.
     Por columna: cuántos hay y las 15 tarjetas más urgentes (hasta Clase agendada: los más nuevos primero; de No vino en adelante: los más atascados). */
+const EMB_PLAZO = { 71: 1, 72: 3, 73: 7, 89: 2, 74: 2, 75: 5 };   // días en la etapa antes de marcarla atrasada
 const EMB_COLS = [[71, 'Nuevo lead'], [72, 'Contactado'], [73, 'Clase agendada'], [89, 'No vino (reagendar)'], [74, 'Vino a clase'], [75, 'En decisión'], [76, 'Empezó plan']];
 function fp_tablero(llave, pc, filtro) {
   const quien = fp_quien_(llave, pc), esOmar = quien === 'OMAR';
   const ver = esOmar ? (emb_ok_(filtro) || (filtro === 'SIN ASESORA' ? 'SIN ASESORA' : '')) : (emb_ok_(quien) || quien);
-  const clave = 'fpTab_' + (ver || 'TODAS');
+  const clave = 'fpTab2_' + (ver || 'TODAS');
   const c = hoy_cacheGet_(clave);
   if (c) return Object.assign(c, { esOmar: esOmar });
   const ahora = Date.now(), abiertos = emb_tratos_().filter(function (d) { return d.est === 'open' && EMB_NIVEL[d.st] != null; });
@@ -196,9 +197,14 @@ function fp_tablero(llave, pc, filtro) {
     });
     const frescos = [71, 72, 73].indexOf(col[0]) >= 0;   // antes de la clase: lo más nuevo está más caliente
     l.sort(function (a, b) { return frescos ? a.dias - b.dias : b.dias - a.dias; });
-    return { id: col[0], nombre: col[1], n: l.length, cards: l.slice(0, 15) };
+    const plazo = EMB_PLAZO[col[0]];
+    return { id: col[0], nombre: col[1], n: l.length, plazo: plazo == null ? null : plazo,
+      tarde: plazo == null ? 0 : l.filter(function (x) { return x.dias > plazo; }).length, cards: l.slice(0, 15) };
   });
-  const res = { ver: ver, cols: cols, total: mios.length, hora: Utilities.formatDate(new Date(), 'America/Lima', 'HH:mm') };
+  const res = { ver: ver, cols: cols, total: mios.length,
+    tarde: cols.reduce(function (t, c) { return t + c.tarde; }, 0),
+    sinAse: mios.filter(function (d) { return aseDe(d) === 'SIN ASESORA'; }).length,
+    hora: Utilities.formatDate(new Date(), 'America/Lima', 'HH:mm') };
   try { hoy_cachePut_(clave, res, EMB_SEG); } catch (e) {}
   return Object.assign(res, { esOmar: esOmar });
 }

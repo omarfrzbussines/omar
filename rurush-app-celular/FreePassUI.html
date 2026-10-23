@@ -216,6 +216,46 @@
   .dec-b { display:flex; flex-wrap:wrap; gap:4px 16px; margin-top:4px; font-size:13.5px; color:var(--sub) } .dec-b span { display:inline-flex; align-items:center; gap:5px } .dec-b .ic { width:14px; height:14px }
   .dec a { color:var(--rojo-texto); font-weight:600; text-decoration:none }
   a.btn { text-decoration:none; color:inherit }
+  /* ---- embudo en estilo oscuro (solo esta sección) ---- */
+  .main.dk { --dk-bg:#0d1626; --dk-sup:#16223a; --dk-sup2:#1c2a45; --dk-borde:#26365a; --dk-tx:#e8eef8; --dk-sub:#93a4bf;
+    background:linear-gradient(180deg,#1d4f86 0,#163a66 150px,var(--dk-bg) 300px); color:var(--dk-tx); min-height:100vh }
+  .dk h1 { color:#fff } .dk .fecha, .dk .tenue, .dk .aviso { color:var(--dk-sub) } .dk .aviso .ic { color:var(--dk-sub) }
+  .dk .btn.sec { background:rgba(255,255,255,.08); color:#fff; border-color:rgba(255,255,255,.16) } .dk .btn.sec:hover { background:rgba(255,255,255,.16) }
+  .dk .rango .btn.sel { background:#fff; color:#0d1626; border-color:#fff }
+  .dk .rango input, .dk .campo { background:var(--dk-sup); color:var(--dk-tx); border-color:var(--dk-borde); color-scheme:dark }
+  .dk .k, .dk .panel { background:var(--dk-sup); border-color:var(--dk-borde); box-shadow:none } .dk .k small, .dk .ksub { color:var(--dk-sub) } .dk .k b { color:#fff }
+  .dk .panel-h { border-color:var(--dk-borde); color:#fff } .dk .panel-h .ic { color:var(--dk-sub) }
+  .dk .t th { color:var(--dk-sub); border-color:var(--dk-borde) } .dk .t td { border-color:var(--dk-borde); color:var(--dk-tx) } .dk .t.rk tr.yo td { background:rgba(200,16,26,.18) }
+  .dk .fun-v em, .dk .emb em { color:#ff8a8f } .dk .fun-n, .dk .fun-aparte { color:var(--dk-sub) } .dk .fun-b { background:var(--dk-sup2) } .dk .fun-aparte { border-color:var(--dk-borde) } .dk .fun-aparte b, .dk .fun-v b { color:#fff }
+  .dk .dec-f { border-color:var(--dk-borde) } .dk .dec-b { color:var(--dk-sub) } .dk .vacio-t, .dk .carga { color:var(--dk-sub) } .dk .dec a { color:#ff8a8f }
+  .dk .sem.v { background:rgba(26,127,55,.22); color:#6ee39a } .dk .sem.a { background:rgba(217,119,6,.2); color:#fbbf5a } .dk .sem.r { background:rgba(229,72,77,.2); color:#ff8a8f }
+  .pills { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px }
+  .pill { border:1px solid rgba(255,255,255,.18); background:rgba(255,255,255,.08); color:#dbe6f6; border-radius:99px; padding:7px 16px; font-weight:700; font-size:13.5px; cursor:pointer }
+  .pill:hover { background:rgba(255,255,255,.16) } .pill.on { background:#fff; color:#0d1626; border-color:#fff }
+  .dk-kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:14px }
+  .dk-k { background:var(--dk-sup); border:1px solid var(--dk-borde); border-radius:14px; padding:14px 18px }
+  .dk-k small { display:block; font-size:12px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--dk-sub) }
+  .dk-k b { display:block; font-size:34px; font-weight:800; line-height:1.15; margin-top:4px; color:#fff; font-variant-numeric:tabular-nums } .dk-k span { font-size:12.5px; color:var(--dk-sub) }
+  .dk-k.r b { color:#ff6b70 } .dk-k.a b { color:#fbbf24 } .dk-k.y b { color:#f59e0b }
+  .tb-info { font-size:12.5px; color:var(--dk-sub); margin-bottom:10px }
+  .dk .tb-col { background:rgba(255,255,255,.035); border-color:var(--dk-borde); border-top-color:var(--c) }
+  .dk .tb-h { background:color-mix(in srgb, var(--c) 16%, transparent); border-color:var(--dk-borde) } .dk .tb-h b { color:color-mix(in srgb, var(--c) 55%, #fff) }
+  .tb-alerta { font-size:12.5px; font-weight:700; color:#ff8a8f; padding:7px 14px; background:rgba(229,72,77,.10); border-bottom:1px solid var(--dk-borde) }
+  .dk .tb-v { color:var(--dk-sub) }
+  .dk-c { background:var(--dk-sup); border:1px solid var(--dk-borde); border-radius:12px; padding:11px 12px; cursor:pointer; transition:background .12s, border-color .12s }
+  .dk-c:hover { background:var(--dk-sup2) } .dk-c.ab { background:var(--dk-sup2); border-color:#4b6596 }
+  .dk-c.tarde { border-color:rgba(229,72,77,.65); box-shadow:inset 3px 0 0 #e5484d }
+  .dk-c1 { display:flex; gap:10px; align-items:center }
+  .dk-c .av { width:38px; height:38px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:14px; flex-shrink:0 }
+  .dk-t { min-width:0 } .dk-t b { display:block; font-size:15px; font-weight:700; color:#fff; line-height:1.25; word-break:break-word }
+  .dk-t small { display:block; font-size:12.5px; color:var(--dk-sub); margin-top:2px } .dk-t .sin { font-style:normal; color:#fbbf24; font-weight:700 }
+  .dk-c2 { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:9px }
+  .pl { font-size:12px; font-weight:700; padding:3px 9px; border-radius:99px; background:rgba(255,255,255,.07); color:var(--dk-sub); white-space:nowrap } .pl.r { background:rgba(229,72,77,.18); color:#ff8a8f }
+  .acc { font-size:12.5px; font-weight:700; color:#cfe0f7 }
+  .dk-acc { display:grid; grid-template-columns:1fr 1.25fr; gap:6px; margin-top:10px; align-items:center } .dk-acc .tb-b { margin:0 }
+  .dk .tb-b { background:rgba(255,255,255,.08); color:#fff; border-color:rgba(255,255,255,.18) } .dk .tb-b:hover { background:rgba(255,255,255,.16) }
+  .dk .tb-b.wa { background:rgba(37,211,102,.16); border-color:rgba(37,211,102,.45); color:#7ef0a8 }
+  @media (max-width:980px) { .dk-kpis { grid-template-columns:repeat(2,minmax(0,1fr)) } .dk-k b { font-size:28px } }
   .ll-marco { background:var(--sup); border:1px solid var(--borde); border-radius:var(--r); overflow:hidden; box-shadow:var(--sombra) }
   .ll-marco iframe { display:block; width:100%; height:calc(100vh - 210px); min-height:560px; border:0; background:#111 }
   .ll-f { display:grid; grid-template-columns:150px minmax(0,1fr); gap:10px; align-items:center; margin-bottom:10px } .ll-f > span { font-weight:600; font-size:14px }
@@ -445,7 +485,7 @@ function pintar() {
       <div class="who"><span class="av">${esc(String(D.quien).charAt(0))}</span><div>Sesión<b>${esc(cap(D.quien))}</b>${ic('candado', 'style="width:12px;height:12px"')} PC autorizada</div></div>
       <div class="nav">${nav('hoy', 'ticket', 'Free Pass hoy', D.hoyL.length)}${nav('ayer', 'reloj', 'Pendientes de ayer', D.ayer.length)}${nav('manana', 'cal', 'Mañana', D.manana.length)}${nav('nutri', 'nutri', 'Nutrición', D.nutri.length)}${nav('agendar', 'mas', 'Agendar')}${nav('embudo', 'embudo', D.esOmar ? 'Embudo' : 'Mi embudo')}${nav('llamadas', 'tel', 'Llamadas · Socios')}${D.esOmar ? nav('metricas', 'graf', 'Métricas') : ''}</div>
       <div class="pie">${ic('candado', 'style="width:13px;height:13px;margin-top:1px"')}<span>Solo se ve lo de hoy · sin descargas · todo queda registrado</span></div></nav>
-    <main class="main">${cont}</main></div>`;
+    <main class="main${vista === 'embudo' ? ' dk' : ''}">${cont}</main></div>`;
   refrescar();
   const f = $('#fagenda'); if (f) armarForm(f);
   if ($('#nform')) pintarNform();
@@ -573,6 +613,8 @@ document.addEventListener('click', (ev) => {
   else if (a === 'refrescar') { b.disabled = true; cargar(true).then(() => { b.disabled = false; toast('Lista actualizada', 'ok'); }); }
   else if (a === 'reintentar') cargar();
   else if (a === 'rango') { rango = b.dataset.r; cargarMetricas(); }
+  else if (a === 'tFil') { tFiltro = b.dataset.v; tbAbierta = ''; cargarEmbudo(); }
+  else if (a === 'tbCard') { if (ev.target.closest('a')) return; tbAbierta = tbAbierta === b.dataset.k ? '' : b.dataset.k; pintar(); }
   else if (a === 'llConf') { llConf = !llConf; pintar(); }
   else if (a === 'llGuardar') guardarLlamadas();
   else if (a === 'rangoE') { rangoE = b.dataset.r; cargarEmbudo(); }
@@ -672,26 +714,43 @@ function pantallaEmbudo() {
     <div class="rango">${sub('tablero', 'embudo', 'Tablero')}${sub('numeros', 'graf', 'Números')}</div></div>`;
   return cab + (subE === 'tablero' ? pantallaTablero() : pantallaNumeros());
 }
+const TB_AV = ['#7c3aed', '#2563eb', '#0d9488', '#db2777', '#ea580c', '#4f46e5', '#0891b2', '#16a34a'];
+function iniciales(n) {
+  n = String(n || '').trim();
+  if (!n || /^[+\d\s()-]+$/.test(n) || /^lead\s*\d/i.test(n)) return '#';
+  const p = n.replace(/^@/, '').replace(/[^\p{L}\s]/gu, ' ').trim().split(/\s+/).filter(Boolean);
+  return ((p[0] || '?')[0] + (p[1] ? p[1][0] : '')).toUpperCase();
+}
+const colorDe = (n) => { let h = 0; for (const ch of String(n)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return TB_AV[h % TB_AV.length]; };
+let tbAbierta = '';
 function pantallaTablero() {
-  const filtro = D.esOmar ? `<div class="tb-top"><label for="tFiltro" class="tenue" style="font-size:13px">Ver:</label><select id="tFiltro" class="campo" style="max-width:220px">
-      ${[['', 'Todas las asesoras'], ['MONICA', 'Mónica'], ['LAURA', 'Laura'], ['DANNA', 'Danna'], ['CIELO', 'Cielo'], ['BOT', 'Bot'], ['SIN ASESORA', 'Sin asesora']].map((o) => `<option value="${o[0]}" ${tFiltro === o[0] ? 'selected' : ''}>${o[1]}</option>`).join('')}</select>
-      ${T ? `<span class="tenue" style="font-size:12.5px">${T.total} tratos abiertos · datos de las ${esc(T.hora)}</span>` : ''}</div>`
-    : (T ? `<div class="tb-top"><span class="tenue" style="font-size:12.5px">${T.total} tratos abiertos tuyos · datos de las ${esc(T.hora)}</span></div>` : '');
-  if (tErr) return filtro + `<div class="panel vacio">${ic('alerta')}<b>No se pudo leer Pipedrive</b>${esc(tErr)}</div>`;
-  if (!T) return filtro + '<div class="carga"><span class="spin"></span>Armando el tablero… (la primera vez del día tarda unos segundos)</div>';
-  const card = (x, c) => {
-    const et = TB_ETAPA[c.id] || {}, tarde = x.dias > (et.plazo != null ? et.plazo : 99), sinAse = x.ase === 'SIN ASESORA';
-    const dias = x.dias === 0 ? 'Hoy en etapa' : x.dias === 1 ? '1 día en etapa' : x.dias + ' días en etapa';
-    return `<div class="tb-c ${tarde ? 'tarde' : ''}"><div class="tb-n">${esc(x.nombre || 'Sin nombre')}</div>
-      <div class="tb-m"><span>${esc(x.telM || 'sin celular')}</span><span class="tb-d ${tarde ? 'r' : ''}">${tarde ? '⚠️ ' : ''}${dias}</span></div>
-      ${D.esOmar && !tFiltro ? `<div class="tb-a ${sinAse ? 'sin' : ''}">${ic('personas')} ${sinAse ? 'Sin asesora' : esc(cap(x.ase))}</div>` : ''}
-      ${et.accion ? `<div class="tb-x">➜ ${et.accion}</div>` : ''}
-      <div class="tb-acc">${x.tel ? `<a class="tb-b" href="tel:+${esc(x.tel)}">${ic('tel')} Llamar</a><a class="tb-b wa" href="https:\/\/wa.me/${esc(x.tel)}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ''}</div></div>`;
+  const pills = D.esOmar ? `<div class="pills">${[['', 'Todas'], ['MONICA', 'Mónica'], ['LAURA', 'Laura'], ['DANNA', 'Danna'], ['CIELO', 'Cielo'], ['BOT', 'Bot'], ['SIN ASESORA', 'Sin asesora']]
+    .map((o) => `<button class="pill ${tFiltro === o[0] ? 'on' : ''}" data-act="tFil" data-v="${o[0]}">${o[1]}</button>`).join('')}</div>` : '';
+  if (tErr) return pills + `<div class="panel vacio">${ic('alerta')}<b>No se pudo leer Pipedrive</b>${esc(tErr)}</div>`;
+  if (!T) return pills + '<div class="carga"><span class="spin"></span>Armando el tablero… (la primera vez del día tarda unos segundos)</div>';
+  const dec = (T.cols.find((c) => c.id === 75) || { n: 0 }).n;
+  const kpi = (cls, i, t, n, sub) => `<div class="dk-k ${cls}"><small>${i} ${t}</small><b>${n}</b><span>${sub}</span></div>`;
+  const kpis = `<div class="dk-kpis">${kpi('', '🗂️', 'Tratos abiertos', T.total, D.esOmar && !tFiltro ? 'todo el equipo' : 'tuyos')}
+      ${kpi('r', '⚠️', 'Atrasados', T.tarde, 'pasaron el plazo de su etapa')}
+      ${D.esOmar && !tFiltro ? kpi('a', '🟨', 'Sin asesora', T.sinAse, T.sinAse ? 'nadie los está trabajando' : 'todos tienen asesora')
+        : kpi('a', '📅', 'Clase agendada', (T.cols.find((c) => c.id === 73) || { n: 0 }).n, 'por confirmar que vengan')}
+      ${kpi('y', '🤔', 'En decisión', dec, 'listos para cerrar')}</div>`;
+  const card = (x, c, i) => {
+    const et = TB_ETAPA[c.id] || {}, tarde = c.plazo != null && x.dias > c.plazo, sinAse = x.ase === 'SIN ASESORA', k = c.id + '-' + i, ab = tbAbierta === k;
+    const dias = x.dias === 0 ? 'hoy' : x.dias === 1 ? '1 día' : x.dias + ' días';
+    const linea = [x.telM || 'sin celular', D.esOmar && !tFiltro ? (sinAse ? '<em class="sin">Sin asesora</em>' : esc(cap(x.ase))) : ''].filter(Boolean).join(' · ');
+    return `<div class="dk-c ${tarde ? 'tarde' : ''} ${ab ? 'ab' : ''}" data-act="tbCard" data-k="${k}" role="button" tabindex="0" aria-expanded="${ab}">
+      <div class="dk-c1"><span class="av" style="background:${colorDe(x.nombre)}">${esc(iniciales(x.nombre))}</span>
+        <div class="dk-t"><b>${esc(x.nombre || 'Sin nombre')}</b><small>${linea}</small></div></div>
+      <div class="dk-c2"><span class="pl ${tarde ? 'r' : ''}">${tarde ? '⚠️ ' : ''}${dias} en etapa</span>${et.accion ? `<span class="acc">➜ ${et.accion}</span>` : ''}</div>
+      ${ab ? `<div class="dk-acc">${x.tel ? `<a class="tb-b" href="tel:+${esc(x.tel)}">${ic('tel')} Llamar</a><a class="tb-b wa" href="https:\/\/wa.me/${esc(x.tel)}" target="_blank" rel="noopener">💬 WhatsApp</a>` : '<span class="pl">Sin celular en Pipedrive</span>'}</div>` : ''}</div>`;
   };
-  return filtro + `<div class="tablero">${T.cols.map((c) => `<section class="tb-col e${c.id}" aria-label="${esc(c.nombre)}">
+  return pills + kpis + `<div class="tb-info">${T.total} tratos abiertos · datos de las ${esc(T.hora)} · toca una tarjeta para llamar o escribir</div>
+    <div class="tablero">${T.cols.map((c) => `<section class="tb-col e${c.id}" aria-label="${esc(c.nombre)}">
       <div class="tb-h"><b>${esc(c.nombre)}</b><span class="tb-cnt">${c.n}</span></div>
-      <div class="tb-l">${c.cards.length ? c.cards.map((x) => card(x, c)).join('') : '<div class="tb-v">Sin tratos en esta etapa</div>'}${c.n > c.cards.length ? `<div class="tb-v">+ ${c.n - c.cards.length} más</div>` : ''}</div></section>`).join('')}</div>
-    <p class="aviso">${ic('candado')} Solo lectura: los tratos se mueven solos cada 30 min según lo que se marca en Free Pass (asistió, ¿se inscribió?). En cada columna salen 15: hasta Clase agendada los más nuevos; desde No vino, los que llevan más días. ⚠️ en rojo = pasó el plazo de la etapa (Nuevo lead 1 día · Contactado 3 · Clase agendada 7 · No vino 2 · Vino a clase 2 · En decisión 5).</p>`;
+      ${c.tarde ? `<div class="tb-alerta">⚠️ ${c.tarde} atrasado${c.tarde === 1 ? '' : 's'}</div>` : ''}
+      <div class="tb-l">${c.cards.length ? c.cards.map((x, i) => card(x, c, i)).join('') : '<div class="tb-v">Sin tratos en esta etapa</div>'}${c.n > c.cards.length ? `<div class="tb-v">+ ${c.n - c.cards.length} más</div>` : ''}</div></section>`).join('')}</div>
+    <p class="aviso">${ic('candado')} Solo lectura: los tratos se mueven solos cada 30 min según lo que se marca en Free Pass. En cada columna salen 15: hasta Clase agendada los más nuevos; desde No vino, los que llevan más días. ⚠️ = pasó el plazo (Nuevo lead 1 día · Contactado 3 · Clase agendada 7 · No vino 2 · Vino a clase 2 · En decisión 5).</p>`;
 }
 function pantallaNumeros() {
   const [de, ha] = E ? [E.desde, E.hasta] : fechasRangoE(rangoE);
