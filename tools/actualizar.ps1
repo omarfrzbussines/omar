@@ -157,6 +157,59 @@ foreach ($l in Get-Content (Join-Path $tools "proyectos.txt") -Encoding UTF8) {
   } catch { Linea "   ❌ $carpeta : $_" Red }
   finally { Set-Location $repo }
 }
+
+# 2b) Arreglos de una sola vez en proyectos que NO están en el repo (quedan marcados en estado.json y no se repiten).
+#     Cola de Renovación ("Dashboard Cola Renovar"): permitir que se vea DENTRO del panel Free Pass.
+#     Solo agrega .setXFrameOptionsMode(ALLOWALL) a lo que devuelve doGet; si no lo encuentra o el código
+#     queda raro, NO sube nada y lo deja anotado para hacerlo a mano.
+if (-not $SoloComparar -and -not $estado["arreglo:cola-iframe"]) {
+  $ID_COLA = "1nLufchu5lHboPKpgKpeKVrSkzbJV0qVYnFbfeaaAWRNxv_qdQw0CbfDN"
+  $DEP_COLA = "AKfycbywf-ajwBz9mRioOeA6bLfF1WzMJYbvN5X5VDmDIYbd4mEY-jxe3IW5K2peNuUReFZb"
+  Linea "`n🩹 Cola de Renovación: que se vea dentro del panel" Cyan
+  $ev = [System.Text.RegularExpressions.MatchEvaluator]{ param($x)
+    if ($x.Value -match 'ContentService') { return $x.Value }
+    return $x.Groups[1].Value + "`n      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);" }
+  foreach ($cuentaCola in @("rurush", "omar")) {
+    if ($estado["arreglo:cola-iframe"]) { break }
+    try {
+      $dirC = Join-Path $tmp "cola-renovar"
+      if (Test-Path $dirC) { Remove-Item $dirC -Recurse -Force }
+      New-Item -ItemType Directory $dirC | Out-Null
+      Set-Location $dirC
+      ('{"scriptId":"' + $ID_COLA + '","rootDir":"."}') | Set-Content ".clasp.json" -Encoding ascii
+      clasp --user $cuentaCola pull | Out-Null
+      if ($LASTEXITCODE -ne 0) { Linea "   · con la cuenta $cuentaCola no se pudo abrir el proyecto" DarkGray; continue }
+      $cambiados = 0; $yaEstaba = $false; $malo = $false
+      foreach ($f in Get-ChildItem $dirC -File | Where-Object { $_.Extension -in ".js",".gs" }) {
+        $t = Get-Content $f.FullName -Raw -Encoding UTF8
+        $m = [regex]::Match($t, 'function\s+doGet\s*\([^)]*\)\s*\{')
+        if (-not $m.Success) { continue }
+        $i = $m.Index + $m.Length; $nivel = 1
+        while ($i -lt $t.Length -and $nivel -gt 0) { if ($t[$i] -eq '{') { $nivel++ } elseif ($t[$i] -eq '}') { $nivel-- }; $i++ }
+        $cuerpo = $t.Substring($m.Index, $i - $m.Index)
+        if ($cuerpo -match 'XFrameOptionsMode') { $yaEstaba = $true; break }
+        $nuevo = [regex]::Replace($cuerpo, '(return\s+(?:(?!\breturn\b)[^;])*?(?:HtmlService|\.evaluate\(\)|createHtmlOutput|createTemplate)(?:(?!\breturn\b)[^;])*?)\s*;', $ev)
+        if ($nuevo -eq $cuerpo) { continue }
+        $t2 = $t.Substring(0, $m.Index) + $nuevo + $t.Substring($i)
+        $prueba = Join-Path $env:TEMP "cola-prueba.js"
+        [IO.File]::WriteAllText($prueba, $t2, (New-Object Text.UTF8Encoding $false))
+        node --check $prueba | Out-Null
+        if ($LASTEXITCODE -ne 0) { $malo = $true; break }
+        [IO.File]::WriteAllText($f.FullName, $t2, (New-Object Text.UTF8Encoding $false))
+        $cambiados++
+      }
+      if ($yaEstaba) { Linea "   ✅ ya estaba permitido" Green; $estado["arreglo:cola-iframe"] = "ya estaba"; break }
+      if ($malo -or -not $cambiados) { Linea "   ⚠️ no encontré dónde ponerlo con seguridad: no subí nada (hay que hacerlo a mano)" Yellow; $estado["arreglo:cola-iframe"] = "a mano"; break }
+      clasp --user $cuentaCola push --force | Out-Null
+      if ($LASTEXITCODE -ne 0) { throw "falló clasp push" }
+      clasp --user $cuentaCola deploy -i $DEP_COLA -d ("Panel: verse dentro " + (Get-Date -Format "dd/MM HH:mm")) | Out-Null
+      if ($LASTEXITCODE -ne 0) { throw "subí el cambio pero no pude publicar la nueva versión" }
+      Linea "   ✅ listo: Cola de Renovación ya se puede ver dentro del panel (mismo link)" Green
+      $estado["arreglo:cola-iframe"] = (Get-Date -Format "dd/MM/yyyy HH:mm")
+    } catch { Linea "   ❌ Cola de Renovación ($cuentaCola): $_" Red }
+    finally { Set-Location $repo }
+  }
+}
 if (-not $SoloComparar) { $estado | ConvertTo-Json | Set-Content $estadoF }
 
 # 3) Extensiones: copia a las carpetas desde donde las carga cada Chrome (tools\extensiones.txt)
