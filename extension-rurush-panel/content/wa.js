@@ -2149,6 +2149,45 @@
     refrescar();
   }, 900);
 
+  /* 💬📞 Último chat → app de Llamadas. Cada 10 min se piden al puente las fechas del último mensaje de
+     cada chat y se mandan solo las que cambiaron (la primera vez, todos los chats que WhatsApp tenga cargados).
+     Solo si en Opciones está el link de la app de Llamadas de la asesora de esta línea. Nunca se manda texto. */
+  function chatsDelPuente() {
+    return new Promise((listo) => {
+      const id = "c" + Date.now();
+      const oir = (ev) => {
+        if (ev.source !== window || !ev.data || ev.data.rr !== "rr-chats" || ev.data.id !== id) return;
+        window.removeEventListener("message", oir); clearTimeout(t); listo(ev.data.lista || []);
+      };
+      const t = setTimeout(() => { window.removeEventListener("message", oir); listo([]); }, 5000);
+      window.addEventListener("message", oir);
+      window.postMessage({ rr: "rr-chats-pide", id }, "*");
+    });
+  }
+  let chatsCorriendo = false;
+  async function mandarChats() {
+    if (chatsCorriendo) return;
+    chatsCorriendo = true;
+    try {
+      const { ucUrl, ucEnviados } = await chrome.storage.local.get(["ucUrl", "ucEnviados"]);
+      if (!ucUrl) return;
+      const enviados = ucEnviados || {};
+      const nuevos = (await chatsDelPuente()).filter((x) => x.ms > (enviados[x.t] || 0) + 30000);
+      for (let i = 0; i < nuevos.length; i += 300) {
+        const parte = nuevos.slice(i, i + 300);
+        const r = await pedir("chats", { chats: parte }, 60000);
+        if (!r.ok) break;
+        parte.forEach((x) => { enviados[x.t] = x.ms; });
+      }
+      const ks = Object.keys(enviados);
+      if (ks.length > 4000) ks.sort((a, b) => enviados[a] - enviados[b]).slice(0, ks.length - 4000).forEach((k) => delete enviados[k]);
+      await chrome.storage.local.set({ ucEnviados: enviados, ucUltimo: Date.now() });
+    } catch (e) { /* se reintenta en la próxima vuelta */ }
+    finally { chatsCorriendo = false; }
+  }
+  setTimeout(mandarChats, 60000);
+  setInterval(mandarChats, 10 * 60000);
+
   // Calienta la lista de socios apenas carga WhatsApp, para que la primera ficha
   // no tenga que esperar la descarga completa de la cartera.
   setTimeout(() => pedir("activos").catch(() => {}), 4000);

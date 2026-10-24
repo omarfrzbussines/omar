@@ -93,9 +93,41 @@
     } catch (e) { /* si WhatsApp cambia sus tripas, simplemente no avisa */ }
   }
 
+  /* 💬 Último chat de cada número (para la app de Llamadas): SOLO la fecha del último mensaje de cada
+     chat individual y si lo mandó esta línea o el cliente. Nunca el texto. Solo lee. */
+  function listaChats() {
+    const out = [];
+    try {
+      if (typeof window.require !== "function") return out;
+      const CC = window.require("WAWebChatCollection").ChatCollection;
+      const chats = CC.getModelsArray ? CC.getModelsArray() : (CC.models || []);
+      for (const chat of chats) {
+        const id = chat.id || {};
+        if (!/^(c\.us|lid|s\.whatsapp\.net)$/.test(String(id.server || ""))) continue;   // grupos, estados, canales
+        const ms = Number(chat.t || 0) * 1000;
+        if (!ms) continue;
+        const ct = chat.contact || {};
+        const pn = ct.phoneNumber || ct.__x_phoneNumber;
+        let tel = String((pn && (typeof pn === "string" ? pn : pn.user)) || "");
+        if (!tel && id.server === "c.us") tel = String(id.user || "");
+        tel = tel.replace(/\D/g, "");
+        if (!/^51\d{9}$/.test(tel)) continue;                    // solo celulares de Perú
+        let yo = null;
+        try {
+          const arr = chat.msgs && (chat.msgs.getModelsArray ? chat.msgs.getModelsArray() : chat.msgs.models);
+          const ult = arr && arr[arr.length - 1];
+          if (ult && ult.id && Number(ult.t || 0) * 1000 >= ms - 2000) yo = ult.id.fromMe === true;
+        } catch (e) { /* sin dato de quién escribió */ }
+        out.push({ t: tel, ms, yo, n: String(ct.name || ct.pushname || "").slice(0, 60) });
+      }
+    } catch (e) { /* si WhatsApp cambia sus tripas, simplemente no manda nada */ }
+    return out;
+  }
+
   window.addEventListener("message", (ev) => {
     if (ev.source !== window) return;
     const d = ev.data;
+    if (d && d.rr === "rr-chats-pide") { window.postMessage({ rr: "rr-chats", id: d.id, lista: listaChats() }, "*"); return; }
     if (d && d.rr === "rr-llegada-on") {
       if (d.on && !reloj) { llegadaDesde = Date.now() - 60000; reloj = setInterval(revisarLlegadas, 8000); }
       if (!d.on && reloj) { clearInterval(reloj); reloj = null; }

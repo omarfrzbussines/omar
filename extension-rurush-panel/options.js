@@ -304,3 +304,23 @@ $("autoLlegada").onchange = async () => {
   else await chrome.storage.local.remove("autoLlegada");
   $("autoPd-estado").innerHTML = `<span class="ok">✅ Guardar al llegar: ${$("autoLlegada").checked ? "prendido" : "apagado"}.</span>`;
 };
+
+/* ---------- 💬 último chat → app de Llamadas ---------- */
+chrome.storage.local.get(["ucUrl", "ucUltimo"]).then(({ ucUrl, ucUltimo }) => {
+  if (ucUrl) $("ucUrl").value = ucUrl;
+  if (ucUltimo) $("uc-estado").innerHTML = '<span class="ok">✅ Último envío: ' + new Date(ucUltimo).toLocaleString("es-PE") + "</span>";
+});
+$("guardarUc").onclick = async () => {
+  const v = $("ucUrl").value.trim();
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec\?(.*&)?k=[A-Za-z0-9]{12,}/.test(v)) {
+    $("uc-estado").innerHTML = '<span class="err">❌ Pega el link completo de la app de Llamadas (termina en ?k=…).</span>';
+    return;
+  }
+  await chrome.storage.local.set({ ucUrl: v });
+  $("uc-estado").innerHTML = '<span class="ok">✅ Guardado. En unos minutos empieza a anotar los chats (recarga WhatsApp Web).</span>';
+};
+$("quitarUc").onclick = async () => {
+  await chrome.storage.local.remove(["ucUrl", "ucEnviados", "ucUltimo"]);
+  $("ucUrl").value = "";
+  $("uc-estado").innerHTML = "Quitado: ya no se anotan los chats de esta línea.";
+};

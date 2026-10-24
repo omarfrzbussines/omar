@@ -132,6 +132,22 @@ code{background:rgba(0,0,0,.4);padding:1px 5px;border-radius:4px;font-size:11px}
     <div id="ventas-estado"></div>
   </div>
 
+  <h2>💬 Último chat → app de Llamadas</h2>
+  <div class="card">
+    <p class="hint">
+      Pega el link de la app de Llamadas de la asesora que usa <b>este WhatsApp</b> (Omar lo copia con 🔗 Links).
+      Cada 10 min se anota la <b>fecha</b> del último mensaje de cada chat y si lo escribió ella o el cliente,
+      para que en la app se vea el último chat de cada contacto. Nunca se manda el texto de los mensajes.
+    </p>
+    <label>Link de la app de Llamadas</label>
+    <input id="ucUrl" type="text" placeholder="https://script.google.com/macros/s/.../exec?k=..." autocomplete="off">
+    <div class="btns">
+      <button id="guardarUc">Guardar</button>
+      <button class="sec" id="quitarUc">Quitar</button>
+    </div>
+    <div id="uc-estado"></div>
+  </div>
+
   <h2>Guardar contactos solos</h2>
   <div class="card">
     <label style="display:flex;gap:8px;align-items:center"><input id="autoPd" type="checkbox" style="width:auto"> Al abrir un chat que no está en Pipedrive, guardarlo solo</label>

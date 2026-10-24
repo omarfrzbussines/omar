@@ -60,6 +60,7 @@ function doPost(e) {
   return ll_responder(function () {
     ll_verificar(e);
     const d = JSON.parse(e.postData.contents || "{}");
+    if (d.accion === "chats") return uc_chatsExt(d);   // 💬 extensión de WhatsApp (va con la llave de la asesora)
     if (d.token !== LL_TOKEN) throw new Error("Token inválido");
     return ll_registrar(d);
   });
@@ -269,6 +270,9 @@ function ll_registrar(d) {
       try { procesarFilaFP(hoja, d.fila); } catch (err) { console.error("procesarFilaFP: " + err); }
     }
     if (String(d.estado).trim().toUpperCase() === "DESCARTADO") { try { desc_anotar(d.telefono); } catch (e) { console.error("descartados: " + e); } }
+    // 💬📞 último contacto de este número (UltimoContacto.gs)
+    uc_anotarSeguro_([{ tel: d.telefono || fila[est.numero], nombre: est.nombre >= 0 ? fila[est.nombre] : "", llam: ahora.getTime(),
+      llamo: String(d.asesora || "").toUpperCase(), res: estado.toUpperCase(), donde: hoja.getName() }]);
     return { fila: d.fila, ronda: libre + 1, fecha: hoy };
   } finally {
     lock.releaseLock();

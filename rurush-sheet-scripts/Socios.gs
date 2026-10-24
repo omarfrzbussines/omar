@@ -77,6 +77,8 @@ function so_lista(llave, como) {
   const hace = function (d) { return Utilities.formatDate(new Date(Date.now() - d * 864e5), "America/Lima", "yyyy-MM-dd"); };
   const reposo = { no: hace(SO_REPOSO.no), si: hace(SO_REPOSO.si) };
   const vistos = {}, listas = { no: [], si: [] };
+  let uc = {};
+  try { uc = uc_mapa_(); } catch (e) { console.error("último contacto: " + e); }
   so_filas_().forEach(function (f, i) {
     const cod = String(f[SO.cod] || "").trim(), tel = so_tel(f[SO.cel]);
     if (!cod || !tel) return;
@@ -91,7 +93,7 @@ function so_lista(llave, como) {
     if (fLlam && fLlam > reposo[tipo]) return;              // ya se le llamó hace poco
     if (yaHoy[cod] || yaHoy[tel] || vistos[tel]) return;    // mismo celular (familiares): una llamada basta
     vistos[tel] = 1;
-    listas[tipo].push({ fila: SO_INI + i, cod: cod, nombre: String(f[SO.nombre] || "").trim(), tel: tel, plan: String(f[SO.plan] || ""),
+    listas[tipo].push({ uc: uc_de_(uc, tel), fila: SO_INI + i, cod: cod, nombre: String(f[SO.nombre] || "").trim(), tel: tel, plan: String(f[SO.plan] || ""),
       fin: fin, vence: vence, dias: dias, tipo: tipo,
       ult: (function (u) { return u ? u.slice(8, 10) + "/" + u.slice(5, 7) : String(f[SO.ult] || "").slice(0, 10); })(cob_iso(f[SO.ult])),
       antes: f[SO.res] ? String(f[SO.res]) + (fLlam ? " · " + fLlam.slice(8, 10) + "/" + fLlam.slice(5, 7) : "") + (f[SO.notas] ? " · " + String(f[SO.notas]).slice(0, 60) : "") : "" });
@@ -136,6 +138,7 @@ function so_guardar(llave, d) {
     const ahora = new Date();
     so_log_().appendRow([Utilities.formatDate(ahora, "America/Lima", "yyyy-MM-dd"), Utilities.formatDate(ahora, "America/Lima", "HH:mm"),
       quien, "'" + d.cod, d.nombre || "", "'" + so_tel(d.tel), d.dias == null ? "" : d.dias, Number(d.intentos) || 0, seg, d.resultado, String(d.nota || "").trim(), d.tipo === "si" ? "si" : "no"]);
+    uc_anotarSeguro_([{ tel: d.tel, nombre: d.nombre, llam: ahora.getTime(), llamo: quien, res: d.resultado, donde: "SOCIO" }]);
     return { ok: true };
   } finally {
     lock.releaseLock();
