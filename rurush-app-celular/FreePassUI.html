@@ -840,26 +840,10 @@ async function guardarLlamadas() {
 /* ---------- 💰 Cola de Renovación (app aparte, ya en producción: solo se abre con su link, no se incrusta) ---------- */
 const COLA_URL = 'https:\/\/script.google.com/macros/s/AKfycbywf-ajwBz9mRioOeA6bLfF1WzMJYbvN5X5VDmDIYbd4mEY-jxe3IW5K2peNuUReFZb/exec';
 function pantallaCola() {
-  const p = (t) => `<li>${t}</li>`;
-  return `<div class="top"><div><h1>Cola de Renovación</h1><div class="fecha">Cobros y renovaciones del mes por asesora. Toca para abrir y editar.</div></div>
-      <div class="acciones"><a class="btn pri" href="${COLA_URL}" target="_blank" rel="noopener">${ic('tarjeta')} Abrir Cola de Renovación</a></div></div>
-    <div class="rejilla">
-      <div class="panel"><div class="panel-h">${ic('tarjeta')} Qué tiene</div><div class="panel-b"><ul class="cola-l">
-        ${p('Solo los clientes con fecha de cobro en el mes elegido (flechas para cambiar de mes).')}
-        ${p('KPIs: <b>Proyección</b>, <b>Ya cobrado</b>, <b>Falta cobrar</b> y <b>% de conversión</b>.')}
-        ${p('Filtro por asesora (Mónica, Laura, Danna, Valeria, Dilan) y buscador por nombre, código o celular.')}
-        ${p('Pestañas: Por cobrar · Cobrados · Todos · Vencen sin agendar.')}
-        ${p('Al tocar un cliente se edita: ¿pagó?, probabilidad, proyección, fecha de cobro, plan nuevo, monto pactado, tipo de acción y notas. <b>💰 Cobrado</b> lo marca pagado en un clic.')}
-        ${p('Botón de WhatsApp por cliente y <b>+ Nuevo cliente</b> por código. Funciona en celular.')}
-      </ul>
-      <a class="btn pri" href="${COLA_URL}" target="_blank" rel="noopener" style="margin-top:14px">${ic('tarjeta')} Abrir Cola de Renovación</a></div></div>
-      <div class="panel"><div class="panel-h">${ic('candado')} Acceso</div><div class="panel-b"><ul class="cola-l">
-        ${p('Se abre en una pestaña nueva: es una app aparte y no se puede mostrar dentro de esta página.')}
-        ${p('Funciona con tu cuenta de Google: solo si puedes editar el Sheet <b>VENTAS RETENCIÓN 2026 V2</b>.')}
-        ${p('La primera vez acepta los permisos: <b>Configuración avanzada → Ir a Dashboard Cola Renovar → Permitir</b>. Es una sola vez.')}
-        ${p('Arriba sale una franja gris de Google ("Un usuario de Google Apps Script creó esta aplicación"). Es normal.')}
-      </ul></div></div>
-    </div>`;
+  return `<div class="top"><div><h1>Cola de Renovación</h1><div class="fecha">Cobros y renovaciones del mes por asesora. Toca un cliente para editar.</div></div>
+      <div class="acciones"><a class="btn sec peq" href="${COLA_URL}" target="_blank" rel="noopener">↗ Abrir en otra pestaña</a></div></div>
+    <p class="aviso" style="margin:-4px 0 10px">${ic('candado')} Si abajo sale "rechazó la conexión" o pide permisos, usa <b>↗ Abrir en otra pestaña</b> (la primera vez: Configuración avanzada → Ir a Dashboard Cola Renovar → Permitir).</p>
+    <div class="ll-marco"><iframe src="${COLA_URL}" title="Cola de Renovación" allow="clipboard-write"></iframe></div>`;
 }
 
 /* ---------- agendar nutrición con la base de socios (proyecto de Nutrición) ---------- */
