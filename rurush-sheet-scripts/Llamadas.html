@@ -3,6 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 <meta name="theme-color" content="#111111">
 <style>
   :root { --bg:#111; --card:#1c1c1e; --line:#2c2c2e; --tx:#f2f2f2; --mut:#9a9a9f; --red:#e53935; --grn:#34c759; --ice:#64b5f6; }
@@ -99,15 +100,73 @@
   .chipsA { display:flex; gap:6px; overflow-x:auto; margin:4px 0 8px; } .chipsA button { flex:none; background:var(--card); color:var(--mut); border:1px solid var(--line); border-radius:99px; padding:7px 12px; font-size:13px; font-weight:600; }
   .chipsA button.on { background:#13293d; border-color:var(--ice); color:#fff; }
   .aviso { background:#3a2e10; color:#ffd666; border-radius:10px; padding:10px; font-size:13px; margin-top:10px; }
+
+  /* ===== versión PRO (oct-2026): íconos de línea, Inter, 2 columnas en la computadora ===== */
+  :root { --bg:#0b0d10; --card:#14171c; --card2:#1b1f26; --line:#262b33; --tx:#eef1f5; --mut:#8b93a1; --red:#e5383b; --grn:#2fd27a; --ice:#5aa9ff; --amb:#f5b83d; }
+  body { font-family:Inter, -apple-system, system-ui, Roboto, sans-serif; font-size:15px; }
+  @media (min-width:760px) { body { max-width:1120px; border:0; } }
+  .ico { width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+  header { padding:14px 16px 0; background:rgba(11,13,16,.94); backdrop-filter:blur(8px); }
+  h1 { font-size:15px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }
+  .sub { font-size:12px; }
+  .btn-s { width:38px; height:38px; padding:0; display:grid; place-items:center; border-radius:10px; color:var(--mut); }
+  .tabs { display:flex; gap:2px; margin-top:12px; border-bottom:1px solid var(--line); }
+  .tab { flex:1 1 0; min-width:0; display:flex; flex-direction:column; align-items:center; gap:3px; background:none; border:0; border-bottom:2px solid transparent; border-radius:0;
+         padding:8px 2px 9px; margin-bottom:-1px; color:var(--mut); font:600 11.5px Inter, system-ui, sans-serif; white-space:nowrap; position:relative; }
+  .tab .ico { width:18px; height:18px; }
+  .tab.on { background:none; color:var(--tx); border-color:var(--red); }
+  .tab .badge { position:absolute; top:2px; left:calc(50% + 6px); margin:0; font-size:10.5px; line-height:17px; min-width:17px; padding:0 5px; }
+  @media (min-width:600px) { .tab { flex:none; flex-direction:row; gap:7px; font-size:14px; padding:11px 14px; }
+    .tab .ico { width:16px; height:16px; } .tab .badge { position:static; margin-left:2px; } }
+  #vistaLlamadas { padding:12px 0; }
+  .bases { margin-top:0; border-radius:10px; font-weight:600; }
+  .marcador { gap:8px; margin-top:10px; }
+  @media (min-width:760px) { #vistaLlamadas { display:flex; gap:10px; } #vistaLlamadas .bases { width:210px; flex:none; } #vistaLlamadas .marcador { margin-top:0; flex:1; } }
+  .m { flex:1 0 auto; min-width:88px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:8px 12px; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; font-weight:600; }
+  .m b { display:block; font-size:20px; margin:0 0 1px; letter-spacing:0; }
+  .m.prog { background:#2a2109; border:1px solid #3a2f12; }
+  main { padding:16px 16px 48px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px; }
+  .lay { display:grid; gap:4px; }
+  @media (min-width:900px) { .lay { grid-template-columns:1.1fr 1fr; gap:16px; align-items:start; }
+    .lay .col2 { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:2px 18px 14px; } .lay .col2 > h2:first-child { margin-top:16px; } }
+  .who { display:flex; gap:14px; align-items:center; }
+  .av { width:50px; height:50px; border-radius:14px; background:linear-gradient(135deg,#2a3140,#1b2029); display:grid; place-items:center; font-weight:800; font-size:17px; color:#c9d3e3; flex:none; }
+  .nombre { font-size:20px; } .num { margin-top:2px; font-variant-numeric:tabular-nums; font-size:14px; }
+  .meta { margin-top:14px; } .tag { background:var(--card2); border:1px solid var(--line); border-radius:8px; padding:3px 9px; font-size:12px; font-weight:600; }
+  .uc { gap:6px; margin-top:8px; } .uc span { display:inline-flex; gap:6px; align-items:center; padding:4px 9px; border-radius:8px; background:var(--card2); border:1px solid var(--line); font-size:12px; font-weight:600; }
+  .uc .ico { width:13px; height:13px; }
+  .uc .ok { color:#6ee7a6; background:#11261b; border-color:#1d4430; } .uc .u3 { color:#ffd27a; background:#2a2109; border-color:#3a2f12; } .uc .u7 { color:#ff7b7d; background:#2a1416; border-color:#4a1f22; font-weight:600; }
+  .acciones { grid-template-columns:1fr 1fr 52px; gap:10px; margin:18px 0 4px; }
+  .llamar, .wacall, .wa { border-radius:12px; padding:14px 8px; font-size:15px; }
+  .llamar { background:var(--grn); color:#04210f; padding:14px 8px; } .wacall { background:none; border:1.5px solid #25d366; color:#25d366; font-size:15px; padding:14px 8px; } .wa { background:var(--card2); border:1px solid var(--line); color:var(--mut); }
+  .medidor { font-size:12.5px; }
+  h2 { font-size:11px; letter-spacing:.08em; margin:20px 0 10px; }
+  .hist { border-left:2px solid var(--line); padding-left:14px; margin-left:4px; } .hist div { position:relative; margin:9px 0; }
+  .hist div::before { content:''; position:absolute; left:-19px; top:5px; width:8px; height:8px; border-radius:9px; background:var(--ice); }
+  .est { display:flex; align-items:center; gap:8px; text-align:left; background:var(--card2); border-radius:10px; padding:12px; font:600 14px Inter, system-ui, sans-serif; }
+  .est i { width:8px; height:8px; border-radius:9px; flex:none; }
+  .est small { margin:0 0 0 auto; font-size:11px; }
+  .est.on { border-color:var(--ice); background:#13233a; }
+  textarea, select, input { background:var(--card2); border-radius:10px; font-family:inherit; }
+  .guardar { border-radius:12px; padding:15px; font:700 15px Inter, system-ui, sans-serif; }
+  .luego { margin:-18px -18px 16px; padding:12px 18px; border-radius:16px 16px 0 0; background:linear-gradient(90deg,#2a2109,#1a170d); border-bottom:1px solid #3a2f12; color:#f3d48a; font-size:13px; display:flex; gap:10px; }
+  .luego b { color:var(--amb); font-size:13px; } .luego .ico { margin-top:1px; color:var(--amb); }
+  .card.esLuego { border:1px solid #6b5216; }
+  .sitem { background:var(--card); } .stipo, .alu, .cobro, .tot { border:1px solid var(--line); }
+  @media (min-width:900px) { .slista { grid-template-columns:1fr 1fr; } }
+  .adm { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:7px 16px; background:#16130b; border-bottom:1px solid #3a2f12; color:var(--amb); font-size:12px; font-weight:700; letter-spacing:.03em; }
+  .adm select, .adm button { width:auto; background:#221c0d; border:1px solid #3a2f12; color:#f3d48a; border-radius:8px; padding:5px 9px; font:600 12px Inter, system-ui, sans-serif; }
+  .adm .sp { flex:1; }
 </style>
 </head>
 <body>
 <header>
   <div class="top">
     <div><h1><b>RURUSH</b> Llamadas</h1><div class="sub" id="sub">Hola <?= asesora ?></div></div>
-    <button class="btn-s" id="recargar">🔄</button>
+    <button class="btn-s" id="recargar" title="Actualizar"><svg class="ico" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg></button>
   </div>
-  <div class="tabs"><button class="tab on" data-v="llamadas">📞 Llamadas</button><button class="tab" data-v="socios">🏋️ Socios</button><button class="tab" data-v="cobros">💰 Cobros</button><button class="tab" data-v="alumnos">👥 Alumnos</button><button class="tab" data-v="dif" id="tabDif" style="display:none">📣 Difus.</button></div>
+  <div class="tabs"><button class="tab on" data-v="llamadas"><svg class="ico" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>Llamadas</button><button class="tab" data-v="socios"><svg class="ico" viewBox="0 0 24 24"><path d="M6.5 6.5v11M17.5 6.5v11M3 9.5v5M21 9.5v5M6.5 12h11"/></svg>Socios</button><button class="tab" data-v="cobros"><svg class="ico" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>Cobros</button><button class="tab" data-v="alumnos"><svg class="ico" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Alumnos</button><button class="tab" data-v="dif" id="tabDif" style="display:none"><svg class="ico" viewBox="0 0 24 24"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>Difusiones</button></div>
   <div id="vistaLlamadas"><select class="bases" id="base"></select>
   <div class="marcador" id="marcador"></div></div>
 </header>
@@ -137,6 +196,22 @@ let mostrando = false, cola = [], idx = 0, estado = null, ESTADOS = [], HORAS = 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
+const IC = {
+  tel: '<svg class="ico" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>',
+  chat: '<svg class="ico" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>',
+  socios: '<svg class="ico" viewBox="0 0 24 24"><path d="M6.5 6.5v11M17.5 6.5v11M3 9.5v5M21 9.5v5M6.5 12h11"/></svg>',
+  cobros: '<svg class="ico" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>',
+  alumnos: '<svg class="ico" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  dif: '<svg class="ico" viewBox="0 0 24 24"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>',
+  reload: '<svg class="ico" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg>',
+  reloj: '<svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>'
+};
+// color de cada resultado (punto en el botón)
+const COLOR_EST = { 'CONTESTO': '#2fd27a', 'NO CONTESTO': '#8b93a1', 'CORTO': '#f5b83d', 'APAGADO': '#5d6573', 'AGENDADO': '#5aa9ff', 'CLIENTE': '#a78bfa',
+  'DESCARTADO': '#e5383b', 'Otra Ciudad': '#64748b', 'LLAMAR LUEGO': '#f59e0b', 'VIENE': '#2fd27a', 'CONTENTO': '#5aa9ff', 'REFERIDO': '#a78bfa', 'DA EXCUSAS': '#f5b83d', 'NO INTERESA': '#e5383b', 'QUEJA': '#f97316', 'NO CONTESTÓ': '#8b93a1' };
+const punto = (e) => `<i style="background:${COLOR_EST[e] || '#8b93a1'}"></i>`;
+// iniciales para el círculo de la persona
+const iniciales = (n) => { const w = String(n || '').replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ ]/g, ' ').trim().split(/\s+/).filter(Boolean); return w.length ? (w[0][0] + (w[1] ? w[1][0] : '')).toUpperCase() : '#'; };
 function toast(t, err) {
   const el = $('#toast'); el.textContent = t; el.className = 'toast' + (err ? ' err' : ''); el.style.display = 'block';
   clearTimeout(el._t); el._t = setTimeout(() => el.style.display = 'none', err ? 6000 : 2200);
@@ -242,7 +317,7 @@ function actualizarBotones() {
   const med = $('#medidor');
   if (med) med.innerHTML = llamada.intentos
     ? `<span>📞 Intentos: <b>${llamada.intentos}</b></span><span>⏱ En llamada: <b>${mmss(seg)}</b></span>`
-    : '<span>Toca 📞 Llamar o 📲 WhatsApp para habilitar los resultados</span>';
+    : '<span>🔒 Toca Llamar o WhatsApp para habilitar los resultados</span>';
   document.querySelectorAll('.est:not(.sest)').forEach((b) => {
     const min = MIN_SEG[b.dataset.e] || 0;
     const ok = llamada.intentos > 0 && llamada.salio == null && seg >= min;
@@ -278,26 +353,27 @@ function pintar() {
     : '';
   const fp = true ? `<div id="fpbox" style="display:none"><h2>Fecha y hora del Free Pass</h2>
       <div class="fila2"><input type="date" id="fpf"><select id="fph"><option value="">Hora</option>${HORAS.map((h) => `<option>${h}</option>`).join('')}</select></div></div>` : '';
-  $('#main').innerHTML = bannerConfirmar() + `
+  $('#main').innerHTML = bannerConfirmar() + `<div class="lay"><div class="col1">
     <div class="card${p.luego ? ' esLuego' : ''}">
-      ${p.luego ? `<div class="luego">🔔 <b>LLAMAR AHORA</b> · pidió que lo llamen el ${esc(p.luego.texto)}${p.luego.nota ? `<br>📝 ${esc(p.luego.nota)}` : ''}<br>${quienLuego(p.luego.asesora)}</div>` : ''}
+      ${p.luego ? `<div class="luego">${IC.reloj}<div><b>Llamar ahora</b> · pidió que lo llamen el ${esc(p.luego.texto)}${p.luego.nota ? `<br>📝 ${esc(p.luego.nota)}` : ''}<br>${quienLuego(p.luego.asesora)}</div></div>` : ''}
+      <div class="who"><div class="av">${esc(esNum || !p.nombre ? 'SN' : iniciales(p.nombre))}</div><div>
       <div class="nombre">${esc(esNum || !p.nombre ? 'Sin nombre' : p.nombre)}</div>
-      <div class="num">+51 ${esc(p.numero.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3'))}</div>
+      <div class="num">+51 ${esc(p.numero.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3'))}</div></div></div>
       <div class="meta"><span class="tag">${p.ronda}ª llamada</span>${p.dia ? `<span class="tag">lead del ${esc(p.dia)}</span>` : ''}${p.origen ? `<span class="tag">${esc(p.origen)}</span>` : ''}</div>
       ${ucLinea(p.uc)}
       <div class="acciones">
-        <a class="llamar" id="llamar" href="tel:+51${p.numero}">📞 Llamar</a>
-        <a class="wacall" id="wacall" href="https:\/\/wa.me/51${p.numero}" target="_blank">📲 WhatsApp</a>
-        <a class="wa" href="https:\/\/wa.me/51${p.numero}" target="_blank">💬</a>
+        <a class="llamar" id="llamar" href="tel:+51${p.numero}">${IC.tel}Llamar</a>
+        <a class="wacall" id="wacall" href="https:\/\/wa.me/51${p.numero}" target="_blank" title="Llamar por WhatsApp">${IC.tel}WhatsApp</a>
+        <a class="wa" href="https:\/\/wa.me/51${p.numero}" target="_blank" title="Escribir por WhatsApp">${IC.chat}</a>
       </div>
       ${p.socio ? (socioVigente(p.socio)
         ? `<div class="socio">🟢 <b>YA ES SOCIO</b>${datosSocio(p.socio)}<button id="esSocio">✅ Marcar CLIENTE sin llamar</button></div>`
         : `<div class="socio exsocio">⚪ <b>EX-SOCIO</b>${datosSocio(p.socio)}<br>Su plan ya venció: llámalo para que regrese.</div>`) : ''}
       <div class="medidor" id="medidor"></div>
     </div>
-    ${hist}
+    ${hist}</div><div class="col2">
     <h2>¿Cómo salió?</h2>
-    <div class="estados">${ESTADOS.map((e) => `<button class="est" data-e="${esc(e)}" disabled>${esc(e)}<small></small></button>`).join('')}</div>
+    <div class="estados">${ESTADOS.map((e) => `<button class="est" data-e="${esc(e)}" disabled>${punto(e)}${esc(e)}<small></small></button>`).join('')}</div>
     ${fp}
     <div id="lgbox" style="display:none"><h2>¿A qué hora lo llamamos?</h2>
       <div class="chips"><button data-lg="1h">En 1 h</button><button data-lg="18">Hoy 6 pm</button><button data-lg="m10">Mañana 10 am</button></div>
@@ -306,7 +382,7 @@ function pintar() {
     <textarea id="obs" placeholder="Toca aquí y usa el 🎤 del teclado para dictar"></textarea>
     <div class="tip">🎤 Toca el cuadro y el micrófono del teclado: habla y se escribe solo.</div>
     <button class="guardar" id="guardar" disabled>Guardar y siguiente</button>
-    <button class="saltar" id="saltar">Saltar (no llamé)</button>`;
+    <button class="saltar" id="saltar">Saltar (no llamé)</button></div></div>`;
   document.querySelectorAll('.est').forEach((b) => b.onclick = () => {
     estado = b.dataset.e;
     document.querySelectorAll('.est').forEach((x) => x.classList.toggle('on', x === b));
@@ -453,25 +529,27 @@ function pintarSocioLlamar(p) {
     ? `«Hola ${nom}, te habla ${yo} de RURUSH 💪 Te extrañamos estos días, ¿todo bien? ¿Qué día de esta semana te esperamos para retomar?»`
     : `«Hola ${nom}, te habla ${yo} de RURUSH 💪 Te vemos constante, ¡felicitaciones! ¿Cómo te sientes con tus entrenamientos? ¿Algo que podamos mejorar? ¿Algún amigo o familiar que quiera entrenar contigo?»`;
   $('#main').innerHTML = `<button class="saltar" id="sVolver" style="text-align:left;margin:0 0 6px;padding:6px 0">← Volver a la lista (${SO_TXT[p.tipo]})</button>
-    <div class="card">
+    <div class="lay"><div class="col1"><div class="card">
+      <div class="who"><div class="av">${esc(iniciales(p.nombre))}</div><div>
       <div class="nombre">${esc(p.nombre || 'Cód. ' + p.cod)}</div>
-      <div class="num">+51 ${esc(p.tel.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3'))}</div>
+      <div class="num">+51 ${esc(p.tel.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3'))}</div></div></div>
       <div class="meta"><span class="tag">Cód. ${esc(p.cod)}</span>${p.plan ? `<span class="tag">${esc(p.plan)}</span>` : ''}${p.fin ? `<span class="tag">vence ${fechaCorta(p.fin)} (${p.vence} d)</span>` : ''}</div>
       ${diasSA(p.dias)}${p.ult ? `<span class="tip"> · última vez: ${esc(p.ult)}</span>` : ''}
       ${ucLinea(p.uc)}
       ${p.antes ? `<div class="aviso">Última llamada: ${esc(p.antes)}</div>` : ''}
       <div class="acciones" style="grid-template-columns:1fr 1fr">
-        <a class="llamar" id="sLlamar" href="tel:+51${p.tel}">📞 Llamar</a>
-        <a class="wacall" id="sWa" href="https:\/\/wa.me/51${p.tel}" target="_blank">📲 WhatsApp</a>
+        <a class="llamar" id="sLlamar" href="tel:+51${p.tel}">${IC.tel}Llamar</a>
+        <a class="wacall" id="sWa" href="https:\/\/wa.me/51${p.tel}" target="_blank">${IC.tel}WhatsApp</a>
       </div>
       <div class="medidor" id="sMed"></div>
     </div>
     <div class="aviso" style="background:#13293d;color:#9fd3ff">💬 <b>Guion:</b> ${guion}</div>
+    </div><div class="col2">
     <h2>¿Cómo salió?</h2>
     <div class="estados">${SO_BOT[p.tipo].map((b) => `<button class="est sest" data-r="${b[0]}" data-min="${b[2]}" disabled>${b[1]}<small></small></button>`).join('')}</div>
     <h2>Nota</h2>
     <textarea id="sNota" placeholder="${p.tipo === 'no' ? 'Ej.: vuelve el lunes en la tarde' : 'Ej.: pide más clases de noche / refirió a su hermana 9xx…'} (usa el 🎤 del teclado)"></textarea>
-    <button class="guardar" id="sGuardar" disabled>Guardar y volver a la lista</button>`;
+    <button class="guardar" id="sGuardar" disabled>Guardar y volver a la lista</button></div></div>`;
   const marca = () => { llamada.intentos++; llamada.toco = Date.now(); guardarLlamada(); actualizarSocio(); };
   $('#sLlamar').onclick = marca; $('#sWa').onclick = () => { llamada.wa = (llamada.wa || 0) + 1; marca(); };
   document.querySelectorAll('.sest').forEach((b) => b.onclick = () => {
@@ -487,7 +565,7 @@ function actualizarSocio() {
   if (!SOC_SEL) return;
   const seg = segundos(), med = $('#sMed');
   if (med) med.innerHTML = llamada.intentos ? `<span>📞 Intentos: <b>${llamada.intentos}</b></span><span>⏱ En llamada: <b>${mmss(seg)}</b></span>`
-    : '<span>Toca 📞 Llamar para habilitar los resultados</span>';
+    : '<span>🔒 Toca Llamar para habilitar los resultados</span>';
   document.querySelectorAll('.sest').forEach((b) => {
     const min = Number(b.dataset.min), ok = llamada.intentos > 0 && llamada.salio == null && seg >= min;
     b.disabled = !ok;
@@ -520,11 +598,12 @@ const horaLima = (ms) => new Date(ms).toLocaleTimeString('es-PE', { timeZone: 'A
 const hace = (ms) => { const d = diasDesde(ms); return d <= 0 ? 'hoy ' + horaLima(ms) : d === 1 ? 'ayer' : 'hace ' + d + ' d'; };
 const ucCls = (ms) => !ms ? 'u7' : diasDesde(ms) >= 7 ? 'u7' : diasDesde(ms) >= 3 ? 'u3' : 'ok';
 const quienTxt = (q) => String(q || '').toUpperCase() === ASESORA ? 'tú' : cap(q);
+const may = (t) => String(t).charAt(0).toUpperCase() + String(t).slice(1);
 function ucLinea(uc) {
   uc = uc || {};
-  const c = uc.c ? '💬 ' + hace(uc.c) + (uc.e === 'CLIENTE' ? ' · escribió él/ella' : uc.e ? (String(uc.e).toUpperCase() === ASESORA ? ' · le escribiste' : ' · le escribió ' + cap(uc.e)) : '') : '💬 sin chat registrado';
-  const l = uc.l ? '📞 ' + hace(uc.l) + (uc.lq ? ' · ' + quienTxt(uc.lq) : '') + (uc.r ? ' · ' + uc.r : '') : '📞 nunca llamado';
-  return `<div class="uc"><span class="${ucCls(uc.c)}">${esc(c)}</span><span class="${ucCls(uc.l)}">${esc(l)}</span></div>`;
+  const c = uc.c ? hace(uc.c) + (uc.e === 'CLIENTE' ? ' · escribió él/ella' : uc.e ? (String(uc.e).toUpperCase() === ASESORA ? ' · le escribiste' : ' · le escribió ' + cap(uc.e)) : '') : 'Sin chat registrado';
+  const l = uc.l ? hace(uc.l) + (uc.lq ? ' · ' + quienTxt(uc.lq) : '') + (uc.r ? ' · ' + cap(uc.r) : '') : 'Nunca llamado';
+  return `<div class="uc"><span class="${ucCls(uc.c)}">${IC.chat}${esc(may(c))}</span><span class="${ucCls(uc.l)}">${IC.tel}${esc(may(l))}</span></div>`;
 }
 
 /* ---------- 👥 Alumnos: tus socios activos + tus leads de los últimos 30 días ---------- */
@@ -551,7 +630,7 @@ function pintarAlumnos() {
       <span class="tag">${p.t === 's' ? '🏋️ socio' : '🎯 lead'}</span>${r.todas ? `<span class="tag">${esc(cap(p.ase))}</span>` : ''}</div>
       <div class="tip" style="margin-top:4px">${p.t === 's' ? `${diasSA(p.dias)} ${p.plan ? esc(p.plan) : ''}${p.fin ? ' · vence ' + fechaCorta(p.fin) : ''}` : esc((p.base || '') + (p.res ? ' · ' + p.res : ''))}</div>
       ${ucLinea(p.uc)}
-      <a class="wa" href="https:\/\/wa.me/51${esc(p.tel)}" target="_blank">💬 WhatsApp</a></div>`;
+      <a class="wa" href="https:\/\/wa.me/51${esc(p.tel)}" target="_blank">${IC.chat} WhatsApp</a></div>`;
   const desde = r.chatsDesde ? `💬 Los chats se registran desde el ${new Date(r.chatsDesde).toLocaleDateString('es-PE', { timeZone: 'America/Lima' })} (WhatsApp de la computadora).`
     : '💬 Los chats aparecerán cuando se active en la extensión de WhatsApp de la computadora.';
   $('#main').innerHTML = (ases.length ? `<div class="chipsA">${['', ...ases].map((a) => `<button data-a="${esc(a)}" class="${ALU_ASE === a ? 'on' : ''}">${a ? esc(cap(a)) : 'Todas'}</button>`).join('')}</div>` : '') +
@@ -779,13 +858,10 @@ $('#base').onchange = () => {
 // Link de prueba de Omar: avisa que nada se guarda.
 if (ASESORA === 'OMAR') {
   const b = document.createElement('div');
-  b.style.cssText = 'background:#5a3a00;color:#ffd27a;padding:6px 10px;font-size:13px;display:flex;gap:8px;align-items:center;flex-wrap:wrap';
-  b.innerHTML = '<span>🧪 OMAR · se guarda de verdad (asesor OMAR)</span>' +
-    '<select id="como" style="background:#2a1d00;color:#ffd27a;border:1px solid #8a6400;border-radius:6px;padding:3px">' +
-    '<option value="">Ver como: yo</option><option>MONICA</option><option>DANNA</option><option>LAURA</option><option>CIELO</option></select>' +
-    '<button id="links" style="background:#8a6400;color:#fff;border:0;border-radius:6px;padding:4px 8px">🔗 Links</button>' +
-    '<button id="errores" style="background:#8a6400;color:#fff;border:0;border-radius:6px;padding:4px 8px">🛠 Errores</button>' +
-    '<button id="dashYa" style="background:#8a6400;color:#fff;border:0;border-radius:6px;padding:4px 8px">📊 Rehacer dashboard</button>';
+  b.className = 'adm';
+  b.innerHTML = '<span title="Lo que guardes queda con asesor OMAR">★ MODO OMAR</span>' +
+    '<select id="como"><option value="">Ver como: yo</option><option>MONICA</option><option>DANNA</option><option>LAURA</option><option>CIELO</option></select>' +
+    '<span class="sp"></span><button id="links">Links</button><button id="errores">Errores</button><button id="dashYa">Rehacer dashboard</button>';
   document.body.prepend(b);
   $('#dashYa').onclick = () => {
     toast('📊 Rehaciendo el dashboard… (~1 min)');
@@ -846,7 +922,7 @@ function badgeSocios(r) {
   const t = document.querySelector('.tab[data-v=socios]');
   if (!t || !r || !r.meta) return;
   const falta = Math.max(0, r.meta.no - r.hoy.no) + Math.max(0, r.meta.si - r.hoy.si);
-  t.innerHTML = '🏋️ Socios' + (falta ? ` <span class="badge">${falta}</span>` : ' ✅');
+  t.innerHTML = IC.socios + 'Socios' + (falta ? `<span class="badge">${falta}</span>` : ' ✓');
 }
 function iniciar() {
   // Al abrir: si hay una cola guardada de hoy, se muestra al instante y se actualiza por detrás.
