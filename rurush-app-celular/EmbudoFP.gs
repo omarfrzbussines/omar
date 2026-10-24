@@ -74,7 +74,7 @@ function emb_respOps_() {
     comprimida de la caché (6 h): con miles de personas, guardarlas una por una hacía que la caché las fuera botando. */
 function emb_personas_(pids) {
   pids = pids.filter(function (x, i, z) { return x && z.indexOf(x) === i; });
-  const guardado = hoy_cacheGet_('fpEmbPers2') || {}, out = {}, faltan = [];
+  const guardado = hoy_cacheGet_('fpEmbPers3') || {}, out = {}, faltan = [];
   pids.forEach(function (i) { if (guardado[i]) out[i] = guardado[i]; else faltan.push(i); });
   if (!faltan.length) return out;
   const ops = emb_respOps_(), tk = token('PIPEDRIVE_TOKEN');
@@ -98,7 +98,7 @@ function emb_personas_(pids) {
       grupos[n].forEach(function (i) { if (!vistos[i] && !out[i]) out[i] = guardado[i] = { r: '', t: '' }; });   // borrada o sin acceso
     });
   }
-  try { hoy_cachePut_('fpEmbPers2', guardado, 21600); } catch (e) {}
+  try { hoy_cachePut_('fpEmbPers3', guardado, 21600); } catch (e) {}
   return out;
 }
 
@@ -112,7 +112,7 @@ const emb_dias_ = (d, ahora) => Math.max(0, Math.floor((ahora - d.cambio) / 864e
 
 /** Números de un periodo para TODAS las asesoras (10 min en caché). Cada quien ve después solo lo suyo. */
 function emb_periodo_(desde, hasta) {
-  const clave = 'fpEmb3_' + desde + '_' + hasta;
+  const clave = 'fpEmb4_' + desde + '_' + hasta;
   const c = hoy_cacheGet_(clave);
   if (c) return c;
   const hoy = fechaLima(0), todos = emb_tratos_(), ahora = Date.now();
@@ -194,7 +194,7 @@ const EMB_COLS = [[71, 'Nuevo lead'], [72, 'Contactado'], [73, 'Clase agendada']
 function fp_tablero(llave, pc, filtro) {
   const quien = fp_quien_(llave, pc), esOmar = quien === 'OMAR';
   const ver = esOmar ? (emb_ok_(filtro) || (filtro === 'SIN ASESORA' ? 'SIN ASESORA' : '')) : (emb_ok_(quien) || quien);
-  const clave = 'fpTab3_' + (ver || 'TODAS');
+  const clave = 'fpTab4_' + (ver || 'TODAS');
   const c = hoy_cacheGet_(clave);
   if (c) return Object.assign(c, { esOmar: esOmar });
   const ahora = Date.now(), abiertos = emb_tratos_().filter(function (d) { return d.est === 'open' && EMB_NIVEL[d.st] != null; });
