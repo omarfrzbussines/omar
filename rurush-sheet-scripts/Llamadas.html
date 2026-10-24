@@ -477,6 +477,10 @@ const SO_BOT = {
   no: [['VIENE', '✅ Viene', 30], ['DA EXCUSAS', '🤷 Da excusas', 30], ['NO INTERESA', '❌ No le interesa', 30], ['NO CONTESTÓ', '📵 No contestó', 15]],
   si: [['CONTENTO', '😊 Contento', 30], ['QUEJA', '🗣️ Queja o sugerencia', 30], ['REFERIDO', '👥 Dio referido', 30], ['NO CONTESTÓ', '📵 No contestó', 15]]
 };
+// Lo último que se vio de cada pestaña queda en el celular: al abrirla se muestra al instante y se actualiza por detrás.
+const memoK = (k) => 'rr_m_' + ASESORA + '_' + (COMO || '') + '_' + k;
+const memoPut = (k, v) => { try { localStorage.setItem(memoK(k), JSON.stringify({ t: Date.now(), dia: new Date().toDateString(), v })); } catch (e) {} };
+const memoGet = (k) => { try { const x = JSON.parse(localStorage.getItem(memoK(k)) || 'null'); return x && x.dia === new Date().toDateString() ? x.v : null; } catch (e) { return null; } };
 const SO_TXT = { no: '😴 No vienen', si: '💪 Sí vienen' };
 let SOC = null, SOC_RES = null, SOC_PIDE = 0, SOC_CTL = null, SOC_TIPO = 'no', SOC_SEL = null, SOC_BUSCA = '';
 function traerSocios() {
@@ -484,7 +488,7 @@ function traerSocios() {
   google.script.run
     .withSuccessHandler((r) => {
       if (n !== SOC_PIDE || como !== COMO) return;            // llegó una respuesta vieja (otro "Ver como" o 🔄)
-      SOC = r; badgeSocios(r);
+      SOC = r; badgeSocios(r); memoPut('soc', r);
       if (VISTA !== 'socios' || SOC_SEL) return;              // si está con un socio abierto, no se le cambia la pantalla
       const y = window.scrollY; pintarListaSoc(); window.scrollTo(0, y);
     })
@@ -611,7 +615,7 @@ let ALU = null, ALU_PIDE = 0, ALU_F = 'todos', ALU_BUSCA = '', ALU_ASE = '', ALU
 function traerAlumnos() {
   const n = ++ALU_PIDE, como = COMO;
   google.script.run
-    .withSuccessHandler((r) => { if (n !== ALU_PIDE || como !== COMO) return; ALU = r; if (VISTA === 'alumnos') { const y = window.scrollY; pintarAlumnos(); window.scrollTo(0, y); } })
+    .withSuccessHandler((r) => { if (n !== ALU_PIDE || como !== COMO) return; ALU = r; memoPut('alu', r); if (VISTA === 'alumnos') { const y = window.scrollY; pintarAlumnos(); window.scrollTo(0, y); } })
     .withFailureHandler((e) => { if (n !== ALU_PIDE) return; if (/CELULAR_NO_AUTORIZADO/.test(e.message || e)) return google.script.run.withSuccessHandler(pantallaPin).app_estadoCelular(LLAVE); if (VISTA === 'alumnos') $('#main').innerHTML = `<div class="vacio">⚠️ ${esc(e.message || e)}</div>`; })
     .uc_alumnos(LLAVE, COMO);
 }
@@ -731,8 +735,8 @@ function cambiarVista(v) {
   $('#vistaLlamadas').style.display = v === 'llamadas' ? '' : 'none';
   if (v === 'llamadas') { if (mostrando) pintar(); else $('#main').innerHTML = '<div class="vacio">Cargando tu cola…</div>'; return; }
   if (v === 'dif') { if (DIF) pintarDif(); else $('#main').innerHTML = '<div class="vacio">Cargando tus difusiones…</div>'; traerDif(); return; }
-  if (v === 'alumnos') { if (ALU) pintarAlumnos(); else $('#main').innerHTML = '<div class="vacio">Cargando tus alumnos…</div>'; traerAlumnos(); return; }
-  if (v === 'socios') { if (SOC) pintarSocios(); else $('#main').innerHTML = '<div class="vacio">Cargando tus socios…</div>'; traerSocios(); return; }
+  if (v === 'alumnos') { if (!ALU) ALU = memoGet('alu'); if (ALU) pintarAlumnos(); else $('#main').innerHTML = '<div class="vacio">Cargando tus alumnos…</div>'; traerAlumnos(); return; }
+  if (v === 'socios') { if (!SOC) SOC = memoGet('soc'); if (SOC) pintarSocios(); else $('#main').innerHTML = '<div class="vacio">Cargando tus socios…</div>'; traerSocios(); return; }
   if (cobros) pintarCobros(); else $('#main').innerHTML = '<div class="vacio">Cargando tus cobros…</div>';
   traerCobros();
 }
@@ -916,7 +920,9 @@ if (ASESORA === 'OMAR') {
 }
 // 🏋️ cuántas llamadas a socios le faltan hoy para su meta, en la misma pestaña (se pide una vez al abrir)
 function avisoSocios() {
-  google.script.run.withSuccessHandler((r) => { if (!SOC) SOC = r; badgeSocios(r); }).withFailureHandler(() => {}).so_lista(LLAVE, COMO);
+  const g = memoGet('soc'); if (g && !SOC) { SOC = g; badgeSocios(g); }
+  google.script.run.withSuccessHandler((r) => { if (!SOC || SOC === g) SOC = r; badgeSocios(r); memoPut('soc', r); }).withFailureHandler(() => {}).so_lista(LLAVE, COMO);
+  setTimeout(() => { if (!ALU) traerAlumnos(); }, 3000);   // 👥 Alumnos queda listo antes de que la abran
 }
 function badgeSocios(r) {
   const t = document.querySelector('.tab[data-v=socios]');
