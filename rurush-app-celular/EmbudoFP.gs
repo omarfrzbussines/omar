@@ -55,14 +55,12 @@ function emb_respOps_() {
   return o;
 }
 
-/** Responsable y celular de cada persona: de 100 en 100 (v2), 6 h en caché por persona. */
+/** Responsable y celular de cada persona: de 100 en 100 (v2). Todas las personas van en UNA entrada
+    comprimida de la caché (6 h): con miles de personas, guardarlas una por una hacía que la caché las fuera botando. */
 function emb_personas_(pids) {
-  const cache = CacheService.getScriptCache(), out = {}, faltan = [];
   pids = pids.filter(function (x, i, z) { return x && z.indexOf(x) === i; });
-  for (let k = 0; k < pids.length; k += 500) {
-    const lote = pids.slice(k, k + 500), ya = cache.getAll(lote.map(function (i) { return 'fpEmbP' + i; }));
-    lote.forEach(function (i) { const v = ya['fpEmbP' + i]; if (v) out[i] = JSON.parse(v); else faltan.push(i); });
-  }
+  const guardado = hoy_cacheGet_('fpEmbPers') || {}, out = {}, faltan = [];
+  pids.forEach(function (i) { if (guardado[i]) out[i] = guardado[i]; else faltan.push(i); });
   if (!faltan.length) return out;
   const ops = emb_respOps_(), tk = token('PIPEDRIVE_TOKEN');
   for (let k = 0; k < faltan.length; k += 1000) {
@@ -71,7 +69,6 @@ function emb_personas_(pids) {
     const rs = UrlFetchApp.fetchAll(grupos.map(function (ids) {
       return { url: EMB_V2 + '/persons?limit=100&ids=' + ids.join(','), headers: { 'x-api-token': tk }, muteHttpExceptions: true };
     }));
-    const guardar = {};
     rs.forEach(function (r, n) {
       let data = [];
       try { data = JSON.parse(r.getContentText()).data || []; } catch (e) {}
@@ -80,14 +77,13 @@ function emb_personas_(pids) {
         const cf = p.custom_fields || {}, rv = cf[EMB_CAMPO_RESP];
         const rid = rv && typeof rv === 'object' ? rv.id : rv;
         const tel = ((p.phones || []).map(function (x) { return String(x.value || '').replace(/\D/g, ''); }).filter(String))[0] || '';
-        out[p.id] = { r: rid != null ? (ops[String(rid)] || '') : '', t: tel };
-        guardar['fpEmbP' + p.id] = JSON.stringify(out[p.id]);
+        out[p.id] = guardado[p.id] = { r: rid != null ? (ops[String(rid)] || '') : '', t: tel };
         vistos[p.id] = 1;
       });
-      grupos[n].forEach(function (i) { if (!vistos[i] && !out[i]) out[i] = { r: '', t: '' }; });   // borrada o sin acceso
+      grupos[n].forEach(function (i) { if (!vistos[i] && !out[i]) out[i] = guardado[i] = { r: '', t: '' }; });   // borrada o sin acceso
     });
-    try { cache.putAll(guardar, 21600); } catch (e) {}
   }
+  try { hoy_cachePut_('fpEmbPers', guardado, 21600); } catch (e) {}
   return out;
 }
 
