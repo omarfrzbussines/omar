@@ -263,6 +263,7 @@
   .num { background:#fff; color:#0d1626 } .ficha.on { box-shadow:0 0 0 1px #fff }
   .toast { background:#fff; color:#0d1626 } .toast.ok .ic { color:#16a34a } .toast.err { background:#7f1d1d; color:#fff }
   body { background:var(--fondo) }
+  .cola-l { margin:0; padding-left:18px; display:grid; gap:8px; color:var(--sub); line-height:1.5 } .cola-l b { color:var(--texto) }
   .ll-marco { background:var(--sup); border:1px solid var(--borde); border-radius:var(--r); overflow:hidden; box-shadow:var(--sombra) }
   .ll-marco iframe { display:block; width:100%; height:calc(100vh - 210px); min-height:560px; border:0; background:#111 }
   .ll-f { display:grid; grid-template-columns:150px minmax(0,1fr); gap:10px; align-items:center; margin-bottom:10px } .ll-f > span { font-weight:600; font-size:14px }
@@ -460,7 +461,7 @@ function filtrada() {
 
 /* ---------- pantalla ---------- */
 function pintar() {
-  const titulo = { hoy: 'Free Pass de hoy', ayer: 'Pendientes de ayer', manana: 'Free Pass de mañana', nutri: 'Nutrición', agendar: 'Agendar', metricas: 'Métricas', embudo: 'Embudo', llamadas: 'Llamadas' }[vista];
+  const titulo = { hoy: 'Free Pass de hoy', ayer: 'Pendientes de ayer', manana: 'Free Pass de mañana', nutri: 'Nutrición', agendar: 'Agendar', metricas: 'Métricas', embudo: 'Embudo', llamadas: 'Llamadas', cola: 'Cola de Renovación' }[vista];
   const fechaV = vista === 'ayer' ? ayerDe(D.hoy) : vista === 'manana' ? manDe(D.hoy) : D.hoy;
   const nav = (id, i, t, n) => `<button class="${vista === id ? 'on' : ''}" data-act="nav" data-v="${id}" ${vista === id ? 'aria-current="page"' : ''}>${ic(i)}<span>${t}</span>${n != null ? `<span class="n">${n}</span>` : ''}</button>`;
   const agenda = ['hoy', 'ayer', 'manana'].includes(vista);
@@ -468,6 +469,7 @@ function pintar() {
   if (vista === 'metricas') cont = pantallaMetricas();
   else if (vista === 'embudo') cont = pantallaEmbudo();
   else if (vista === 'llamadas') cont = pantallaLlamadas();
+  else if (vista === 'cola') cont = pantallaCola();
   else {
     const btnAg = vista !== 'agendar' ? `<button class="btn pri" data-act="nav" data-v="agendar">${ic('mas')} Agendar Free Pass</button>` : '';
     cont = `<div class="top"><div><h1>${titulo}</h1><div class="fecha">${fechaLarga(fechaV)} · RURUSH Fitness Club</div></div>
@@ -490,7 +492,7 @@ function pintar() {
   }
   $('#raiz').innerHTML = `<div class="app"><nav class="side" aria-label="Menú"><img class="logo" src="${LOGO}" alt="RURUSH Fitness Club">
       <div class="who"><span class="av">${esc(String(D.quien).charAt(0))}</span><div>Sesión<b>${esc(cap(D.quien))}</b>${ic('candado', 'style="width:12px;height:12px"')} PC autorizada</div></div>
-      <div class="nav">${nav('hoy', 'ticket', 'Free Pass hoy', D.hoyL.length)}${nav('ayer', 'reloj', 'Pendientes de ayer', D.ayer.length)}${nav('manana', 'cal', 'Mañana', D.manana.length)}${nav('nutri', 'nutri', 'Nutrición', D.nutri.length)}${nav('agendar', 'mas', 'Agendar')}${nav('embudo', 'embudo', D.esOmar ? 'Embudo' : 'Mi embudo')}${nav('llamadas', 'tel', 'Llamadas · Socios')}${D.esOmar ? nav('metricas', 'graf', 'Métricas') : ''}</div>
+      <div class="nav">${nav('hoy', 'ticket', 'Free Pass hoy', D.hoyL.length)}${nav('ayer', 'reloj', 'Pendientes de ayer', D.ayer.length)}${nav('manana', 'cal', 'Mañana', D.manana.length)}${nav('nutri', 'nutri', 'Nutrición', D.nutri.length)}${nav('agendar', 'mas', 'Agendar')}${nav('embudo', 'embudo', D.esOmar ? 'Embudo' : 'Mi embudo')}${nav('llamadas', 'tel', 'Llamadas · Socios')}${nav('cola', 'tarjeta', 'Cola de Renovación')}${D.esOmar ? nav('metricas', 'graf', 'Métricas') : ''}</div>
       <div class="pie">${ic('candado', 'style="width:13px;height:13px;margin-top:1px"')}<span>Solo se ve lo de hoy · sin descargas · todo queda registrado</span></div></nav>
     <main class="main dk">${cont}</main></div>`;
   refrescar();
@@ -833,6 +835,31 @@ async function cargarLlamadas() {
 async function guardarLlamadas() {
   const o = {}; document.querySelectorAll('[data-ll]').forEach((i) => { o[i.dataset.ll] = i.value; });
   try { LL = await llamar('fp_guardarLlamadas', o); llConf = false; toast('Links guardados', 'ok'); pintar(); } catch (e) { toast(e.message, 'err'); }
+}
+
+/* ---------- 💰 Cola de Renovación (app aparte, ya en producción: solo se abre con su link, no se incrusta) ---------- */
+const COLA_URL = 'https:\/\/script.google.com/macros/s/AKfycbywf-ajwBz9mRioOeA6bLfF1WzMJYbvN5X5VDmDIYbd4mEY-jxe3IW5K2peNuUReFZb/exec';
+function pantallaCola() {
+  const p = (t) => `<li>${t}</li>`;
+  return `<div class="top"><div><h1>Cola de Renovación</h1><div class="fecha">Cobros y renovaciones del mes por asesora. Toca para abrir y editar.</div></div>
+      <div class="acciones"><a class="btn pri" href="${COLA_URL}" target="_blank" rel="noopener">${ic('tarjeta')} Abrir Cola de Renovación</a></div></div>
+    <div class="rejilla">
+      <div class="panel"><div class="panel-h">${ic('tarjeta')} Qué tiene</div><div class="panel-b"><ul class="cola-l">
+        ${p('Solo los clientes con fecha de cobro en el mes elegido (flechas para cambiar de mes).')}
+        ${p('KPIs: <b>Proyección</b>, <b>Ya cobrado</b>, <b>Falta cobrar</b> y <b>% de conversión</b>.')}
+        ${p('Filtro por asesora (Mónica, Laura, Danna, Valeria, Dilan) y buscador por nombre, código o celular.')}
+        ${p('Pestañas: Por cobrar · Cobrados · Todos · Vencen sin agendar.')}
+        ${p('Al tocar un cliente se edita: ¿pagó?, probabilidad, proyección, fecha de cobro, plan nuevo, monto pactado, tipo de acción y notas. <b>💰 Cobrado</b> lo marca pagado en un clic.')}
+        ${p('Botón de WhatsApp por cliente y <b>+ Nuevo cliente</b> por código. Funciona en celular.')}
+      </ul>
+      <a class="btn pri" href="${COLA_URL}" target="_blank" rel="noopener" style="margin-top:14px">${ic('tarjeta')} Abrir Cola de Renovación</a></div></div>
+      <div class="panel"><div class="panel-h">${ic('candado')} Acceso</div><div class="panel-b"><ul class="cola-l">
+        ${p('Se abre en una pestaña nueva: es una app aparte y no se puede mostrar dentro de esta página.')}
+        ${p('Funciona con tu cuenta de Google: solo si puedes editar el Sheet <b>VENTAS RETENCIÓN 2026 V2</b>.')}
+        ${p('La primera vez acepta los permisos: <b>Configuración avanzada → Ir a Dashboard Cola Renovar → Permitir</b>. Es una sola vez.')}
+        ${p('Arriba sale una franja gris de Google ("Un usuario de Google Apps Script creó esta aplicación"). Es normal.')}
+      </ul></div></div>
+    </div>`;
 }
 
 /* ---------- agendar nutrición con la base de socios (proyecto de Nutrición) ---------- */
