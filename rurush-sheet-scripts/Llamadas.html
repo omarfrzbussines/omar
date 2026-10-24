@@ -51,7 +51,7 @@
   .toast.err { background:#5c1f1f; }
   .vacio { text-align:center; color:var(--mut); padding:60px 10px; }
   .badge { display:inline-block; min-width:20px; padding:0 6px; border-radius:99px; background:var(--red); color:#fff; font-size:12px; font-weight:800; line-height:20px; margin-left:4px }
-  .tabs { display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:6px; margin-top:10px; }
+  .tabs { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(0,1fr); gap:6px; margin-top:10px; }
   .dmsg { white-space:pre-wrap; font-size:14px; color:var(--mut); margin:8px 0 10px; max-height:7.5em; overflow:hidden; }
   .dif .wacall { padding:13px 6px; }
   .prog { height:8px; background:var(--line); border-radius:9px; overflow:hidden; margin-top:8px; } .prog i { display:block; height:100%; background:var(--grn); }
@@ -65,7 +65,7 @@
   .hecha { font-size:13px; color:var(--mut); padding:6px 0; border-bottom:1px solid var(--line); }
   table.ctl { width:100%; border-collapse:collapse; font-size:13px; } .ctl th, .ctl td { padding:7px 4px; border-bottom:1px solid var(--line); text-align:right; } .ctl th:first-child, .ctl td:first-child { text-align:left; } .ctl th { color:var(--mut); font-weight:600; font-size:11px; }
   .ctl .mal { color:var(--red); font-weight:700; }
-  .tab { background:var(--card); color:var(--mut); border:1px solid var(--line); border-radius:10px; padding:9px; font-size:15px; font-weight:600; }
+  .tab { background:var(--card); color:var(--mut); border:1px solid var(--line); border-radius:10px; padding:7px 2px; font-size:13px; font-weight:600; line-height:1.2; min-width:0; }
   .tab.on { background:#2a1414; border-color:var(--red); color:#fff; }
   .totales { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
   .tot { background:var(--card); border-radius:14px; padding:12px; } .tot b { display:block; font-size:22px; margin-top:2px; } .tot span { color:var(--mut); font-size:12px; }
@@ -91,6 +91,13 @@
   .confirmar { display:flex; gap:8px; align-items:center; background:#12391f; color:#7ee2a0; border-radius:12px; padding:10px 12px; margin-bottom:12px; font-size:14px; }
   .confirmar a { flex:1; text-align:center; background:#25d366; color:#062b12; border-radius:10px; padding:10px; font-weight:700; text-decoration:none; }
   .confirmar button { background:none; border:0; color:#7ee2a0; font-size:18px; padding:4px 8px; }
+  .uc { display:flex; flex-wrap:wrap; gap:3px 12px; font-size:12.5px; margin-top:6px; } .uc span { color:var(--mut); }
+  .uc .ok { color:#7ee2a0; } .uc .u3 { color:#ffcc00; } .uc .u7 { color:#ff6b6b; font-weight:600; }
+  .alu { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:11px 12px; }
+  .alu .arr { display:flex; gap:6px; align-items:center; flex-wrap:wrap; } .alu .arr b { font-size:15px; margin-right:auto; word-break:break-word; }
+  .alu .wa { display:inline-flex; padding:8px 12px; font-size:14px; border-radius:10px; margin-top:8px; }
+  .chipsA { display:flex; gap:6px; overflow-x:auto; margin:4px 0 8px; } .chipsA button { flex:none; background:var(--card); color:var(--mut); border:1px solid var(--line); border-radius:99px; padding:7px 12px; font-size:13px; font-weight:600; }
+  .chipsA button.on { background:#13293d; border-color:var(--ice); color:#fff; }
   .aviso { background:#3a2e10; color:#ffd666; border-radius:10px; padding:10px; font-size:13px; margin-top:10px; }
 </style>
 </head>
@@ -100,7 +107,7 @@
     <div><h1><b>RURUSH</b> Llamadas</h1><div class="sub" id="sub">Hola <?= asesora ?></div></div>
     <button class="btn-s" id="recargar">🔄</button>
   </div>
-  <div class="tabs"><button class="tab on" data-v="llamadas">📞 Llamadas</button><button class="tab" data-v="socios">🏋️ Socios</button><button class="tab" data-v="cobros">💰 Cobros</button><button class="tab" data-v="dif" id="tabDif" style="display:none">📣 Difus.</button></div>
+  <div class="tabs"><button class="tab on" data-v="llamadas">📞 Llamadas</button><button class="tab" data-v="socios">🏋️ Socios</button><button class="tab" data-v="cobros">💰 Cobros</button><button class="tab" data-v="alumnos">👥 Alumnos</button><button class="tab" data-v="dif" id="tabDif" style="display:none">📣 Difus.</button></div>
   <div id="vistaLlamadas"><select class="bases" id="base"></select>
   <div class="marcador" id="marcador"></div></div>
 </header>
@@ -277,6 +284,7 @@ function pintar() {
       <div class="nombre">${esc(esNum || !p.nombre ? 'Sin nombre' : p.nombre)}</div>
       <div class="num">+51 ${esc(p.numero.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3'))}</div>
       <div class="meta"><span class="tag">${p.ronda}ª llamada</span>${p.dia ? `<span class="tag">lead del ${esc(p.dia)}</span>` : ''}${p.origen ? `<span class="tag">${esc(p.origen)}</span>` : ''}</div>
+      ${ucLinea(p.uc)}
       <div class="acciones">
         <a class="llamar" id="llamar" href="tel:+51${p.numero}">📞 Llamar</a>
         <a class="wacall" id="wacall" href="https:\/\/wa.me/51${p.numero}" target="_blank">📲 WhatsApp</a>
@@ -426,7 +434,7 @@ function pintarListaSoc() {
   const q = cob_q(SOC_BUSCA), l = s.listas[SOC_TIPO].filter((p) => !q || cob_q(p.nombre + ' ' + p.cod + ' ' + p.tel).includes(q));
   const item = (p) => `<button class="sitem" data-c="${esc(p.cod)}"><b>${esc(p.nombre || 'Cód. ' + p.cod)}</b>
     <span>${diasSA(p.dias)} <span class="tag">${esc(p.plan || '—')}</span> ${p.fin ? `<span class="tag">vence ${fechaCorta(p.fin)}</span>` : ''}</span>
-    ${p.antes ? `<small>Última llamada: ${esc(p.antes)}</small>` : ''}</button>`;
+    ${ucLinea(p.uc)}</button>`;
   const hechas = s.hechas.filter((h) => h.tipo === SOC_TIPO);
   $('#main').innerHTML = `<div class="stipos">${meta('no')}${meta('si')}</div>
     <div class="tip" style="margin:8px 2px">${SOC_TIPO === 'no' ? 'Activos que no vienen hace más de 5 días: llama a todos para que vuelvan.' : 'Activos que sí vienen: que sigan, renueven y te den referidos.'} Toca a quién vas a llamar.</div>
@@ -450,6 +458,7 @@ function pintarSocioLlamar(p) {
       <div class="num">+51 ${esc(p.tel.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3'))}</div>
       <div class="meta"><span class="tag">Cód. ${esc(p.cod)}</span>${p.plan ? `<span class="tag">${esc(p.plan)}</span>` : ''}${p.fin ? `<span class="tag">vence ${fechaCorta(p.fin)} (${p.vence} d)</span>` : ''}</div>
       ${diasSA(p.dias)}${p.ult ? `<span class="tip"> · última vez: ${esc(p.ult)}</span>` : ''}
+      ${ucLinea(p.uc)}
       ${p.antes ? `<div class="aviso">Última llamada: ${esc(p.antes)}</div>` : ''}
       <div class="acciones" style="grid-template-columns:1fr 1fr">
         <a class="llamar" id="sLlamar" href="tel:+51${p.tel}">📞 Llamar</a>
@@ -504,6 +513,59 @@ function guardarSocio() {
     .withFailureHandler((e) => { btn.disabled = false; btn.textContent = 'Guardar y volver a la lista'; toast(e.message || String(e), true); })
     .so_guardar(LLAVE, d);
 }
+/* ---------- 💬📞 último chat y última llamada de cada número (UltimoContacto.gs) ---------- */
+const diaLima = (ms) => new Date(ms - 5 * 36e5).toISOString().slice(0, 10);
+const diasDesde = (ms) => Math.round((Date.parse(diaLima(Date.now())) - Date.parse(diaLima(ms))) / 864e5);
+const horaLima = (ms) => new Date(ms).toLocaleTimeString('es-PE', { timeZone: 'America/Lima', hour: 'numeric', minute: '2-digit' });
+const hace = (ms) => { const d = diasDesde(ms); return d <= 0 ? 'hoy ' + horaLima(ms) : d === 1 ? 'ayer' : 'hace ' + d + ' d'; };
+const ucCls = (ms) => !ms ? 'u7' : diasDesde(ms) >= 7 ? 'u7' : diasDesde(ms) >= 3 ? 'u3' : 'ok';
+const quienTxt = (q) => String(q || '').toUpperCase() === ASESORA ? 'tú' : cap(q);
+function ucLinea(uc) {
+  uc = uc || {};
+  const c = uc.c ? '💬 ' + hace(uc.c) + (uc.e === 'CLIENTE' ? ' · escribió él/ella' : uc.e ? (String(uc.e).toUpperCase() === ASESORA ? ' · le escribiste' : ' · le escribió ' + cap(uc.e)) : '') : '💬 sin chat registrado';
+  const l = uc.l ? '📞 ' + hace(uc.l) + (uc.lq ? ' · ' + quienTxt(uc.lq) : '') + (uc.r ? ' · ' + uc.r : '') : '📞 nunca llamado';
+  return `<div class="uc"><span class="${ucCls(uc.c)}">${esc(c)}</span><span class="${ucCls(uc.l)}">${esc(l)}</span></div>`;
+}
+
+/* ---------- 👥 Alumnos: tus socios activos + tus leads de los últimos 30 días ---------- */
+let ALU = null, ALU_PIDE = 0, ALU_F = 'todos', ALU_BUSCA = '', ALU_ASE = '', ALU_MAX = 60;
+function traerAlumnos() {
+  const n = ++ALU_PIDE, como = COMO;
+  google.script.run
+    .withSuccessHandler((r) => { if (n !== ALU_PIDE || como !== COMO) return; ALU = r; if (VISTA === 'alumnos') { const y = window.scrollY; pintarAlumnos(); window.scrollTo(0, y); } })
+    .withFailureHandler((e) => { if (n !== ALU_PIDE) return; if (/CELULAR_NO_AUTORIZADO/.test(e.message || e)) return google.script.run.withSuccessHandler(pantallaPin).app_estadoCelular(LLAVE); if (VISTA === 'alumnos') $('#main').innerHTML = `<div class="vacio">⚠️ ${esc(e.message || e)}</div>`; })
+    .uc_alumnos(LLAVE, COMO);
+}
+const ultContacto = (p) => Math.max((p.uc && p.uc.c) || 0, (p.uc && p.uc.l) || 0);
+function pintarAlumnos() {
+  const r = ALU, frio = (p) => { const u = ultContacto(p); return !u || diasDesde(u) >= 7; };
+  const deAse = r.lista.filter((p) => !ALU_ASE || p.ase === ALU_ASE);
+  const cuenta = { todos: deAse.length, s: deAse.filter((p) => p.t === 's').length, l: deAse.filter((p) => p.t === 'l').length, frio: deAse.filter(frio).length };
+  const q = cob_q(ALU_BUSCA);
+  const l = deAse.filter((p) => ALU_F === 'todos' || (ALU_F === 'frio' ? frio(p) : p.t === ALU_F))
+    .filter((p) => !q || cob_q(p.nombre + ' ' + p.tel + ' ' + (p.cod || '')).includes(q))
+    .sort((a, b) => ultContacto(a) - ultContacto(b));   // primero los que llevan más tiempo sin contacto
+  const chip = (k, t) => `<button data-f="${k}" class="${ALU_F === k ? 'on' : ''}">${t} ${cuenta[k]}</button>`;
+  const ases = r.todas ? Array.from(new Set(r.lista.map((p) => p.ase))).sort() : [];
+  const item = (p) => `<div class="alu"><div class="arr"><b>${esc(uc_esNombre(p.nombre) ? p.nombre : '+51 ' + p.tel)}</b>
+      <span class="tag">${p.t === 's' ? '🏋️ socio' : '🎯 lead'}</span>${r.todas ? `<span class="tag">${esc(cap(p.ase))}</span>` : ''}</div>
+      <div class="tip" style="margin-top:4px">${p.t === 's' ? `${diasSA(p.dias)} ${p.plan ? esc(p.plan) : ''}${p.fin ? ' · vence ' + fechaCorta(p.fin) : ''}` : esc((p.base || '') + (p.res ? ' · ' + p.res : ''))}</div>
+      ${ucLinea(p.uc)}
+      <a class="wa" href="https:\/\/wa.me/51${esc(p.tel)}" target="_blank">💬 WhatsApp</a></div>`;
+  const desde = r.chatsDesde ? `💬 Los chats se registran desde el ${new Date(r.chatsDesde).toLocaleDateString('es-PE', { timeZone: 'America/Lima' })} (WhatsApp de la computadora).`
+    : '💬 Los chats aparecerán cuando se active en la extensión de WhatsApp de la computadora.';
+  $('#main').innerHTML = (ases.length ? `<div class="chipsA">${['', ...ases].map((a) => `<button data-a="${esc(a)}" class="${ALU_ASE === a ? 'on' : ''}">${a ? esc(cap(a)) : 'Todas'}</button>`).join('')}</div>` : '') +
+    `<div class="chipsA">${chip('todos', 'Todos')}${chip('frio', '🔴 +7 d sin contacto')}${chip('s', '🏋️ Socios')}${chip('l', '🎯 Leads')}</div>
+    <input id="aBusca" placeholder="🔍 Buscar por nombre, código o celular" value="${esc(ALU_BUSCA)}">
+    <div class="tip" style="margin:8px 2px">Primero los que llevan más tiempo sin contacto. ${desde}</div>
+    <div class="slista">${l.slice(0, ALU_MAX).map(item).join('') || `<div class="vacio" style="padding:30px 10px">${q ? 'Nadie con ese nombre.' : '🎉 Nadie en esta lista.'}</div>`}</div>
+    ${l.length > ALU_MAX ? `<button class="saltar" id="aMas">Ver más (${l.length - ALU_MAX})</button>` : ''}`;
+  document.querySelectorAll('[data-f]').forEach((b) => b.onclick = () => { ALU_F = b.dataset.f; ALU_MAX = 60; pintarAlumnos(); });
+  document.querySelectorAll('[data-a]').forEach((b) => b.onclick = () => { ALU_ASE = b.dataset.a; ALU_MAX = 60; pintarAlumnos(); });
+  const mas = $('#aMas'); if (mas) mas.onclick = () => { ALU_MAX += 60; const y = window.scrollY; pintarAlumnos(); window.scrollTo(0, y); };
+  const bu = $('#aBusca'); bu.oninput = () => { ALU_BUSCA = bu.value; const pos = bu.selectionStart; pintarAlumnos(); const n = $('#aBusca'); n.focus(); n.setSelectionRange(pos, pos); };
+}
+const uc_esNombre = (s) => !!String(s || '').trim() && !/^[+\d\s()-]+$/.test(String(s));
 const cob_q = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 /* ---------- 📣 Difusiones (solo DANNA, desde su WhatsApp 977): se marca sola al volver de WhatsApp ---------- */
@@ -590,6 +652,7 @@ function cambiarVista(v) {
   $('#vistaLlamadas').style.display = v === 'llamadas' ? '' : 'none';
   if (v === 'llamadas') { if (mostrando) pintar(); else $('#main').innerHTML = '<div class="vacio">Cargando tu cola…</div>'; return; }
   if (v === 'dif') { if (DIF) pintarDif(); else $('#main').innerHTML = '<div class="vacio">Cargando tus difusiones…</div>'; traerDif(); return; }
+  if (v === 'alumnos') { if (ALU) pintarAlumnos(); else $('#main').innerHTML = '<div class="vacio">Cargando tus alumnos…</div>'; traerAlumnos(); return; }
   if (v === 'socios') { if (SOC) pintarSocios(); else $('#main').innerHTML = '<div class="vacio">Cargando tus socios…</div>'; traerSocios(); return; }
   if (cobros) pintarCobros(); else $('#main').innerHTML = '<div class="vacio">Cargando tus cobros…</div>';
   traerCobros();
@@ -733,9 +796,10 @@ if (ASESORA === 'OMAR') {
   };
   $('#como').onchange = () => {
     COMO = $('#como').value; mostrando = false; cola = []; idx = 0; trayendo = false;
-    SOC = null; SOC_SEL = null; SOC_BUSCA = ''; cobros = null; DIF = null; DIF_ULT = null;
+    SOC = null; SOC_SEL = null; SOC_BUSCA = ''; cobros = null; DIF = null; DIF_ULT = null; ALU = null; ALU_ASE = '';
     const de = COMO ? ' de ' + esc(COMO) : '';
     if (VISTA === 'socios') { $('#main').innerHTML = '<div class="vacio">Cargando los socios' + de + '…</div>'; traerSocios(); }
+    else if (VISTA === 'alumnos') { $('#main').innerHTML = '<div class="vacio">Cargando los alumnos' + de + '…</div>'; traerAlumnos(); }
     else if (VISTA === 'dif') { $('#main').innerHTML = '<div class="vacio">Cargando las difusiones' + de + '…</div>'; traerDif(); }
     else if (VISTA === 'cobros') { $('#main').innerHTML = '<div class="vacio">Cargando los cobros' + de + '…</div>'; traerCobros(); }
     else $('#main').innerHTML = '<div class="vacio">Cargando la cola' + de + '…</div>';

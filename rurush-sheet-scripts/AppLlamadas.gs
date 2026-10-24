@@ -282,6 +282,8 @@ function app_getCola_(llave, base, excluir, api, como) {
   let socios = {};
   try { socios = cob_sociosPorTel(); } catch (e) {}
   cola.forEach(function (x) { if (socios[x.numero]) x.socio = socios[x.numero]; });
+  // 💬📞 último chat y última llamada de cada número (UltimoContacto.gs)
+  try { uc_instalarSiFalta(); const um = uc_mapa_(); cola.forEach(function (x) { x.uc = uc_de_(um, x.numero); }); } catch (e) { console.error("último contacto: " + e); }
   const res = {};
   cola.forEach(function (x) { res["r" + (x.base || base) + x.fila] = asesora; });
   if (cola.length && quien !== APP_PRUEBA) cache.putAll(res, APP_RESERVA_SEG);

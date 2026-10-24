@@ -96,6 +96,7 @@ function df_marcar(llave, d) {
     if (h.resultado >= 0) sh.getRange(fila, h.resultado + 1).setValue("ENVIADO SIN RESPUESTA");
     if (h.nota >= 0) sh.getRange(fila, h.nota + 1).setValue(nota);
     df_log_().appendRow([fecha, hora, d.tab, fila, tel, String(v[h.asesora]), "ENVIADO", nota]);
+    uc_anotarSeguro_([{ tel: tel, chat: ahora.getTime(), chatEn: quien, escribio: quien }]);
     return { ok: true, antes: antes, logFila: df_log_().getLastRow() };
   } finally {
     lock.releaseLock();

@@ -1042,7 +1042,26 @@ function enCristiano(e) {
   return m;
 }
 
+/* 💬 último chat de cada número → app de Llamadas (UltimoContacto.gs). Va con la llave del link de la asesora. */
+async function mandarChatsLlamadas({ chats }) {
+  const { ucUrl } = await chrome.storage.local.get("ucUrl");
+  if (!ucUrl) throw new Error("Falta el link de la app de Llamadas (Opciones).");
+  const u = new URL(ucUrl), k = u.searchParams.get("k");
+  if (!k) throw new Error("El link de Llamadas no tiene la llave (?k=…).");
+  const r = await fetch(u.origin + u.pathname, {
+    method: "POST", redirect: "follow", credentials: "omit",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ accion: "chats", k, chats: chats || [] })
+  });
+  const txt = await r.text();
+  let j;
+  try { j = JSON.parse(txt); } catch { throw new Error("La app de Llamadas respondió una página en vez de datos."); }
+  if (!j.ok) throw new Error(j.error || "Error de la app de Llamadas");
+  return j.data;
+}
+
 const rutas = {
+  chats:     (p) => mandarChatsLlamadas(p),
   ficha:     (p) => fichaPorTelefono(p),
   activos:   () => sociosActivos(),              // respeta el caché de 30 min
   refrescar: () => sociosActivos(true).then((a) => ({ activos: a.length })),
