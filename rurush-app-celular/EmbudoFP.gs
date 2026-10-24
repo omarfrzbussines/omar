@@ -21,27 +21,42 @@ const EMB_SEG = 600;                                                      // 10 
 const emb_ms_ = (t) => (t ? Date.parse(String(t).replace(' ', 'T') + 'Z') : 0);
 const emb_diaLima_ = (ms) => new Date(ms + LIMA * 3600e3).toISOString().slice(0, 10);
 
-/** Todo el embudo 14 (campos justos), 10 min en caché. */
+/** Todo el embudo 14 (campos justos), 10 min en caché.
+    OJO: /v1/pipelines/14/deals solo devuelve los ABIERTOS (ignora status): por eso se usa /api/v2/deals,
+    que sí trae abiertos + ganados + perdidos. Y como una persona puede tener varios tratos en el embudo
+    (duplicados), se deja UNO por persona: ganado > perdido > el abierto más avanzado. */
+const EMB_ORDEN = { 71: 1, 72: 2, 73: 3, 89: 4, 74: 5, 75: 6, 76: 7 };
 function emb_tratos_() {
-  const c = hoy_cacheGet_('fpEmbTratos');
+  const c = hoy_cacheGet_('fpEmbTratos2');
   if (c) return c;
-  const out = [];
-  for (let start = 0, v = 0; v < 40; v++) {
-    const r = UrlFetchApp.fetch(PIPEDRIVE_BASE + '/pipelines/' + EMB_PIPE + '/deals?status=all_not_deleted&limit=500&start=' + start,
+  const todos = [];
+  let cursor = '';
+  for (let v = 0; v < 40; v++) {
+    const r = UrlFetchApp.fetch(EMB_V2 + '/deals?pipeline_id=' + EMB_PIPE + '&status=open,won,lost&limit=500' + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''),
       { muteHttpExceptions: true, headers: { 'x-api-token': token('PIPEDRIVE_TOKEN') } });
     const j = JSON.parse(r.getContentText() || '{}');
     if (r.getResponseCode() >= 300 || j.success === false) throw new Error((j && j.error) || 'Pipedrive respondió ' + r.getResponseCode() + '.');
     (j.data || []).forEach(function (d) {
-      const pid = d.person_id && typeof d.person_id === 'object' ? d.person_id.value : d.person_id;
-      out.push({ id: d.id, add: emb_ms_(d.add_time), st: d.stage_id, est: d.status, pid: pid || null,
-        nom: d.person_name || d.title || '', cambio: emb_ms_(d.stage_change_time) || emb_ms_(d.add_time),
-        fp: /^\s*FP\b/i.test(d.next_activity_subject || '') ? asesoraDeAsunto(d.next_activity_subject) : '' });
+      if (d.is_deleted) return;
+      const add = Date.parse(d.add_time) || 0;
+      todos.push({ id: d.id, add: add, st: d.stage_id, est: d.status, pid: d.person_id || null, nom: d.title || '', cambio: Date.parse(d.stage_change_time) || add, fp: '' });
     });
-    const pg = j.additional_data && j.additional_data.pagination;
-    if (!pg || !pg.more_items_in_collection) break;
-    start = pg.next_start;
+    cursor = j.additional_data && j.additional_data.next_cursor;
+    if (!cursor) break;
   }
-  try { hoy_cachePut_('fpEmbTratos', out, EMB_SEG); } catch (e) {}
+  // uno por persona
+  const peso = (d) => (d.est === 'won' ? 100 : d.est === 'lost' ? 50 : 0) + (EMB_ORDEN[d.st] || 0);
+  const porPersona = {}, sueltos = [];
+  todos.forEach(function (d) {
+    if (!d.pid) return sueltos.push(d);
+    const y = porPersona[d.pid];
+    if (!y) { porPersona[d.pid] = Object.assign({ primero: d.add }, d); return; }
+    const primero = Math.min(y.primero, d.add);   // el lead nació con su primer trato
+    if (peso(d) > peso(y) || (peso(d) === peso(y) && d.add > y.add)) porPersona[d.pid] = Object.assign({}, d, { primero: primero });
+    else y.primero = primero;
+  });
+  const out = Object.keys(porPersona).map(function (k) { const d = porPersona[k]; d.add = d.primero; delete d.primero; return d; }).concat(sueltos);
+  try { hoy_cachePut_('fpEmbTratos2', out, EMB_SEG); } catch (e) {}
   return out;
 }
 
@@ -59,7 +74,7 @@ function emb_respOps_() {
     comprimida de la caché (6 h): con miles de personas, guardarlas una por una hacía que la caché las fuera botando. */
 function emb_personas_(pids) {
   pids = pids.filter(function (x, i, z) { return x && z.indexOf(x) === i; });
-  const guardado = hoy_cacheGet_('fpEmbPers') || {}, out = {}, faltan = [];
+  const guardado = hoy_cacheGet_('fpEmbPers2') || {}, out = {}, faltan = [];
   pids.forEach(function (i) { if (guardado[i]) out[i] = guardado[i]; else faltan.push(i); });
   if (!faltan.length) return out;
   const ops = emb_respOps_(), tk = token('PIPEDRIVE_TOKEN');
@@ -77,13 +92,13 @@ function emb_personas_(pids) {
         const cf = p.custom_fields || {}, rv = cf[EMB_CAMPO_RESP];
         const rid = rv && typeof rv === 'object' ? rv.id : rv;
         const tel = ((p.phones || []).map(function (x) { return String(x.value || '').replace(/\D/g, ''); }).filter(String))[0] || '';
-        out[p.id] = guardado[p.id] = { r: rid != null ? (ops[String(rid)] || '') : '', t: tel };
+        out[p.id] = guardado[p.id] = { r: rid != null ? (ops[String(rid)] || '') : '', t: tel, n: String(p.name || '') };
         vistos[p.id] = 1;
       });
       grupos[n].forEach(function (i) { if (!vistos[i] && !out[i]) out[i] = guardado[i] = { r: '', t: '' }; });   // borrada o sin acceso
     });
   }
-  try { hoy_cachePut_('fpEmbPers', guardado, 21600); } catch (e) {}
+  try { hoy_cachePut_('fpEmbPers2', guardado, 21600); } catch (e) {}
   return out;
 }
 
@@ -97,7 +112,7 @@ const emb_dias_ = (d, ahora) => Math.max(0, Math.floor((ahora - d.cambio) / 864e
 
 /** Números de un periodo para TODAS las asesoras (10 min en caché). Cada quien ve después solo lo suyo. */
 function emb_periodo_(desde, hasta) {
-  const clave = 'fpEmb2_' + desde + '_' + hasta;
+  const clave = 'fpEmb3_' + desde + '_' + hasta;
   const c = hoy_cacheGet_(clave);
   if (c) return c;
   const hoy = fechaLima(0), todos = emb_tratos_(), ahora = Date.now();
@@ -140,7 +155,7 @@ function emb_periodo_(desde, hasta) {
   });
   const lista = decision.map(function (d) {
     const p = per[d.pid] || {};
-    return { nombre: d.nom, tel: p.t || '', ase: emb_ok_(p.r) || p.r || emb_ok_(d.fp) || '', dias: emb_dias_(d, ahora) };
+    return { nombre: p.n || d.nom, tel: p.t || '', ase: emb_ok_(p.r) || p.r || emb_ok_(d.fp) || '', dias: emb_dias_(d, ahora) };
   }).sort(function (a, b) { return b.dias - a.dias; });
   const res = { desde: desde, hasta: hasta, total: tot, porAse: porAse, decision: lista, hora: Utilities.formatDate(new Date(), 'America/Lima', 'HH:mm') };
   try { hoy_cachePut_(clave, res, EMB_SEG); } catch (e) {}
@@ -179,7 +194,7 @@ const EMB_COLS = [[71, 'Nuevo lead'], [72, 'Contactado'], [73, 'Clase agendada']
 function fp_tablero(llave, pc, filtro) {
   const quien = fp_quien_(llave, pc), esOmar = quien === 'OMAR';
   const ver = esOmar ? (emb_ok_(filtro) || (filtro === 'SIN ASESORA' ? 'SIN ASESORA' : '')) : (emb_ok_(quien) || quien);
-  const clave = 'fpTab2_' + (ver || 'TODAS');
+  const clave = 'fpTab3_' + (ver || 'TODAS');
   const c = hoy_cacheGet_(clave);
   if (c) return Object.assign(c, { esOmar: esOmar });
   const ahora = Date.now(), abiertos = emb_tratos_().filter(function (d) { return d.est === 'open' && EMB_NIVEL[d.st] != null; });
@@ -189,7 +204,7 @@ function fp_tablero(llave, pc, filtro) {
   const cols = EMB_COLS.map(function (col) {
     const l = mios.filter(function (d) { return d.st === col[0]; }).map(function (d) {
       const p = per[d.pid] || {};
-      return { nombre: d.nom, tel: p.t || '', telM: fp_mascara_(p.t), dias: emb_dias_(d, ahora), ase: aseDe(d) };
+      return { nombre: p.n || d.nom, tel: p.t || '', telM: fp_mascara_(p.t), dias: emb_dias_(d, ahora), ase: aseDe(d) };
     });
     const frescos = [71, 72, 73].indexOf(col[0]) >= 0;   // antes de la clase: lo más nuevo está más caliente
     l.sort(function (a, b) { return frescos ? a.dias - b.dias : b.dias - a.dias; });
