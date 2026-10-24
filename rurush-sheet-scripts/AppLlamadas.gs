@@ -121,7 +121,7 @@ function app_links(llave) {
   lock.waitLock(10000);
   try {
     const llaves = JSON.parse(app_props().getProperty("APP_LLAVES") || "{}"), cel = app_celulares();
-    const out = APP_ASESORAS.map(function (a) {
+    const out = APP_ASESORAS.concat([APP_PRUEBA]).map(function (a) {   // Omar también: para conectarlo en Free Pass
       let k = Object.keys(llaves).filter(function (x) { return llaves[x] === a; })[0];
       if (!k) { k = Utilities.getUuid().replace(/-/g, "").slice(0, 20); llaves[k] = a; }
       return { asesora: a, link: "https://omarfrzbussines.github.io/omar/rurush-llamadas/?k=" + k, celular: cel[a] && cel[a].id ? cel[a].desde + " · " + cel[a].modelo : "",
