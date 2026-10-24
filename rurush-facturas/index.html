@@ -533,6 +533,7 @@ async function procesarCola() {
         await subir(it);
         await colaDel(it.id);
         historial(it.id, { estado: 'ok', foto: it.subidas[0] && it.subidas[0].web });
+        FILAS = null;
       } catch (e) {
         ultimoError = e.message || String(e);
         it.error = ultimoError; await colaPut(it);
@@ -837,7 +838,7 @@ async function guardar() {
   };
   await colaPut({ id, creado: Date.now(), gasto, archivo: nombreArchivo(c), fotos: F.fotos.map((x) => x.blob), subidas: [], filaOk: false });
   historial(id, { estado: 'pend', reg: c.hoy, fecha: c.fecha, descripcion: gasto.descripcion, categoria: gasto.categoria,
-    metodo: gasto.metodo, total: gasto.total, persona: gasto.persona });
+    metodo: gasto.metodo, total: gasto.total, persona: gasto.persona, archivo: nombreArchivo(c) });
   if (gasto.proveedor) { const p = proveedores(); p[gasto.proveedor] = gasto.ruc || p[gasto.proveedor] || ''; ls.set('proveedores', p); }
   F.fotos.forEach((x) => URL.revokeObjectURL(x.url));
   F = nuevoForm();
@@ -857,22 +858,113 @@ function pintarHist() {
   const fila = (x) => {
     const tag = x.estado === 'ok' ? '<span class="tag ok">subido</span>' : x.estado === 'err' ? '<span class="tag err">reintentando</span>' : '<span class="tag pend">en cola</span>';
     const t = `<div class="main"><div class="t">${esc(x.descripcion)}${tag}</div><div class="d">${fm(x.fecha).slice(0, 5)} · ${esc(x.categoria)} · ${esc(x.metodo)} · ${esc(x.persona)}${x.estado === 'err' && x.error ? '<br>' + esc(x.error) : ''}</div></div><div class="m">${soles(x.total)}</div>`;
-    return x.foto ? `<a class="row" style="color:inherit;text-decoration:none" href="${esc(x.foto)}" target="_blank" rel="noopener">${t}</a>` : `<div class="row">${t}</div>`;
+    const del = `<button class="btn" data-borrar="${esc(x.id)}" title="Borrar" style="flex:none;padding:6px 9px">🗑️</button>`;
+    return x.foto ? `<div class="row"><a style="display:flex;flex:1;min-width:0;gap:10px;align-items:center;color:inherit;text-decoration:none" href="${esc(x.foto)}" target="_blank" rel="noopener">${t}</a>${del}</div>`
+      : `<div class="row">${t}${del}</div>`;
   };
-  const delMes = h.filter((x) => (x.fecha || '').slice(0, 7) === mes);
-  const porCat = {};
-  delMes.forEach((x) => { porCat[x.categoria] = (porCat[x.categoria] || 0) + (Number(x.total) || 0); });
-  const cats = Object.keys(porCat).sort((a, b) => porCat[b] - porCat[a]);
   const R = ls.get('raiz');
+  const [a, m] = MES_VER.split('-').map(Number);
   return `<div id="estado"></div>
+    <h2><span>📊 ${MESES[m - 1]} ${a} <small>todo el equipo</small></span>
+      <span><button class="btn" data-mes="-1" style="padding:4px 10px">‹</button> <button class="btn" data-mes="1" style="padding:4px 10px">›</button></span></h2>
+    <div id="totMes"><div class="list"><div class="vacio">Cargando el Excel…</div></div></div>
     <h2>Hoy en este celular <small>${deHoy.length} · ${soles(suma(deHoy))}</small></h2>
     <div class="list">${deHoy.length ? deHoy.map(fila).join('') : '<div class="vacio">Todavía nada hoy.</div>'}</div>
-    <h2>${MESES[new Date().getMonth()]} por categoría <small>${soles(suma(delMes))}</small></h2>
-    <div class="list">${cats.map((k) => `<div class="row"><div class="main"><div class="t">${esc(k)}</div></div><div class="m">${soles(porCat[k])}</div></div>`).join('') || '<div class="vacio">—</div>'}</div>
-    <div class="ayuda">Solo lo registrado en este celular. El total de todas está en el Excel.</div>
-    <h2>Anteriores</h2>
+    <h2>Anteriores en este celular</h2>
     <div class="list">${h.filter((x) => x.reg !== hoy).slice(0, 40).map(fila).join('') || '<div class="vacio">—</div>'}</div>
     ${R && R.web ? `<a class="btn" style="display:block;text-align:center;margin-top:16px;text-decoration:none" href="${esc(R.web)}" target="_blank" rel="noopener">📁 Abrir carpeta en OneDrive</a>` : ''}`;
+}
+
+/* ---------- total del mes (todo el equipo, leído del Excel) ---------- */
+
+let MES_VER = isoLocal(new Date()).slice(0, 7);
+let FILAS = null;   // { t: hora de lectura, v: filas, web: link del Excel }
+async function filasExcel(forzar) {
+  if (FILAS && !forzar && Date.now() - FILAS.t < 60000) return FILAS;
+  const R = await raiz();
+  const id = await excel();
+  const r = await gj('GET', `/drives/${R.driveId}/items/${id}/workbook/tables/${TABLA}/dataBodyRange?$select=values`);
+  let web = FILAS && FILAS.web;
+  if (!web) try { web = (await gj('GET', `/drives/${R.driveId}/items/${id}?$select=webUrl`)).webUrl; } catch (e) { /* sin link */ }
+  FILAS = { t: Date.now(), v: (r.values || []).filter((f) => String(f[0] || '').trim()), web };
+  return FILAS;
+}
+// Columna Mes ("2026-10 OCTUBRE"); si no, la Fecha (Excel la devuelve como número de serie).
+function mesDeFila(f) {
+  const m = String(f[2] || '').match(/^(\d{4}-\d{2})/);
+  if (m) return m[1];
+  if (typeof f[1] === 'number') return new Date(Math.round((f[1] - 25569) * 864e5)).toISOString().slice(0, 7);
+  return String(f[1] || '').slice(0, 7);
+}
+async function pintarTotalMes(forzar) {
+  if (!$('#totMes')) return;
+  let F;
+  try { F = await filasExcel(forzar); } catch (e) {
+    if ($('#totMes')) $('#totMes').innerHTML = `<div class="list"><div class="vacio">⚠️ No pude leer el Excel: ${esc(e.message)}</div></div>`;
+    return;
+  }
+  const del = F.v.filter((f) => mesDeFila(f) === MES_VER);
+  const n = (v) => typeof v === 'number' ? v : num(v);
+  const total = del.reduce((t, f) => t + n(f[15]), 0), igv = del.reduce((t, f) => t + n(f[14]), 0);
+  const agrupar = (col) => {
+    const g = {};
+    del.forEach((f) => { const k = String(f[col] || '—').trim() || '—'; g[k] = (g[k] || 0) + n(f[15]); });
+    return Object.keys(g).sort((x, y) => g[y] - g[x]).map((k) =>
+      `<div class="row"><div class="main"><div class="t">${esc(k)}</div></div><div class="m">${soles(g[k])}</div></div>`).join('');
+  };
+  if (!$('#totMes')) return;
+  $('#totMes').innerHTML = !del.length ? `<div class="list"><div class="vacio">Sin gastos registrados este mes.</div></div>` : `
+    <div class="calc" style="margin-top:0">
+      <div class="r tot" style="border:0;margin:0;padding:0"><span>Total gastado</span><b>${soles(total)}</b></div>
+      <div class="r"><span>Gastos registrados</span><b>${del.length}</b></div>
+      ${igv ? `<div class="r"><span>IGV (facturas)</span><b>${soles(igv)}</b></div>` : ''}
+    </div>
+    <h2 style="font-size:13px">Por categoría</h2><div class="list">${agrupar(5)}</div>
+    <h2 style="font-size:13px">Por persona</h2><div class="list">${agrupar(4)}</div>
+    <h2 style="font-size:13px">Pagado con</h2><div class="list">${agrupar(16)}</div>`;
+  if (F.web) $('#totMes').insertAdjacentHTML('beforeend', `<a class="btn" style="display:block;text-align:center;margin-top:10px;text-decoration:none" href="${esc(F.web)}" target="_blank" rel="noopener">📊 Abrir el Excel</a>`);
+}
+
+/* ---------- borrar un gasto registrado por error ----------
+   Borra la fila del Excel (por su ID) y las fotos/PDF de ese gasto en nuestra
+   carpeta del mes y en la copia de la contadora (solo archivos que subió la app:
+   los que empiezan con el nombre del gasto). */
+
+async function borrarGasto(id) {
+  const h = ls.get('hist', []);
+  const x = h.find((g) => g.id === id);
+  if (!x) return;
+  const quitarDelHistorial = () => ls.set('hist', ls.get('hist', []).filter((g) => g.id !== id));
+  // Todavía en la cola (no subió nada): se borra solo del celular.
+  const enCola = (await colaTodo()).find((it) => it.id === id);
+  if (enCola && !enCola.filaOk && !(enCola.subidas || []).length) { await colaDel(id); quitarDelHistorial(); return 'Borrado del celular (no se había subido).'; }
+  if (enCola) await colaDel(id);   // a medio subir: que no se vuelva a intentar
+  const R = await raiz();
+  const xid = await excel();
+  const rango = await gj('GET', `/drives/${R.driveId}/items/${xid}/workbook/tables/${TABLA}/dataBodyRange?$select=address,values`);
+  const i = (rango.values || []).findIndex((f) => String(f[0]).trim() === id);
+  let base = x.archivo;
+  if (i >= 0) {
+    const f = rango.values[i];
+    if (!base) base = nombreOk([x.fecha, String(f[5] || x.categoria).toUpperCase(), f[9] || f[6] || x.descripcion, 'S' + r2(typeof f[15] === 'number' ? f[15] : num(f[15])), f[4] || x.persona].join(' - '));
+    const m = String(rango.address).match(/^(.*)!([A-Z]+)(\d+):([A-Z]+)\d+$/);
+    const hoja = m[1].replace(/^'|'$/g, ''), fila = Number(m[3]) + i;
+    await gj('POST', `/drives/${R.driveId}/items/${xid}/workbook/worksheets/${encodeURIComponent(hoja)}/range(address='${m[2]}${fila}:${m[4]}${fila}')/delete`, { shift: 'Up' });
+  }
+  let n = 0;
+  const borrarEn = async (d) => {
+    for (const a of await hijos(d)) {
+      if (!a.folder && base && sinTildes(a.name).startsWith(sinTildes(base))) { await gj('DELETE', `/drives/${d.driveId}/items/${a.id}`); n++; }
+    }
+  };
+  await borrarEn(await carpetaPropia(x.fecha));
+  let aviso = '';
+  if (CFG.fotos) {
+    try { await borrarEn(await carpetaFotos(x.fecha)); } catch (e) { aviso = ' No pude borrar la copia de la contadora: ' + e.message; }
+  }
+  quitarDelHistorial();
+  FILAS = null;
+  return (i >= 0 ? 'Fila del Excel borrada' : 'No estaba en el Excel') + ` · ${n} archivo(s) borrado(s).` + aviso;
 }
 
 function pintarConf() {
@@ -997,6 +1089,7 @@ function pintarSub() {
 function pintar() {
   $('#main').innerHTML = tab === 'nueva' ? pintarNueva() : tab === 'hist' ? pintarHist() : pintarConf();
   if (tab === 'conf' && esAdmin()) pintarSolicitudes();
+  if (tab === 'hist') pintarTotalMes();
   clearInterval(pintar.t);
   if (tab === 'conf' && esAdmin()) pintar.t = setInterval(() => { if (tab === 'conf' && document.visibilityState === 'visible') pintarSolicitudes(); }, 8000);
   document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
@@ -1029,6 +1122,22 @@ document.addEventListener('click', async (ev) => {
   if (t.dataset.comp != null) { F.comprobante = t.dataset.comp; return pintar(); }
   if (t.dataset.metodo != null) { F.metodo = t.dataset.metodo; return pintar(); }
   if (t.id === 'guardar') { t.disabled = true; try { await guardar(); } catch (e) { t.disabled = false; toast('❌ ' + e.message, 5000); } return; }
+  if (t.dataset.borrar) {
+    ev.preventDefault();
+    const g = ls.get('hist', []).find((x) => x.id === t.dataset.borrar);
+    if (!g || !confirm(`¿Borrar "${g.descripcion}" (${soles(g.total)})?\n\nSe borra la fila del Excel y sus fotos (tuya y la copia de la contadora). No se puede deshacer.`)) return;
+    t.disabled = true; t.textContent = '…';
+    try { toast('🗑️ ' + await borrarGasto(t.dataset.borrar), 5000); pintar(); }
+    catch (e) { t.disabled = false; t.textContent = '🗑️'; toast('❌ ' + e.message, 6000); }
+    return;
+  }
+  if (t.dataset.mes) {
+    const [a, m] = MES_VER.split('-').map(Number);
+    const d = new Date(a, m - 1 + Number(t.dataset.mes), 1);
+    if (isoLocal(d).slice(0, 7) > isoLocal(new Date()).slice(0, 7)) return;
+    MES_VER = isoLocal(d).slice(0, 7);
+    return pintar();
+  }
   if (t.id === 'reintentar') { permitirLogin = true; try { await cargarConfig(); BASE_FOTOS = null; Object.keys(MES_CACHE).forEach((k) => delete MES_CACHE[k]); } catch (e) { /* sin internet */ } return procesarCola(); }
   if (t.id === 'cGuardar') return guardarAjustes();
   if (t.id === 'cCopiar') {
@@ -1116,8 +1225,99 @@ document.addEventListener('input', (ev) => {
   refrescarCalc();
 });
 
+/* ---------- leer el QR del comprobante (SUNAT) ----------
+   Las facturas/boletas electrónicas traen un QR con:
+   RUC emisor | tipo (01 factura, 03 boleta…) | serie | número | IGV | total | fecha | …
+   Se lee aquí mismo en el celular (sin servidor): BarcodeDetector si el celular lo
+   tiene, si no jsQR; para PDF se dibuja la 1.ª página con pdf.js. Librerías bajo demanda. */
+
+const LIBS = {
+  jsqr: 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js',
+  pdf: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js',
+  pdfWorker: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'
+};
+const cargado = {};
+function cargarScript(url) {
+  if (!cargado[url]) cargado[url] = new Promise((res, rej) => {
+    const sc = document.createElement('script'); sc.src = url; sc.onload = res;
+    sc.onerror = () => { delete cargado[url]; rej(new Error('No cargó el lector de QR (¿sin internet?).')); };
+    document.head.appendChild(sc);
+  });
+  return cargado[url];
+}
+async function qrDeCanvas(c) {
+  if ('BarcodeDetector' in window) {
+    try {
+      const r = await new BarcodeDetector({ formats: ['qr_code'] }).detect(c);
+      if (r[0] && r[0].rawValue) return r[0].rawValue;
+    } catch (e) { /* sin soporte: jsQR */ }
+  }
+  await cargarScript(LIBS.jsqr);
+  const d = c.getContext('2d').getImageData(0, 0, c.width, c.height);
+  const r = jsQR(d.data, d.width, d.height, { inversionAttempts: 'attemptBoth' });
+  return r ? r.data : '';
+}
+function canvasDe(img, max) {
+  const k = Math.min(1, max / Math.max(img.width, img.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return c;
+}
+async function qrDeArchivo(file) {
+  if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
+    await cargarScript(LIBS.pdf);
+    pdfjsLib.GlobalWorkerOptions.workerSrc = LIBS.pdfWorker;
+    const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+    for (let n = 1; n <= Math.min(pdf.numPages, 2); n++) {
+      const pag = await pdf.getPage(n);
+      const vp = pag.getViewport({ scale: 2.5 });
+      const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height;
+      await pag.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+      const t = await qrDeCanvas(c);
+      if (t) return t;
+    }
+    return '';
+  }
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    // Varias resoluciones: un QR chico se lee mejor en grande y uno grande en chico.
+    for (const max of [1600, 2600, 1000]) { const t = await qrDeCanvas(canvasDe(img, max)); if (t) return t; }
+    return '';
+  } finally { URL.revokeObjectURL(url); }
+}
+// "20601234567|01|F001|4567|9.00|59.00|2026-10-09|6|…" → datos (o null si no es de SUNAT)
+function datosQR(t) {
+  const p = String(t || '').split('|').map((x) => x.trim());
+  if (p.length < 7 || !/^\d{11}$/.test(p[0]) || !num(p[5])) return null;
+  let f = p[6];
+  const m = f.match(/^(\d{2})[/-](\d{2})[/-](\d{4})$/);
+  if (m) f = m[3] + '-' + m[2] + '-' + m[1];
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(f)) f = '';
+  return { ruc: p[0], tipo: p[1], numero: (p[2] + '-' + p[3]).toUpperCase(), igv: num(p[4]), total: num(p[5]), fecha: f };
+}
+async function leerComprobante(file) {
+  if (F.qr) return;   // ya se leyó de otra foto de este gasto
+  let d;
+  try { d = datosQR(await qrDeArchivo(file)); } catch (e) { return; }
+  if (!d) return toast('No encontré un QR de SUNAT: llena los datos a mano.', 3500);
+  F.qr = true;
+  F.ruc = d.ruc; F.numero = d.numero; F.total = String(d.total);
+  if (d.fecha) F.fecha = d.fecha;
+  const nombre = { '01': 'FACTURA', '03': 'BOLETA' }[d.tipo];
+  const comp = nombre && CFG.comprobantes.find((c) => sinTildes(c.nombre).includes(nombre));
+  if (comp) F.comprobante = comp.nombre;
+  // Proveedor conocido por su RUC (se aprende de gastos anteriores en este celular).
+  const prov = Object.entries(proveedores()).find(([, r]) => r === d.ruc);
+  if (prov && !F.proveedor) F.proveedor = prov[0];
+  pintar();
+  toast('✅ Datos leídos del QR: ' + d.numero + ' · ' + soles(d.total), 4000);
+}
+
 async function agregarFotos(ev) {
   for (const file of Array.from(ev.target.files || []).slice(0, 5)) {
+    leerComprobante(file);
     try {
       // PDF (facturas electrónicas): se sube tal cual, sin comprimir.
       if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
