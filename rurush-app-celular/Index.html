@@ -103,7 +103,7 @@ const deAse = (x) => ase === 'TODAS' || norm(x.asesora) === norm(ase);
 const fm = (iso) => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : '';
 const soles = (n) => 'S/ ' + Math.round(n).toLocaleString('es-PE');
 const pct = (a, b) => b ? Math.round(a * 100 / b) : 0;
-const wa = (tel) => tel ? `<a class="wa" href="https://wa.me/51${tel}" target="_blank">💬</a>` : '';
+const wa = (tel) => tel ? `<a class="wa" href="https:\/\/wa.me/51${tel}" target="_blank">💬</a>` : '';
 
 // ⚡ Se muestra al instante lo último que se vio en este celular y se actualiza por detrás.
 let ESTADO_D = '';   // ' · actualizando…' / ' · sin conexión' mientras se muestra lo guardado
