@@ -201,7 +201,7 @@ function uc_reconstruir() {
     } catch (e) { console.error("uc base " + base + ": " + e); }
   });
   try {
-    so_logFilas_("2000-01-01").forEach(function (x) {
+    so_logFilas_("2000-01-01", true).forEach(function (x) {
       const tel = uc_tel_(x.tel);
       if (!tel) return;
       const hm = String(x.hora || "12:00").split(":");

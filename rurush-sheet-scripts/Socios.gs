@@ -36,11 +36,26 @@ function so_tel(v) { const d = String(v || "").replace(/\D/g, ""); return d.leng
 function so_ent_(v) { const n = so_num(v); return n == null ? null : Math.round(n); }   // "82.666…" → 83
 function so_num(v) { if (v === "" || v == null) return null; const n = Number(v); return isFinite(n) ? n : null; }
 function so_hoja() { return cob_libro().getSheetByName(SO_HOJA); }
+// Filas de BASE DE SOCIOS (B..Y desde la fila 6). Rápido: API de Sheets (no espera recálculos) y caché de 5 min;
+// al guardar una llamada se borra la caché. Las fechas vienen como número de serie (cob_iso las entiende).
 function so_filas_() {
-  const sh = so_hoja();
-  if (!sh) throw new Error("No encuentro la pestaña " + SO_HOJA + ".");
-  const n = sh.getLastRow() - SO_INI + 1;
-  return n > 0 ? sh.getRange(SO_INI, 2, n, SO_ANCHO).getValues() : [];
+  const c = uc_cacheGet_("so_filas");
+  if (c) return c;
+  let v = null;
+  if (app_conApi()) {
+    try {
+      v = app_valores(COB_ID, ["'" + SO_HOJA + "'!B" + SO_INI + ":" + app_col(SO_ANCHO)], COB_API_OPC)[0]
+        .map(function (f) { while (f.length < SO_ANCHO) f.push(""); return f; });
+    } catch (e) { if (!/^API Sheets/.test(e.message)) throw e; v = null; }
+  }
+  if (!v) {
+    const sh = so_hoja();
+    if (!sh) throw new Error("No encuentro la pestaña " + SO_HOJA + ".");
+    const n = sh.getLastRow() - SO_INI + 1;
+    v = n > 0 ? sh.getRange(SO_INI, 2, n, SO_ANCHO).getValues() : [];
+  }
+  uc_cachePut_("so_filas", v, 300);
+  return v;
 }
 function so_quien_(llave, como) {
   const a = app_asesora(llave);
@@ -59,10 +74,12 @@ function so_log_() {
     sh.getRange(1, 1, 1, SO_LOG_COLS.length).setValues([SO_LOG_COLS]).setFontWeight("bold");
   return sh;
 }
-function so_logFilas_(desdeIso) {
+// El registro solo crece hacia abajo: para hoy / la semana bastan las últimas 3000 filas (todo = el registro entero).
+function so_logFilas_(desdeIso, todo) {
   const sh = so_log_(), n = sh.getLastRow() - 1;
   if (n < 1) return [];
-  return sh.getRange(2, 1, n, SO_LOG_COLS.length).getDisplayValues()
+  const k = todo ? n : Math.min(n, 3000);
+  return sh.getRange(2 + n - k, 1, k, SO_LOG_COLS.length).getDisplayValues()
     .map(function (f) { return { fecha: cob_iso(f[0]), hora: f[1], ase: cob_norm(f[2]), cod: String(f[3]), socio: f[4], tel: f[5],
       dias: so_num(f[6]), intentos: so_num(f[7]) || 0, seg: so_num(f[8]) || 0, res: f[9], nota: f[10], tipo: f[11] === "si" ? "si" : "no" }; })
     .filter(function (x) { return x.fecha && x.fecha >= desdeIso; });
@@ -139,6 +156,7 @@ function so_guardar(llave, d) {
     so_log_().appendRow([Utilities.formatDate(ahora, "America/Lima", "yyyy-MM-dd"), Utilities.formatDate(ahora, "America/Lima", "HH:mm"),
       quien, "'" + d.cod, d.nombre || "", "'" + so_tel(d.tel), d.dias == null ? "" : d.dias, Number(d.intentos) || 0, seg, d.resultado, String(d.nota || "").trim(), d.tipo === "si" ? "si" : "no"]);
     uc_anotarSeguro_([{ tel: d.tel, nombre: d.nombre, llam: ahora.getTime(), llamo: quien, res: d.resultado, donde: "SOCIO" }]);
+    CacheService.getScriptCache().remove("so_filas");
     return { ok: true };
   } finally {
     lock.releaseLock();
