@@ -50,6 +50,7 @@
   .toast { white-space:pre-line; position:fixed; left:16px; right:16px; bottom:16px; background:#2c2c2e; color:#fff; padding:12px 14px; border-radius:12px; font-size:14px; display:none; z-index:20; }
   .toast.err { background:#5c1f1f; }
   .vacio { text-align:center; color:var(--mut); padding:60px 10px; }
+  .badge { display:inline-block; min-width:20px; padding:0 6px; border-radius:99px; background:var(--red); color:#fff; font-size:12px; font-weight:800; line-height:20px; margin-left:4px }
   .tabs { display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:6px; margin-top:10px; }
   .dmsg { white-space:pre-wrap; font-size:14px; color:var(--mut); margin:8px 0 10px; max-height:7.5em; overflow:hidden; }
   .dif .wacall { padding:13px 6px; }
@@ -399,7 +400,7 @@ function traerSocios() {
   google.script.run
     .withSuccessHandler((r) => {
       if (n !== SOC_PIDE || como !== COMO) return;            // llegó una respuesta vieja (otro "Ver como" o 🔄)
-      SOC = r;
+      SOC = r; badgeSocios(r);
       if (VISTA !== 'socios' || SOC_SEL) return;              // si está con un socio abierto, no se le cambia la pantalla
       const y = window.scrollY; pintarListaSoc(); window.scrollTo(0, y);
     })
@@ -495,7 +496,7 @@ function guardarSocio() {
     .withSuccessHandler(() => {
       toast('✓ ' + (p.nombre || p.cod) + ': ' + SOC_RES);
       SOC.hechas.push({ socio: p.nombre, res: SOC_RES, seg: d.segundos, hora: new Date().toTimeString().slice(0, 5), tipo: p.tipo });
-      SOC.hoy[p.tipo]++; SOC.listas[p.tipo] = SOC.listas[p.tipo].filter((x) => x.tel !== p.tel);
+      SOC.hoy[p.tipo]++; SOC.listas[p.tipo] = SOC.listas[p.tipo].filter((x) => x.tel !== p.tel); badgeSocios(SOC);
       try { localStorage.removeItem('rr_llamada_soc'); } catch (e) {}
       SOC_SEL = null; pintarListaSoc(); window.scrollTo(0, 0);
       if (ASESORA === 'OMAR') traerControl();
@@ -506,7 +507,7 @@ function guardarSocio() {
 const cob_q = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 /* ---------- 📣 Difusiones (solo DANNA, desde su WhatsApp 977): se marca sola al volver de WhatsApp ---------- */
-let DIF = null, DIF_PIDE = 0, DIF_ENV = null, DIF_ULT = null;   // DIF_ENV = envío en curso · DIF_ULT = último marcado (para Deshacer)
+let DIF = null, DIF_PIDE = 0, DIF_ENV = null, DIF_ULT = null, DIF_CONF = null;   // DIF_CONF = vuelta rápida de WhatsApp, por confirmar   // DIF_ENV = envío en curso · DIF_ULT = último marcado (para Deshacer)
 try { DIF_ENV = JSON.parse(localStorage.getItem('rr_dif_env') || 'null'); } catch (e) {}
 const guardarDifEnv = () => { try { DIF_ENV ? localStorage.setItem('rr_dif_env', JSON.stringify(DIF_ENV)) : localStorage.removeItem('rr_dif_env'); } catch (e) {} };
 if (ASESORA === 'DANNA' || ASESORA === 'OMAR') $('#tabDif').style.display = '';
@@ -522,17 +523,21 @@ function pintarDif() {
   const cab = `<div class="card" style="padding:12px 14px"><div style="display:flex;justify-content:space-between"><b>📣 Difusiones de hoy</b><b>${d.hoy} / ${d.tope}${d.hoy >= d.tope ? ' ✅' : ''}</b></div>
     <div class="prog"><i style="width:${Math.min(100, d.hoy / d.tope * 100)}%"></i></div>
     <div class="tip">Toca 📲 Enviar → se abre tu WhatsApp con el mensaje listo → envíalo y vuelve aquí: se marca solo. Quedan ${d.pendientes} en tus tandas.</div></div>`;
+  const conf = DIF_CONF ? `<div class="aviso" style="background:#13293d;color:#9fd3ff">¿Le enviaste el mensaje a <b>${esc(DIF_CONF.it.nombre || DIF_CONF.it.celular)}</b>? (volviste en ${DIF_CONF.seg} s)
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px"><button class="guardar" id="dSi" style="margin:0;padding:10px">✅ Sí, lo envié</button><button class="saltar" id="dNo" style="margin:0;border:1px solid #2e3d55;border-radius:12px">❌ No</button></div></div>` : '';
   const deshacer = DIF_ULT ? `<div class="aviso" style="display:flex;justify-content:space-between;align-items:center;gap:8px">✓ Marcado enviado: ${esc(DIF_ULT.nombre || DIF_ULT.celular)}<button class="saltar" id="dDes" style="width:auto;margin:0;padding:4px 8px;color:#ffd27a">Deshacer</button></div>` : '';
   const item = (it, i) => `<div class="card dif" style="margin-top:10px">
       <div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(it.nombre || it.celular)}</b><span class="tag">${esc(it.tab.replace(/^\W+/, ''))}</span></div>
       <div class="dmsg">${esc(it.mensaje)}</div>
       <a class="wacall" data-i="${i}" href="https:\/\/wa.me/${it.celular}?text=${encodeURIComponent(it.mensaje)}" target="_blank">📲 Enviar por WhatsApp</a></div>`;
-  $('#main').innerHTML = cab + deshacer + (d.items.length ? d.items.map(item).join('')
+  $('#main').innerHTML = cab + conf + deshacer + (d.items.length ? d.items.map(item).join('')
     : `<div class="vacio" style="padding:40px 10px">${d.hoy >= d.tope ? '✅ ¡Listo por hoy! Hiciste tus ' + d.tope + ' difusiones.' : '🎉 No tienes difusiones pendientes.'}</div>`);
   document.querySelectorAll('.dif .wacall').forEach((a) => a.onclick = () => {
     DIF_ENV = { it: d.items[Number(a.dataset.i)], t: Date.now(), salio: null, fuera: 0 }; guardarDifEnv();
   });
   if ($('#dDes')) $('#dDes').onclick = deshacerDif;
+  if ($('#dSi')) $('#dSi').onclick = () => { const c = DIF_CONF; DIF_CONF = null; marcarDif(c.it, c.seg); };
+  if ($('#dNo')) $('#dNo').onclick = () => { DIF_CONF = null; pintarDif(); };
 }
 // Salió a WhatsApp y volvió: si estuvo fuera 4 s o más, se marca enviado.
 function difSalio() { if (DIF_ENV && DIF_ENV.salio == null && Date.now() - DIF_ENV.t < 20000) { DIF_ENV.salio = Date.now(); guardarDifEnv(); } }
@@ -541,6 +546,8 @@ function difVolvio() {
   DIF_ENV.fuera += Date.now() - DIF_ENV.salio; DIF_ENV.salio = null;
   const e = DIF_ENV; DIF_ENV = null; guardarDifEnv();
   if (e.fuera < 4000) return toast('No se marcó: volviste muy rápido. Si no se abrió WhatsApp, toca 📲 Enviar otra vez.', true);
+  // menos de 10 s en WhatsApp: puede que no se haya enviado → se pregunta en vez de marcar solo
+  if (e.fuera < 10000) { DIF_CONF = { it: e.it, seg: Math.round(e.fuera / 1000) }; if (VISTA === 'dif' && DIF) pintarDif(); else toast('📣 ¿Enviaste el mensaje? Confírmalo en Difusiones.'); return; }
   marcarDif(e.it, Math.round(e.fuera / 1000));
 }
 document.addEventListener('visibilitychange', () => (document.hidden ? difSalio() : difVolvio()));
@@ -767,8 +774,19 @@ if (ASESORA === 'OMAR') {
       .app_errores(LLAVE);
   };
 }
+// 🏋️ cuántas llamadas a socios le faltan hoy para su meta, en la misma pestaña (se pide una vez al abrir)
+function avisoSocios() {
+  google.script.run.withSuccessHandler((r) => { if (!SOC) SOC = r; badgeSocios(r); }).withFailureHandler(() => {}).so_lista(LLAVE, COMO);
+}
+function badgeSocios(r) {
+  const t = document.querySelector('.tab[data-v=socios]');
+  if (!t || !r || !r.meta) return;
+  const falta = Math.max(0, r.meta.no - r.hoy.no) + Math.max(0, r.meta.si - r.hoy.si);
+  t.innerHTML = '🏋️ Socios' + (falta ? ` <span class="badge">${falta}</span>` : ' ✅');
+}
 function iniciar() {
   // Al abrir: si hay una cola guardada de hoy, se muestra al instante y se actualiza por detrás.
+  setTimeout(avisoSocios, 2500);
   const local = leerLocal();
   if (local) { cola = local.cola; ESTADOS = local.ESTADOS; HORAS = local.HORAS; mostrando = true; pintar(); pintarMarcador(); }
   traer(true);
